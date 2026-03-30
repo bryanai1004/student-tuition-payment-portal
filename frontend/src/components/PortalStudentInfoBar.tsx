@@ -14,12 +14,6 @@ export function PortalStudentInfoBar() {
           </div>
           <div className="portal-student-info-bar-text">
             <p className="portal-student-info-bar-name">Bingchen Li</p>
-            <p className="portal-student-info-bar-meta">
-              Alhambra Medical University
-            </p>
-            <p className="portal-student-info-bar-degree">
-              Doctor of Medicine (MD)
-            </p>
           </div>
         </div>
         <div className="portal-student-info-bar-balance">

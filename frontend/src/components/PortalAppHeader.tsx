@@ -15,7 +15,7 @@ export const PortalAppHeader = forwardRef<HTMLButtonElement, PortalAppHeaderProp
     return (
       <header className="portal-app-header">
         <div className="portal-app-header-inner">
-          <div className="portal-app-header-start">
+          <div className="portal-app-header-leading">
             <button
               ref={ref}
               type="button"
@@ -31,8 +31,8 @@ export const PortalAppHeader = forwardRef<HTMLButtonElement, PortalAppHeaderProp
             <Link to="/login" className="portal-app-header-logo-link" aria-label="Go to sign in">
               <img className="portal-app-header-logo" src="/AMULogo.png" alt="" />
             </Link>
-            <h1 className="portal-app-header-page-title">{title}</h1>
           </div>
+          <h1 className="portal-app-header-page-title">{title}</h1>
           <div className="portal-app-header-utilities">
             <span className="portal-app-header-placeholder" title="Reserved for future links">
               Notifications
