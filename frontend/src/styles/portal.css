@@ -990,16 +990,11 @@
   text-align: right;
 }
 
-/* Payment plan: amount column numeric; status column left */
+/* Payment plan: amount column numeric, right-aligned */
 .portal-table--plan th:nth-child(3),
 .portal-table--plan td:nth-child(3) {
   text-align: right;
   font-variant-numeric: tabular-nums;
-}
-
-.portal-table--plan th:last-child,
-.portal-table--plan td:last-child {
-  text-align: left;
 }
 
 .portal-table--activity th:nth-child(3),

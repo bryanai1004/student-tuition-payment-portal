@@ -6,29 +6,21 @@ const installments = [
     n: 1,
     due: 'Sep 15, 2026',
     amount: '$4,612.50',
-    status: 'Scheduled',
-    statusClass: 'portal-status--scheduled',
   },
   {
     n: 2,
     due: 'Oct 15, 2026',
     amount: '$4,612.50',
-    status: 'Upcoming',
-    statusClass: 'portal-status--upcoming',
   },
   {
     n: 3,
     due: 'Nov 15, 2026',
     amount: '$4,612.50',
-    status: 'Pending',
-    statusClass: 'portal-status--pending',
   },
   {
     n: 4,
     due: 'Dec 15, 2026',
     amount: '$4,612.50',
-    status: 'Pending',
-    statusClass: 'portal-status--pending',
   },
 ] as const
 
@@ -49,7 +41,6 @@ export function PaymentPlanPage() {
                 <th scope="col">Installment</th>
                 <th scope="col">Due Date</th>
                 <th scope="col">Amount</th>
-                <th scope="col">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -58,9 +49,6 @@ export function PaymentPlanPage() {
                   <td>{row.n}</td>
                   <td>{row.due}</td>
                   <td>{row.amount}</td>
-                  <td>
-                    <span className={`portal-status ${row.statusClass}`}>{row.status}</span>
-                  </td>
                 </tr>
               ))}
             </tbody>
