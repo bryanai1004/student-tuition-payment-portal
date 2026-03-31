@@ -2309,7 +2309,7 @@
 
 /* —— Dashboard (portal homepage) —— */
 .portal-dashboard {
-  max-width: min(80rem, 100%);
+  max-width: min(92vw, 1440px);
   margin: 0 auto;
   width: 100%;
 }
