@@ -530,8 +530,9 @@
 }
 
 .portal-shell--no-sidebar .portal-main-body:has(.portal-dashboard) {
-  padding-left: clamp(1.25rem, 4vw, 2.5rem);
-  padding-right: clamp(1.25rem, 4vw, 2.5rem);
+  /* Fluid portal canvas: generous side inset on large displays without a narrow max-width column */
+  padding-left: clamp(1.25rem, 4vw, 4rem);
+  padding-right: clamp(1.25rem, 4vw, 4rem);
 }
 
 @media (max-width: 768px) {
@@ -2309,9 +2310,10 @@
 
 /* —— Dashboard (portal homepage) —— */
 .portal-dashboard {
-  max-width: min(92vw, 1440px);
-  margin: 0 auto;
   width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .portal-dashboard-hero {
@@ -2364,7 +2366,7 @@
 
 .portal-dashboard-home-grid {
   display: grid;
-  /* ~38% / ~62% of row after gap (golden-ratio–style portal split); gap 30px */
+  /* Tablet / small desktop: proportional split */
   grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
   gap: 1.5rem clamp(1.75rem, 2.5vw, 2rem);
   align-items: stretch;
@@ -2386,8 +2388,13 @@
   height: 100%;
 }
 
-/* Slight horizontal bleed into the column gap: wider gold tiles without changing 38fr / 62fr */
+/* Large desktop: Services = semi-fixed (~380–440px), My Calendar = flexes to fill */
 @media (min-width: 1025px) {
+  .portal-dashboard-home-grid {
+    grid-template-columns: clamp(23.75rem, 26vw, 27.5rem) minmax(0, 1fr);
+  }
+
+  /* Slight horizontal bleed into the column gap: wider gold tiles */
   .portal-dashboard-home-primary {
     margin-inline-end: -0.375rem;
   }
