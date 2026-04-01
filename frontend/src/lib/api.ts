@@ -20,6 +20,7 @@ export async function fetchStudentAccount(
     year: String(year),
   })
   const url = `/api/students/${encodeURIComponent(studentId)}/account?${params.toString()}`
+  console.debug('[account-debug] fetchStudentAccount', url)
   const res = await fetch(url, { signal })
   if (!res.ok) {
     throw new Error(`Could not load account (HTTP ${res.status})`)
