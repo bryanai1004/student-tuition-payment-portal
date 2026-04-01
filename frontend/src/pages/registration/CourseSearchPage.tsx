@@ -50,6 +50,9 @@ type CourseSectionDetail = {
   room: string | null
   instructor: string | null
   notes: string | null
+  /** If API adds section-level overrides later, catalog fallback still applies when empty. */
+  units?: string | number | null
+  category?: string | number | null
 }
 
 function cellText(value: string | number | null | undefined): string {
@@ -68,6 +71,118 @@ function formatTimeSlot(start: string | null, end: string | null): string {
   if (s === '' && e === '') return '—'
   if (s !== '' && e !== '') return `${s} – ${e}`
   return s || e
+}
+
+function unitsFromSectionOrCatalog(
+  section: CourseSectionDetail | null,
+  course: CourseCatalogItem,
+): string {
+  if (section) {
+    const u = cellText(section.units)
+    if (u !== '') return u
+  }
+  return displayOrDash(course.units)
+}
+
+function categoryFromSectionOrCatalog(
+  section: CourseSectionDetail | null,
+  course: CourseCatalogItem,
+): string {
+  if (section) {
+    const c = cellText(section.category)
+    if (c !== '') return c
+  }
+  return displayOrDash(course.category)
+}
+
+type SectionPanelPhase = 'loading' | 'empty' | 'error' | 'data'
+
+function sectionPanelPhase(
+  sectionErr: string | undefined,
+  sectionRows: CourseSectionDetail[] | undefined,
+): SectionPanelPhase {
+  if (sectionErr) return 'error'
+  // Until the first response is stored, always treat as loading so the panel is never blank
+  // (avoids a one-frame gap before `sectionsLoading` is true).
+  if (sectionRows === undefined) return 'loading'
+  if (sectionRows.length === 0) return 'empty'
+  return 'data'
+}
+
+function scheduleValue(
+  phase: SectionPanelPhase,
+  hasSection: boolean,
+  valueWhenData: string,
+): string {
+  if (phase === 'loading') return '…'
+  if (phase === 'error' || phase === 'empty' || !hasSection) return 'Not available yet'
+  return valueWhenData === '' ? '—' : valueWhenData
+}
+
+function CourseSectionDetailCard({
+  course,
+  section,
+  phase,
+  heading,
+}: {
+  course: CourseCatalogItem
+  section: CourseSectionDetail | null
+  phase: SectionPanelPhase
+  heading: string
+}) {
+  const hasSection = section !== null
+  const weekday = scheduleValue(phase, hasSection, displayOrDash(section?.weekday))
+  const timeSlot = scheduleValue(
+    phase,
+    hasSection,
+    section ? formatTimeSlot(section.start_time, section.end_time) : '—',
+  )
+  const room = scheduleValue(phase, hasSection, displayOrDash(section?.room))
+  const instructor = scheduleValue(phase, hasSection, displayOrDash(section?.instructor))
+  const delivery = scheduleValue(phase, hasSection, displayOrDash(section?.delivery_mode))
+  const notes = scheduleValue(phase, hasSection, displayOrDash(section?.notes))
+  const units = unitsFromSectionOrCatalog(section, course)
+  const category = categoryFromSectionOrCatalog(section, course)
+
+  return (
+    <div className="portal-course-detail-card">
+      <h4 className="portal-course-detail-card-title">{heading}</h4>
+      <dl className="portal-course-detail-dl">
+        <div className="portal-course-detail-dl-row">
+          <dt>Weekday</dt>
+          <dd>{weekday}</dd>
+        </div>
+        <div className="portal-course-detail-dl-row">
+          <dt>Time slot</dt>
+          <dd>{timeSlot}</dd>
+        </div>
+        <div className="portal-course-detail-dl-row">
+          <dt>Room</dt>
+          <dd>{room}</dd>
+        </div>
+        <div className="portal-course-detail-dl-row">
+          <dt>Instructor</dt>
+          <dd>{instructor}</dd>
+        </div>
+        <div className="portal-course-detail-dl-row">
+          <dt>Units</dt>
+          <dd>{units}</dd>
+        </div>
+        <div className="portal-course-detail-dl-row">
+          <dt>Category</dt>
+          <dd>{category}</dd>
+        </div>
+        <div className="portal-course-detail-dl-row">
+          <dt>Delivery mode</dt>
+          <dd>{delivery}</dd>
+        </div>
+        <div className="portal-course-detail-dl-row">
+          <dt>Notes</dt>
+          <dd>{notes}</dd>
+        </div>
+      </dl>
+    </div>
+  )
 }
 
 function isCourseSectionDetailRow(v: unknown): v is CourseSectionDetail {
@@ -396,6 +511,7 @@ export function CourseSearchPage() {
                                 const sectionRows = sectionsByCode[code]
                                 const sectionLoad = sectionsLoading[code] === true
                                 const sectionErr = sectionsError[code]
+                                const phase = sectionPanelPhase(sectionErr, sectionRows)
                                 return (
                                   <Fragment key={rowKey}>
                                     <tr className="portal-course-search-summary-row">
@@ -439,57 +555,44 @@ export function CourseSearchPage() {
                                                 Loading section details…
                                               </p>
                                             )}
-                                            {!sectionLoad && sectionErr && (
-                                              <p className="portal-course-search-sections-status portal-inline-note portal-inline-note--flush" role="alert">
+                                            {sectionErr && (
+                                              <p
+                                                className="portal-course-search-sections-status portal-inline-note portal-inline-note--flush"
+                                                role="alert"
+                                              >
                                                 {sectionErr}
                                               </p>
                                             )}
-                                            {!sectionLoad &&
-                                              !sectionErr &&
-                                              sectionRows !== undefined &&
-                                              sectionRows.length === 0 && (
-                                                <p
-                                                  className="portal-course-search-sections-status"
-                                                  role="status"
-                                                >
-                                                  No scheduled sections are listed for this course yet.
-                                                </p>
-                                              )}
-                                            {!sectionLoad &&
-                                              !sectionErr &&
-                                              sectionRows !== undefined &&
-                                              sectionRows.length > 0 && (
-                                                <div className="portal-table-wrap portal-table-wrap--nested portal-course-search-sections-table-wrap">
-                                                  <table className="portal-table portal-table--course-sections">
-                                                    <thead>
-                                                      <tr>
-                                                        <th scope="col">Section</th>
-                                                        <th scope="col">Weekday</th>
-                                                        <th scope="col">Time</th>
-                                                        <th scope="col">Room</th>
-                                                        <th scope="col">Instructor</th>
-                                                        <th scope="col">Units</th>
-                                                        <th scope="col">Category</th>
-                                                        <th scope="col">Delivery</th>
-                                                      </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                      {sectionRows.map((sec) => (
-                                                        <tr key={sec.id}>
-                                                          <td>{displayOrDash(sec.section_code)}</td>
-                                                          <td>{displayOrDash(sec.weekday)}</td>
-                                                          <td>{formatTimeSlot(sec.start_time, sec.end_time)}</td>
-                                                          <td>{displayOrDash(sec.room)}</td>
-                                                          <td>{displayOrDash(sec.instructor)}</td>
-                                                          <td>{displayOrDash(c.units)}</td>
-                                                          <td>{displayOrDash(c.category)}</td>
-                                                          <td>{displayOrDash(sec.delivery_mode)}</td>
-                                                        </tr>
-                                                      ))}
-                                                    </tbody>
-                                                  </table>
-                                                </div>
-                                              )}
+                                            {phase === 'empty' && (
+                                              <p className="portal-course-search-sections-status" role="status">
+                                                No scheduled sections are listed for this course yet. Catalog
+                                                fields are shown below where available.
+                                              </p>
+                                            )}
+                                            <div className="portal-course-detail-stack">
+                                              {phase === 'data' && sectionRows
+                                                ? sectionRows.map((sec) => (
+                                                    <CourseSectionDetailCard
+                                                      key={sec.id}
+                                                      course={c}
+                                                      section={sec}
+                                                      phase="data"
+                                                      heading={
+                                                        cellText(sec.section_code)
+                                                          ? `Section ${cellText(sec.section_code)} · ${cellText(sec.term)} ${sec.year}`
+                                                          : `Section · ${cellText(sec.term)} ${sec.year}`
+                                                      }
+                                                    />
+                                                  ))
+                                                : (
+                                                    <CourseSectionDetailCard
+                                                      course={c}
+                                                      section={null}
+                                                      phase={phase}
+                                                      heading="Course details"
+                                                    />
+                                                  )}
+                                            </div>
                                           </div>
                                         </td>
                                       </tr>
