@@ -36,6 +36,7 @@ export function getCatalogDemoAccountPayload(term, year) {
     }));
     return assembleStudentAccountPayload({
         studentId: DEMO_STUDENT_ID,
+        studentDisplayName: "Demo Student",
         term,
         year,
         enrollments,

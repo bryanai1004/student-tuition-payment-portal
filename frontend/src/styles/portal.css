@@ -928,6 +928,65 @@
   max-width: 52rem;
 }
 
+/* —— My Account (student profile) —— */
+.portal-profile-page .portal-profile-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 10rem;
+  padding: 2rem 1.25rem;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.portal-profile-state__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--portal-text);
+}
+
+.portal-profile-state__detail {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--portal-text-muted);
+}
+
+.portal-profile-state--error .portal-profile-state__title {
+  color: var(--amu-red-dark);
+}
+
+.portal-profile-state__actions {
+  margin-top: 0.25rem;
+  justify-content: center;
+}
+
+.portal-profile-card.portal-stack > .portal-section-heading {
+  margin-bottom: 0.5rem;
+}
+
+.portal-profile-card .portal-profile-balance {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--portal-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .portal-profile-page .portal-profile-state {
+    min-height: 8.5rem;
+    padding: 1.5rem 1rem;
+  }
+
+  .portal-profile-state__detail {
+    font-size: 0.8125rem;
+  }
+}
+
 /* —— Module layouts: local sub-navigation (Academics, Clinical, Documents) —— */
 .portal-academics-module,
 .portal-clinical-module,

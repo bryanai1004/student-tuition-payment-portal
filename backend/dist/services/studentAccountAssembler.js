@@ -12,7 +12,9 @@ const DEFAULT_PREFERENCE = {
     registrationPeriodEnds: "2026-09-05",
 };
 export function assembleStudentAccountPayload(ctx, options) {
-    const { studentId, term, year, enrollments, preference, payments, adjustments, courses, } = ctx;
+    const { studentId, studentDisplayName, term, year, enrollments, preference, payments, adjustments, courses, } = ctx;
+    const displayName = studentDisplayName?.trim() ||
+        (studentId?.trim() ? studentId.trim() : "Student");
     const courseById = new Map(courses.map((c) => [c.courseId, c]));
     const pref = preference ?? DEFAULT_PREFERENCE;
     const enrollmentLines = buildEnrollmentLineItems(enrollments, courseById);
@@ -43,6 +45,12 @@ export function assembleStudentAccountPayload(ctx, options) {
         term,
         year,
         studentId,
+        student: {
+            name: displayName,
+            studentId,
+            term,
+            year,
+        },
         preference: {
             useInstallmentPlan: pref.useInstallmentPlan,
             tuitionPaidInFullDuringRegistration: pref.tuitionPaidInFullDuringRegistration,

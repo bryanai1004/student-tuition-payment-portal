@@ -93,7 +93,7 @@ export async function postCourseBin(req, res) {
             res.status(400).json({ error: "studentId is required" });
             return;
         }
-        res.status(201).json(result.item);
+        res.status(200).json(result.item);
     }
     catch (e) {
         console.error("[course-bin] upsert failed:", e);

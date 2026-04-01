@@ -4,6 +4,7 @@ import { loadAccountContext } from "../repositories/studentAccountRepository.js"
 import { getCatalogDemoAccountPayload } from "./demoAccountService.js";
 import { assembleStudentAccountPayload } from "./studentAccountAssembler.js";
 export async function getStudentAccountPayload(studentId, term, year) {
+    console.debug("[account-debug] getStudentAccountPayload input", JSON.stringify({ studentId, term, year }));
     try {
         const ctx = await loadAccountContext(pool, studentId, term, year);
         if (ctx) {

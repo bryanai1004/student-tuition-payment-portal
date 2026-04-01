@@ -17,8 +17,10 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
   { mobileMenuOpen, onMobileMenuToggle, showPortalBanner = false },
   ref,
 ) {
-  const { account } = useAccount()
-  const displayName = account.student.name
+  const { fetchedAccount, loading } = useAccount()
+  const displayName = loading
+    ? 'Loading…'
+    : (fetchedAccount?.student.name?.trim() || 'Student')
 
   return (
     <header className="portal-app-header">
