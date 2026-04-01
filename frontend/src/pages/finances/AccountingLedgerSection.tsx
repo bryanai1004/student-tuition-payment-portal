@@ -145,7 +145,7 @@ export function AccountingLedgerSection() {
         <section className="portal-stack" aria-live="polite">
           <h2 className="portal-section-heading">Accounting ledger by quarter</h2>
           <p className="portal-inline-note portal-inline-note--flush" role="alert">
-            {error}
+            Could not load accounting quarters. {error}
           </p>
         </section>
       )
@@ -185,7 +185,7 @@ export function AccountingLedgerSection() {
 
       {error ? (
         <p className="portal-inline-note portal-inline-note--flush" role="alert">
-          {error}
+          Ledger could not be loaded. {error}
         </p>
       ) : null}
 

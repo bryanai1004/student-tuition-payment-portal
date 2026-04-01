@@ -75,12 +75,17 @@ function num(v) {
  * Newest first: year DESC, then Fall > Summer > Spring > Winter within the year.
  */
 export async function listLegacyAccountingQuarters(pool, studentId) {
-    const [rows] = await pool.query(`SELECT TRIM(term) AS term, year
-     FROM accounting
-     WHERE id = ?
-     GROUP BY TRIM(term), year
-     ORDER BY year DESC,
-       CASE UPPER(TRIM(term))
+    // Inner query: GROUP BY only (MySQL ONLY_FULL_GROUP_BY rejects ORDER BY on raw `term`
+    // in the same SELECT as GROUP BY). Outer query orders by normalized `q.term`.
+    const [rows] = await pool.query(`SELECT q.term, q.year
+     FROM (
+       SELECT TRIM(term) AS term, year
+       FROM accounting
+       WHERE id = ?
+       GROUP BY TRIM(term), year
+     ) AS q
+     ORDER BY q.year DESC,
+       CASE UPPER(q.term)
          WHEN 'FALL' THEN 4
          WHEN 'SUMMER' THEN 3
          WHEN 'SPRING' THEN 2

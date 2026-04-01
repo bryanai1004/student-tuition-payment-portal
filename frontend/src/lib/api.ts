@@ -62,7 +62,7 @@ export async function fetchApiJson(
   const trimmed = text.trim()
   if (trimmed === '') {
     if (!res.ok) {
-      throw new Error(`Request failed (HTTP ${res.status})`)
+      throw new Error(`Empty response body (HTTP ${res.status})`)
     }
     return null
   }
@@ -79,8 +79,8 @@ export async function fetchApiJson(
     const msg =
       (typeof body.message === 'string' && body.message) ||
       (typeof body.error === 'string' && body.error) ||
-      `Request failed (HTTP ${res.status})`
-    throw new Error(msg)
+      'Request failed'
+    throw new Error(`${msg} (HTTP ${res.status})`)
   }
 
   return data
