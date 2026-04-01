@@ -22,7 +22,10 @@ export function buildActivityRows(
   payload: StudentAccountPayload,
 ): ActivityRow[] {
   const effective = payload.termChargeEffectiveDate;
-  const displayEffective = formatShortDate(effective);
+  const displayEffective =
+    effective != null && String(effective).trim() !== ""
+      ? formatShortDate(effective)
+      : "—";
   const rows: ActivityRow[] = [];
   let balance = 0;
   for (const li of payload.lineItems) {

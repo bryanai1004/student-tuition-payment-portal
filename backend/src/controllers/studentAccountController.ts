@@ -7,8 +7,8 @@ import {
 } from "../services/studentAccountService.js";
 
 /**
- * Both `term` and `year` must be present for an explicit term; otherwise resolve latest enrollment
- * term/year for the student (see findLatestTermYearForStudent).
+ * Both `term` and `year` must be present for an explicit term; otherwise resolve the default term/year:
+ * demo student → latest `portal_enrollments`; real students → latest legacy `registration` row.
  */
 function accountTermYearFromQuery(req: Request): AccountTermYearInput {
   const termRaw = req.query.term;

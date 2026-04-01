@@ -46,7 +46,7 @@ export type InstallmentScheduleEntry = {
 };
 
 export type StudentAccountPayload = {
-  program: string;
+  program: string | null;
   term: string;
   year: number;
   studentId: string;
@@ -57,15 +57,15 @@ export type StudentAccountPayload = {
     term: string;
     year: number;
   };
-  preference: StudentTermPreference;
+  preference: StudentTermPreference | null;
   lineItems: BillingLineItem[];
   summary: StudentAccountSummary;
   scheduleRows: ScheduleRow[];
   payments: PaymentRecord[];
   installmentSchedule: InstallmentScheduleEntry[];
   installmentPolicy: string[];
-  billingStatus: string;
-  termChargeEffectiveDate: string;
+  billingStatus: string | null;
+  termChargeEffectiveDate: string | null;
 };
 
 export type EnrollmentRecord = {

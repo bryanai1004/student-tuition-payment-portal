@@ -22,7 +22,9 @@ export function AccountSummaryContent() {
   const nextDueRow = nextInstallmentRow(installmentRows)
   const payments = paymentsFromRecentActivity(account.recentActivity)
   const lastPayment = [...payments].sort((a, b) => String(b.paidAt).localeCompare(String(a.paidAt)))[0]
-  const lastUpdate = lastPayment?.paidAt ?? account.termChargeEffectiveDate
+  const lastUpdateRaw = lastPayment?.paidAt ?? account.termChargeEffectiveDate
+  const lastUpdate =
+    typeof lastUpdateRaw === 'string' && lastUpdateRaw.trim() !== '' ? lastUpdateRaw.trim() : null
   const planLabel = installmentPlanDisplayLabel(installmentPlan)
   const termLabel = portalTermLabel(account)
 
@@ -93,11 +95,13 @@ export function AccountSummaryContent() {
           <div className="portal-row">
             <dt>Last account update</dt>
             <dd>
-              {new Date(lastUpdate + 'T12:00:00').toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
+              {lastUpdate
+                ? new Date(`${lastUpdate}T12:00:00`).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })
+                : '—'}
             </dd>
           </div>
         </dl>

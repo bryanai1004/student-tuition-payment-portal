@@ -116,5 +116,5 @@ export function assembleStudentAccountPayload(
       summary.outstandingBalance > 0 ? "Active" : "Paid in full",
     termChargeEffectiveDate:
       options?.termChargeEffectiveDate ?? "2026-08-15",
-  };
+  } satisfies StudentAccountPayload;
 }

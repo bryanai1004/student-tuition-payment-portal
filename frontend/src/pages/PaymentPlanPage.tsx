@@ -14,7 +14,8 @@ export function PaymentPlanPage() {
     <PageLayout>
       <main className="portal-page">
         <p className="portal-page-lede">
-          {termLabel} installment schedule for {program}. Your plan: {planLabel}. Amounts and dates follow
+          {termLabel} installment schedule for {program.trim() ? program : 'your program'}. Your plan:{' '}
+          {planLabel}. Amounts and dates follow
           catalog rules (up to three installments per quarter); confirm details on official bursar
           communications.
         </p>
