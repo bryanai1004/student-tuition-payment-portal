@@ -10,6 +10,10 @@ export function MyCourseBinPage() {
   const { items, removeFromCourseBin } = useCourseBin()
   const hasItems = items.length > 0
 
+  const handleCheckout = () => {
+    navigate('/finances/overview')
+  }
+
   return (
     <main className="portal-page portal-course-bin-page">
       <section className="portal-card portal-stack" aria-labelledby="course-bin-heading">
@@ -27,7 +31,7 @@ export function MyCourseBinPage() {
               type="button"
               className="portal-btn portal-btn--primary portal-btn--compact"
               disabled={!hasItems}
-              onClick={() => navigate('/registration/checkout')}
+              onClick={handleCheckout}
             >
               Checkout
             </button>
