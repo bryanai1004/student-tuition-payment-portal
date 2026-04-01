@@ -11,7 +11,8 @@
     "dev": "tsx watch src/server.ts",
     "restart": "lsof -ti :3001 | xargs kill -9 2>/dev/null; npm run dev",
     "build": "tsc",
-    "seed": "node legacy/seed/seed.js"
+    "seed": "node legacy/seed/seed.js",
+    "db:bootstrap-portal": "node scripts/applyPortalAccountBootstrap.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

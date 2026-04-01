@@ -12,6 +12,7 @@ import type {
 /**
  * MySQL-first account reads. Expect these tables (adjust names in migrations as needed):
  *
+ * portal_students (student_external_id PK, full_name)
  * portal_courses (course_id PK, course_code, title, type ENUM, units, hours)
  * portal_enrollments (student_external_id, course_id, term, year)
  * portal_student_term_prefs (student_external_id, term, year, use_installment_plan,
@@ -65,8 +66,24 @@ export async function loadAccountContext(
   );
 
   if (enrollmentRows.length === 0) {
+    console.debug(
+      "[account-debug] loadAccountContext: no enrollments",
+      JSON.stringify({ studentId, term, year }),
+    );
     return null;
   }
+
+  const [[nameRow]] = await pool.query<RowDataPacket[]>(
+    `SELECT full_name AS fullName
+     FROM portal_students
+     WHERE student_external_id = ?
+     LIMIT 1`,
+    [studentId],
+  );
+  const studentDisplayName =
+    nameRow?.fullName != null && String(nameRow.fullName).trim() !== ""
+      ? String(nameRow.fullName).trim()
+      : null;
 
   const enrollments: EnrollmentRecord[] = enrollmentRows.map((r) => ({
     studentId: String(r.studentId),
@@ -155,8 +172,9 @@ export async function loadAccountContext(
     }),
   );
 
-  return {
+  const ctx: AccountContext = {
     studentId,
+    studentDisplayName,
     term,
     year,
     enrollments,
@@ -165,4 +183,18 @@ export async function loadAccountContext(
     adjustments,
     courses,
   };
+
+  console.debug(
+    "[account-debug] loadAccountContext: ok",
+    JSON.stringify({
+      studentId,
+      term,
+      year,
+      enrollmentCount: enrollments.length,
+      courseCount: courses.length,
+      hasDisplayName: Boolean(studentDisplayName),
+    }),
+  );
+
+  return ctx;
 }

@@ -10,6 +10,10 @@ export async function getStudentAccountPayload(
   term: string,
   year: number,
 ): Promise<StudentAccountPayload | null> {
+  console.debug(
+    "[account-debug] getStudentAccountPayload input",
+    JSON.stringify({ studentId, term, year }),
+  );
   try {
     const ctx = await loadAccountContext(pool, studentId, term, year);
     if (ctx) {

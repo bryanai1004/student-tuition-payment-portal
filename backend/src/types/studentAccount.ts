@@ -50,6 +50,13 @@ export type StudentAccountPayload = {
   term: string;
   year: number;
   studentId: string;
+  /** Display profile block aligned with the portal UI (TopBar / Profile). */
+  student: {
+    name: string;
+    studentId: string;
+    term: string;
+    year: number;
+  };
   preference: StudentTermPreference;
   lineItems: BillingLineItem[];
   summary: StudentAccountSummary;
@@ -86,6 +93,8 @@ export type BillingAdjustmentRecord = {
 /** Raw rows loaded from MySQL for one student term */
 export type AccountContext = {
   studentId: string;
+  /** From portal_students.full_name when present */
+  studentDisplayName: string | null;
   term: string;
   year: number;
   enrollments: EnrollmentRecord[];

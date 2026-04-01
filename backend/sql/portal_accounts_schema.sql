@@ -1,5 +1,10 @@
 -- MySQL tables expected by src/repositories/studentAccountRepository.ts
--- Apply via your migration workflow.
+-- Apply via your migration workflow or: npm run db:bootstrap-portal (from backend/)
+
+CREATE TABLE IF NOT EXISTS portal_students (
+  student_external_id VARCHAR(64) PRIMARY KEY,
+  full_name VARCHAR(255) NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS portal_courses (
   course_id VARCHAR(64) PRIMARY KEY,

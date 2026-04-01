@@ -35,6 +35,7 @@ export function assembleStudentAccountPayload(
 ): StudentAccountPayload {
   const {
     studentId,
+    studentDisplayName,
     term,
     year,
     enrollments,
@@ -43,6 +44,10 @@ export function assembleStudentAccountPayload(
     adjustments,
     courses,
   } = ctx;
+
+  const displayName =
+    studentDisplayName?.trim() ||
+    (studentId?.trim() ? studentId.trim() : "Student");
 
   const courseById = new Map(courses.map((c) => [c.courseId, c]));
   const pref = preference ?? DEFAULT_PREFERENCE;
@@ -88,6 +93,12 @@ export function assembleStudentAccountPayload(
     term,
     year,
     studentId,
+    student: {
+      name: displayName,
+      studentId,
+      term,
+      year,
+    },
     preference: {
       useInstallmentPlan: pref.useInstallmentPlan,
       tuitionPaidInFullDuringRegistration:

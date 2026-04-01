@@ -27,11 +27,12 @@ export async function getStudentAccount(
   try {
     const term = termFromQuery(req);
     const year = yearFromQuery(req);
-    const payload = await getStudentAccountPayload(
-      pathStudentId(req),
-      term,
-      year,
+    const sid = pathStudentId(req);
+    console.debug(
+      "[account-debug] getStudentAccount",
+      JSON.stringify({ studentId: sid, term, year }),
     );
+    const payload = await getStudentAccountPayload(sid, term, year);
     if (!payload) {
       res.status(404).json({ error: "Student term account not found" });
       return;
