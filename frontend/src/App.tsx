@@ -3,12 +3,8 @@ import { LoginPage } from './pages/LoginPage'
 import { PaymentPlanPage } from './pages/PaymentPlanPage'
 import { PortalLayout } from './components/PortalLayout'
 import { RegistrationLayout } from './pages/registration/RegistrationLayout'
-import { RegistrationHomePage } from './pages/registration/RegistrationHomePage'
-import { AddDropPage } from './pages/registration/AddDropPage'
 import { CourseSearchPage } from './pages/registration/CourseSearchPage'
 import { SchedulePage } from './pages/registration/SchedulePage'
-import { RegistrationFormPage } from './pages/registration/RegistrationFormPage'
-import { RegistrationStatusPage } from './pages/registration/RegistrationStatusPage'
 import { FinancesLayout } from './pages/finances/FinancesLayout'
 import { FinancesOverviewPage } from './pages/finances/FinancesOverviewPage'
 import { FinancesPaymentPage } from './pages/finances/FinancesPaymentPage'
@@ -47,12 +43,9 @@ export default function App() {
       <Route element={<PortalLayout />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/registration" element={<RegistrationLayout />}>
-          <Route index element={<RegistrationHomePage />} />
-          <Route path="add-drop" element={<AddDropPage />} />
+          <Route index element={<Navigate to="search" replace />} />
           <Route path="search" element={<CourseSearchPage />} />
           <Route path="schedule" element={<SchedulePage />} />
-          <Route path="form" element={<RegistrationFormPage />} />
-          <Route path="status" element={<RegistrationStatusPage />} />
         </Route>
         <Route path="/finances" element={<FinancesLayout />}>
           <Route index element={<Navigate to="overview" replace />} />

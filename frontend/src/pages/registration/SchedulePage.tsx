@@ -4,13 +4,9 @@ const SLOTS = ['8:00', '10:00', '12:00', '2:00', '4:00'] as const
 export function SchedulePage() {
   return (
     <main className="portal-page">
-      <p className="portal-page-lede">
-        This timetable is a preview layout. Registered sections will populate these cells when your
-        enrollment data is connected.
-      </p>
       <section className="portal-card portal-stack" aria-labelledby="timetable-heading">
         <h2 id="timetable-heading" className="portal-section-heading">
-          Week at a glance
+          My Timetable
         </h2>
         <div className="portal-table-wrap">
           <table className="portal-table portal-table--courses">
