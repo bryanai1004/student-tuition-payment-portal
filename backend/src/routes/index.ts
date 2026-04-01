@@ -4,6 +4,11 @@ import {
   patchAdminCourseSection,
   postAdminCourseSection,
 } from "../controllers/adminCourseSectionController.js";
+import {
+  deleteCourseBinItemHandler,
+  getCourseBin,
+  postCourseBin,
+} from "../controllers/courseBinController.js";
 import { getCourseSections, getCourses } from "../controllers/courseController.js";
 import { getHealth, getHealthDb } from "../controllers/healthController.js";
 import {
@@ -20,6 +25,14 @@ apiRouter.get("/health/db", getHealthDb);
 
 apiRouter.get("/courses", getCourses);
 apiRouter.get("/courses/:code/sections", getCourseSections);
+
+/** Course bin (per student); requires `student_course_bin` table when used. */
+apiRouter.get("/course-bin/:studentId", getCourseBin);
+apiRouter.post("/course-bin/:studentId", postCourseBin);
+apiRouter.delete(
+  "/course-bin/:studentId/:itemId",
+  deleteCourseBinItemHandler,
+);
 
 /** Admin section CRUD: protect with auth / role checks before exposing publicly. */
 const adminRouter = Router();

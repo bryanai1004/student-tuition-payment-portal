@@ -4,6 +4,7 @@ import { PaymentPlanPage } from './pages/PaymentPlanPage'
 import { PortalLayout } from './components/PortalLayout'
 import { RegistrationLayout } from './pages/registration/RegistrationLayout'
 import { CourseSearchPage } from './pages/registration/CourseSearchPage'
+import { MyCourseBinPage } from './pages/registration/MyCourseBinPage'
 import { SchedulePage } from './pages/registration/SchedulePage'
 import { FinancesLayout } from './pages/finances/FinancesLayout'
 import { FinancesOverviewPage } from './pages/finances/FinancesOverviewPage'
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/registration" element={<RegistrationLayout />}>
           <Route index element={<Navigate to="search" replace />} />
           <Route path="search" element={<CourseSearchPage />} />
+          <Route path="course-bin" element={<MyCourseBinPage />} />
           <Route path="schedule" element={<SchedulePage />} />
         </Route>
         <Route path="/finances" element={<FinancesLayout />}>

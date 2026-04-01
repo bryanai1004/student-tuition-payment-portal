@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCourseBin, type CourseBinItem } from './CourseBinContext'
 
 const COURSES_API_URL = 'http://127.0.0.1:3001/api/courses'
 
@@ -84,17 +85,6 @@ function unitsFromSectionOrCatalog(
   return displayOrDash(course.units)
 }
 
-function categoryFromSectionOrCatalog(
-  section: CourseSectionDetail | null,
-  course: CourseCatalogItem,
-): string {
-  if (section) {
-    const c = cellText(section.category)
-    if (c !== '') return c
-  }
-  return displayOrDash(course.category)
-}
-
 type SectionPanelPhase = 'loading' | 'empty' | 'error' | 'data'
 
 function sectionPanelPhase(
@@ -109,78 +99,188 @@ function sectionPanelPhase(
   return 'data'
 }
 
-function scheduleValue(
-  phase: SectionPanelPhase,
-  hasSection: boolean,
-  valueWhenData: string,
-): string {
-  if (phase === 'loading') return '…'
-  if (phase === 'error' || phase === 'empty' || !hasSection) return 'Not available yet'
-  return valueWhenData === '' ? '—' : valueWhenData
+const PLACEHOLDER_REGISTERED = '0 of 0'
+
+type SectionScheduleRowModel = {
+  key: string | number
+  section: string
+  session: string
+  type: string
+  units: string
+  registered: string
+  time: string
+  days: string
+  instructor: string
+  location: string
 }
 
-function CourseSectionDetailCard({
-  course,
-  section,
+function sessionLabelFromSection(sec: CourseSectionDetail): string {
+  const term = cellText(sec.term)
+  const year = sec.year
+  if (term === '' && (year === null || year === undefined || Number.isNaN(Number(year)))) {
+    return '—'
+  }
+  if (term === '') return String(year)
+  return `${term} ${year}`
+}
+
+function typeLabelFromSection(sec: CourseSectionDetail | null): string {
+  if (!sec) return 'Lecture'
+  const d = cellText(sec.delivery_mode)
+  return d === '' ? 'Lecture' : d
+}
+
+function sectionScheduleRows(
+  phase: SectionPanelPhase,
+  sectionRows: CourseSectionDetail[] | undefined,
+  course: CourseCatalogItem,
+): SectionScheduleRowModel[] {
+  if (phase === 'data' && sectionRows && sectionRows.length > 0) {
+    return sectionRows.map((sec) => {
+      const timeRaw = formatTimeSlot(sec.start_time, sec.end_time)
+      const daysRaw = cellText(sec.weekday)
+      const instRaw = cellText(sec.instructor)
+      const locRaw = cellText(sec.room)
+      const secCode = cellText(sec.section_code)
+      return {
+        key: sec.id,
+        section: secCode === '' ? '—' : secCode,
+        session: sessionLabelFromSection(sec),
+        type: typeLabelFromSection(sec),
+        units: unitsFromSectionOrCatalog(sec, course),
+        registered: PLACEHOLDER_REGISTERED,
+        time: timeRaw === '—' ? 'TBA' : timeRaw,
+        days: daysRaw === '' ? 'TBA' : daysRaw,
+        instructor: instRaw === '' ? 'TBA' : instRaw,
+        location: locRaw === '' ? 'TBA' : locRaw,
+      }
+    })
+  }
+
+  const catalogUnits = displayOrDash(course.units)
+  return [
+    {
+      key: 'placeholder',
+      section: '—',
+      session: '—',
+      type: 'Lecture',
+      units: catalogUnits === '' ? '—' : catalogUnits,
+      registered: PLACEHOLDER_REGISTERED,
+      time: 'TBA',
+      days: 'TBA',
+      instructor: 'TBA',
+      location: 'TBA',
+    },
+  ]
+}
+
+function CourseSectionScheduleTable({
+  courseCode,
+  panelId,
   phase,
-  heading,
+  sectionRows,
+  course,
+  sectionLoad,
+  sectionErr,
+  addToCourseBin,
 }: {
-  course: CourseCatalogItem
-  section: CourseSectionDetail | null
+  courseCode: string
+  panelId: string
   phase: SectionPanelPhase
-  heading: string
+  sectionRows: CourseSectionDetail[] | undefined
+  course: CourseCatalogItem
+  sectionLoad: boolean
+  sectionErr: string | undefined
+  addToCourseBin: (item: CourseBinItem) => void
 }) {
-  const hasSection = section !== null
-  const weekday = scheduleValue(phase, hasSection, displayOrDash(section?.weekday))
-  const timeSlot = scheduleValue(
-    phase,
-    hasSection,
-    section ? formatTimeSlot(section.start_time, section.end_time) : '—',
-  )
-  const room = scheduleValue(phase, hasSection, displayOrDash(section?.room))
-  const instructor = scheduleValue(phase, hasSection, displayOrDash(section?.instructor))
-  const delivery = scheduleValue(phase, hasSection, displayOrDash(section?.delivery_mode))
-  const notes = scheduleValue(phase, hasSection, displayOrDash(section?.notes))
-  const units = unitsFromSectionOrCatalog(section, course)
-  const category = categoryFromSectionOrCatalog(section, course)
+  const rows = sectionScheduleRows(phase, sectionRows, course)
 
   return (
-    <div className="portal-course-detail-card">
-      <h4 className="portal-course-detail-card-title">{heading}</h4>
-      <dl className="portal-course-detail-dl">
-        <div className="portal-course-detail-dl-row">
-          <dt>Weekday</dt>
-          <dd>{weekday}</dd>
+    <div
+      id={panelId}
+      className="portal-course-search-sections-panel"
+      role="region"
+      aria-label={`Section schedule for ${courseCode}`}
+    >
+      {sectionLoad && (
+        <p className="portal-course-search-sections-status" role="status" aria-live="polite">
+          Loading section details…
+        </p>
+      )}
+      {sectionErr && (
+        <p
+          className="portal-course-search-sections-status portal-inline-note portal-inline-note--flush"
+          role="alert"
+        >
+          {sectionErr}
+        </p>
+      )}
+      <div className="portal-course-search-sections-table-wrap portal-course-search-sections-table-wrap--schedule">
+        <div className="portal-course-search-sections-table-scroll">
+          <table className="portal-table portal-table--course-sections portal-table--course-section-schedule">
+            <thead>
+              <tr>
+                <th scope="col">Section</th>
+                <th scope="col">Session</th>
+                <th scope="col">Type</th>
+                <th scope="col">Units</th>
+                <th scope="col">Registered</th>
+                <th scope="col">Time</th>
+                <th scope="col">Days</th>
+                <th scope="col">Instructor</th>
+                <th scope="col">Location</th>
+                <th scope="col" className="portal-course-section-schedule-col-action">
+                  Action
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const canAddToBin = phase === 'data' && row.key !== 'placeholder'
+                return (
+                  <tr key={row.key}>
+                    <td>{row.section}</td>
+                    <td>{row.session}</td>
+                    <td>{row.type}</td>
+                    <td>{row.units}</td>
+                    <td>{row.registered}</td>
+                    <td>{row.time}</td>
+                    <td>{row.days}</td>
+                    <td>{row.instructor}</td>
+                    <td>{row.location}</td>
+                    <td className="portal-course-section-schedule-col-action">
+                      <button
+                        type="button"
+                        className="portal-btn portal-btn--secondary portal-btn--compact"
+                        disabled={!canAddToBin}
+                        onClick={() => {
+                          if (!canAddToBin) return
+                          addToCourseBin({
+                            course_code: cellText(courseCode),
+                            eng_name: cellText(course.eng_name),
+                            chi_name: cellText(course.chi_name),
+                            units: row.units,
+                            section: row.section,
+                            session: row.session,
+                            type: row.type,
+                            registered: row.registered,
+                            time: row.time,
+                            days: row.days,
+                            instructor: row.instructor,
+                            location: row.location,
+                          })
+                        }}
+                      >
+                        Add to CourseBin
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
-        <div className="portal-course-detail-dl-row">
-          <dt>Time slot</dt>
-          <dd>{timeSlot}</dd>
-        </div>
-        <div className="portal-course-detail-dl-row">
-          <dt>Room</dt>
-          <dd>{room}</dd>
-        </div>
-        <div className="portal-course-detail-dl-row">
-          <dt>Instructor</dt>
-          <dd>{instructor}</dd>
-        </div>
-        <div className="portal-course-detail-dl-row">
-          <dt>Units</dt>
-          <dd>{units}</dd>
-        </div>
-        <div className="portal-course-detail-dl-row">
-          <dt>Category</dt>
-          <dd>{category}</dd>
-        </div>
-        <div className="portal-course-detail-dl-row">
-          <dt>Delivery mode</dt>
-          <dd>{delivery}</dd>
-        </div>
-        <div className="portal-course-detail-dl-row">
-          <dt>Notes</dt>
-          <dd>{notes}</dd>
-        </div>
-      </dl>
+      </div>
     </div>
   )
 }
@@ -212,6 +312,7 @@ function panelIdForPrefix(prefixKey: string): string {
 }
 
 export function CourseSearchPage() {
+  const { addToCourseBin } = useCourseBin()
   const [courses, setCourses] = useState<CourseCatalogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -540,60 +641,16 @@ export function CourseSearchPage() {
                                     {courseOpen && (
                                       <tr className="portal-course-search-detail-row">
                                         <td colSpan={5} className="portal-course-search-sections-cell">
-                                          <div
-                                            id={panelId}
-                                            className="portal-course-search-sections-panel"
-                                            role="region"
-                                            aria-label={`Scheduled sections for ${code}`}
-                                          >
-                                            {sectionLoad && (
-                                              <p
-                                                className="portal-course-search-sections-status"
-                                                role="status"
-                                                aria-live="polite"
-                                              >
-                                                Loading section details…
-                                              </p>
-                                            )}
-                                            {sectionErr && (
-                                              <p
-                                                className="portal-course-search-sections-status portal-inline-note portal-inline-note--flush"
-                                                role="alert"
-                                              >
-                                                {sectionErr}
-                                              </p>
-                                            )}
-                                            {phase === 'empty' && (
-                                              <p className="portal-course-search-sections-status" role="status">
-                                                No scheduled sections are listed for this course yet. Catalog
-                                                fields are shown below where available.
-                                              </p>
-                                            )}
-                                            <div className="portal-course-detail-stack">
-                                              {phase === 'data' && sectionRows
-                                                ? sectionRows.map((sec) => (
-                                                    <CourseSectionDetailCard
-                                                      key={sec.id}
-                                                      course={c}
-                                                      section={sec}
-                                                      phase="data"
-                                                      heading={
-                                                        cellText(sec.section_code)
-                                                          ? `Section ${cellText(sec.section_code)} · ${cellText(sec.term)} ${sec.year}`
-                                                          : `Section · ${cellText(sec.term)} ${sec.year}`
-                                                      }
-                                                    />
-                                                  ))
-                                                : (
-                                                    <CourseSectionDetailCard
-                                                      course={c}
-                                                      section={null}
-                                                      phase={phase}
-                                                      heading="Course details"
-                                                    />
-                                                  )}
-                                            </div>
-                                          </div>
+                                          <CourseSectionScheduleTable
+                                            courseCode={code}
+                                            panelId={panelId}
+                                            phase={phase}
+                                            sectionRows={sectionRows}
+                                            course={c}
+                                            sectionLoad={sectionLoad}
+                                            sectionErr={sectionErr}
+                                            addToCourseBin={addToCourseBin}
+                                          />
                                         </td>
                                       </tr>
                                     )}

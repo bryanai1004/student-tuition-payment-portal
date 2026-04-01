@@ -8,6 +8,7 @@ function linkClass(isActive: boolean) {
 
 const ITEMS = [
   { to: 'search', label: 'Course Search' },
+  { to: 'course-bin', label: 'My CourseBin' },
   { to: 'schedule', label: 'My Timetable' },
 ] as const
 
