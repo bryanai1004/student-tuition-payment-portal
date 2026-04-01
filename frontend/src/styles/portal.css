@@ -565,6 +565,37 @@
   padding-right: var(--portal-dashboard-padding-x);
 }
 
+/* Registration (sidebar routes): use main column width + tighter gutters — matches dashboard canvas intent */
+.portal-main-body:has(.portal-registration-module) {
+  --portal-registration-main-padding-x: clamp(1rem, 0.45rem + 1vw, 1.5rem);
+  padding-left: var(--portal-registration-main-padding-x);
+  padding-right: var(--portal-registration-main-padding-x);
+}
+
+@media (min-width: 1280px) {
+  .portal-main-body:has(.portal-registration-module) {
+    --portal-registration-main-padding-x: clamp(0.875rem, 0.45rem + 0.38vw, 1.125rem);
+  }
+}
+
+@media (min-width: 1440px) {
+  .portal-main-body:has(.portal-registration-module) {
+    --portal-registration-main-padding-x: clamp(0.75rem, 0.4rem + 0.28vw, 1rem);
+  }
+}
+
+@media (min-width: 1600px) {
+  .portal-main-body:has(.portal-registration-module) {
+    --portal-registration-main-padding-x: clamp(0.75rem, 0.35rem + 0.22vw, 0.875rem);
+  }
+}
+
+@media (min-width: 1920px) {
+  .portal-main-body:has(.portal-registration-module) {
+    --portal-registration-main-padding-x: clamp(0.625rem, 0.28rem + 0.16vw, 0.75rem);
+  }
+}
+
 @media (max-width: 768px) {
   .portal-shell--authenticated {
     flex-direction: column;
@@ -639,6 +670,11 @@
 
   .portal-main-body {
     padding-top: 0.875rem;
+  }
+
+  .portal-main-body:has(.portal-registration-module) {
+    padding-left: var(--portal-main-padding-x);
+    padding-right: var(--portal-main-padding-x);
   }
 
   .portal-page-lede {
@@ -886,15 +922,23 @@
   max-width: 52rem;
 }
 
-/* —— Module layouts: local sub-navigation (Finances, Registration, Academics, Clinical, Documents) —— */
+/* —— Module layouts: local sub-navigation (Finances, Academics, Clinical, Documents) —— */
 .portal-finances-module,
-.portal-registration-module,
 .portal-academics-module,
 .portal-clinical-module,
 .portal-documents-module {
   max-width: min(var(--portal-module-max), 100%);
   margin: 0 auto;
   width: 100%;
+}
+
+/* Registration: fill the main column (no centered 74rem island) so catalog + expanded rows use available width */
+.portal-registration-module {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .portal-finances-nav,
@@ -1695,6 +1739,52 @@
 
 .portal-course-search-sections-panel {
   max-width: 100%;
+}
+
+.portal-course-detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.portal-course-detail-card {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--portal-border-subtle);
+  border-radius: var(--portal-radius);
+  background: var(--portal-surface);
+}
+
+.portal-course-detail-card-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--portal-text);
+  letter-spacing: 0.02em;
+}
+
+.portal-course-detail-dl {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 9.5rem) 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.portal-course-detail-dl-row {
+  display: contents;
+}
+
+.portal-course-detail-dl dt {
+  margin: 0;
+  font-weight: 600;
+  color: var(--portal-text-muted);
+}
+
+.portal-course-detail-dl dd {
+  margin: 0;
+  color: var(--portal-text);
+  word-break: break-word;
 }
 
 .portal-course-search-sections-status {

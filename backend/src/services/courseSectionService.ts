@@ -1,12 +1,38 @@
 import {
+  createCourseSection as insertCourseSection,
+  deleteCourseSectionById,
   listCourseSectionsByCourseCode,
+  updateCourseSection as patchCourseSection,
+  type CourseSectionCreateInput,
   type CourseSectionDetail,
+  type CourseSectionUpdateInput,
 } from "../repositories/courseSectionRepository.js";
 
-export type { CourseSectionDetail };
+export type {
+  CourseSectionCreateInput,
+  CourseSectionDetail,
+  CourseSectionUpdateInput,
+};
 
 export async function getSectionsForCourseCode(
   courseCode: string,
 ): Promise<CourseSectionDetail[]> {
   return listCourseSectionsByCourseCode(courseCode);
+}
+
+export async function createCourseSection(
+  input: CourseSectionCreateInput,
+): Promise<CourseSectionDetail> {
+  return insertCourseSection(input);
+}
+
+export async function updateCourseSection(
+  id: number,
+  patch: CourseSectionUpdateInput,
+): Promise<CourseSectionDetail | null> {
+  return patchCourseSection(id, patch);
+}
+
+export async function deleteCourseSection(id: number): Promise<boolean> {
+  return deleteCourseSectionById(id);
 }

@@ -1,4 +1,9 @@
 import { Router } from "express";
+import {
+  deleteAdminCourseSection,
+  patchAdminCourseSection,
+  postAdminCourseSection,
+} from "../controllers/adminCourseSectionController.js";
 import { getCourseSections, getCourses } from "../controllers/courseController.js";
 import { getHealth, getHealthDb } from "../controllers/healthController.js";
 import {
@@ -15,6 +20,13 @@ apiRouter.get("/health/db", getHealthDb);
 
 apiRouter.get("/courses", getCourses);
 apiRouter.get("/courses/:code/sections", getCourseSections);
+
+/** Admin section CRUD: protect with auth / role checks before exposing publicly. */
+const adminRouter = Router();
+adminRouter.post("/course-sections", postAdminCourseSection);
+adminRouter.patch("/course-sections/:id", patchAdminCourseSection);
+adminRouter.delete("/course-sections/:id", deleteAdminCourseSection);
+apiRouter.use("/admin", adminRouter);
 
 apiRouter.get("/students/:studentId/account", getStudentAccount);
 apiRouter.get("/students/:studentId/activity", getStudentActivity);
