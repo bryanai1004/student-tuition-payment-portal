@@ -155,3 +155,80 @@ export async function loginStudent(
 
   throw new Error('Unexpected login response shape')
 }
+
+export type AccountingQuarterOption = {
+  term: string
+  year: number
+  label: string
+}
+
+export type AccountingQuartersResponse = {
+  studentId: string
+  quarters: AccountingQuarterOption[]
+}
+
+export type AccountingLedgerRow = {
+  date: string
+  type: string
+  code: string
+  memo: string
+  debit: number
+  credit: number
+}
+
+export type AccountingLedgerResponse = {
+  studentId: string
+  term: string
+  year: number
+  rows: AccountingLedgerRow[]
+  summary: {
+    totalCharges: number
+    totalPayments: number
+    balance: number
+  }
+}
+
+/** GET /api/students/:studentId/accounting/quarters — legacy `accounting` term/year list (real students). */
+export async function fetchAccountingQuarters(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<AccountingQuartersResponse> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/accounting/quarters`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (
+    data != null &&
+    typeof data === 'object' &&
+    typeof (data as { studentId?: unknown }).studentId === 'string' &&
+    Array.isArray((data as { quarters?: unknown }).quarters)
+  ) {
+    return data as AccountingQuartersResponse
+  }
+  throw new Error('Unexpected accounting quarters response')
+}
+
+/** GET /api/students/:studentId/accounting/ledger?term=&year= — legacy ledger rows for one quarter. */
+export async function fetchAccountingLedger(
+  studentId: string,
+  term: string,
+  year: number,
+  options?: { signal?: AbortSignal },
+): Promise<AccountingLedgerResponse> {
+  const params = new URLSearchParams()
+  params.set('term', term.trim())
+  params.set('year', String(year))
+  const path = `/api/students/${encodeURIComponent(studentId)}/accounting/ledger?${params.toString()}`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (
+    data != null &&
+    typeof data === 'object' &&
+    typeof (data as { studentId?: unknown }).studentId === 'string' &&
+    typeof (data as { term?: unknown }).term === 'string' &&
+    typeof (data as { year?: unknown }).year === 'number' &&
+    Array.isArray((data as { rows?: unknown }).rows) &&
+    (data as { summary?: unknown }).summary != null &&
+    typeof (data as { summary: unknown }).summary === 'object'
+  ) {
+    return data as AccountingLedgerResponse
+  }
+  throw new Error('Unexpected accounting ledger response')
+}

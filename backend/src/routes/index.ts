@@ -12,6 +12,10 @@ import {
 import { getCourseSections, getCourses } from "../controllers/courseController.js";
 import { getHealth, getHealthDb } from "../controllers/healthController.js";
 import {
+  getAccountingLedger,
+  getAccountingQuarters,
+} from "../controllers/studentLedgerController.js";
+import {
   getDemoAccount,
   getDemoActivity,
   getStudentAccount,
@@ -46,6 +50,11 @@ apiRouter.use("/admin", adminRouter);
 
 apiRouter.get("/students/:studentId/account", getStudentAccount);
 apiRouter.get("/students/:studentId/activity", getStudentActivity);
+apiRouter.get(
+  "/students/:studentId/accounting/quarters",
+  getAccountingQuarters,
+);
+apiRouter.get("/students/:studentId/accounting/ledger", getAccountingLedger);
 
 apiRouter.get("/demo/account", getDemoAccount);
 apiRouter.get("/demo/activity", getDemoActivity);
