@@ -95,8 +95,35 @@ export async function listLegacyAccountingQuarters(pool, studentId) {
     return out;
 }
 /**
- * All `accounting` rows for one student (`id`), term, and year (signed debit/credit preserved).
+ * Load one legacy `students` row by primary key `id` (e.g. C17310).
  */
+export async function loadLegacyStudentProfileRow(pool, studentId) {
+    const [rows] = await pool.query(`SELECT
+       id,
+       name,
+       gender,
+       dob,
+       signed_date,
+       EnrollStartDate,
+       background,
+       admission_credits,
+       tertiary,
+       race,
+       address,
+       address2,
+       city,
+       state,
+       zip,
+       email,
+       requirements_id
+     FROM students
+     WHERE id = ?
+     LIMIT 1`, [studentId]);
+    if (rows.length === 0) {
+        return null;
+    }
+    return rows[0];
+}
 export async function loadLegacyAccountingRows(pool, studentId, term, year) {
     const [rows] = await pool.query(`SELECT seqNumber, year, TRIM(term) AS term, date, type, code, debit, credit, memo
      FROM accounting

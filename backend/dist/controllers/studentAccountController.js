@@ -1,6 +1,7 @@
 import { buildActivityRows } from "../services/activityView.js";
 import { getCatalogDemoAccountPayload } from "../services/demoAccountService.js";
 import { getStudentAccountPayload, } from "../services/studentAccountService.js";
+import { getLegacyStudentProfile } from "../services/studentProfileService.js";
 /**
  * Both `term` and `year` must be present for an explicit term; otherwise resolve the default term/year:
  * demo student → latest `portal_enrollments`; real students → latest legacy `registration` row.
@@ -35,6 +36,25 @@ function pathStudentId(req) {
     if (Array.isArray(v))
         return v[0] ?? "";
     return v ?? "";
+}
+export async function getStudentProfile(req, res) {
+    try {
+        const sid = pathStudentId(req).trim();
+        if (sid === "") {
+            res.status(400).json({ error: "Missing student id" });
+            return;
+        }
+        const payload = await getLegacyStudentProfile(sid);
+        if (!payload) {
+            res.status(404).json({ error: "Student profile not found" });
+            return;
+        }
+        res.json(payload);
+    }
+    catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to load student profile" });
+    }
 }
 export async function getStudentAccount(req, res) {
     try {

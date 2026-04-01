@@ -1,4 +1,4 @@
-import type { Pool } from "mysql2/promise";
+import type { Pool, RowDataPacket } from "mysql2/promise";
 /**
  * Legacy MySQL tables (live school DB):
  * - `students.id` — login / account key (e.g. C17310)
@@ -53,5 +53,11 @@ export declare function listLegacyAccountingQuarters(pool: Pool, studentId: stri
 /**
  * All `accounting` rows for one student (`id`), term, and year (signed debit/credit preserved).
  */
+/** Raw row from `students` for profile mapping (column names as returned by MySQL driver). */
+export type LegacyStudentProfileRow = RowDataPacket;
+/**
+ * Load one legacy `students` row by primary key `id` (e.g. C17310).
+ */
+export declare function loadLegacyStudentProfileRow(pool: Pool, studentId: string): Promise<LegacyStudentProfileRow | null>;
 export declare function loadLegacyAccountingRows(pool: Pool, studentId: string, term: string, year: number): Promise<LegacyAccountingRow[]>;
 //# sourceMappingURL=studentLegacyAccountRepository.d.ts.map
