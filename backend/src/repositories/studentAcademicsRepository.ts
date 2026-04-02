@@ -22,6 +22,7 @@ export type MarksRow = {
   name: string;
   code: string;
   course_title: string;
+  units: number;
   days: string | null;
   time_from: unknown;
   time_to: unknown;
@@ -39,10 +40,13 @@ function str(v: unknown): string {
 
 function mapMarksRow(r: RowDataPacket): MarksRow {
   const row = r as Record<string, unknown>;
+  const unitsRaw = Number(row.units);
+  const units = Number.isFinite(unitsRaw) ? unitsRaw : 0;
   return {
     name: str(row.name),
     code: str(row.code),
     course_title: str(row.course_title),
+    units,
     days: row.days == null || str(row.days) === "" ? null : str(row.days),
     time_from: row.time_from,
     time_to: row.time_to,
@@ -65,6 +69,7 @@ export async function listMarksForStudent(
     `SELECT TRIM(name) AS name,
             TRIM(code) AS code,
             course_title,
+            units,
             days,
             time_from,
             time_to,

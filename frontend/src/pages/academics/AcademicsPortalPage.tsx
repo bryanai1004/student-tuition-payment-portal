@@ -4,69 +4,20 @@ import {
   fetchStudentAcademics,
   type StudentAcademicsResponse,
 } from '../../lib/api'
+import {
+  bilingualCourseTitleParts,
+  buildTranscriptTermOptions,
+  defaultTermKeyFromTranscript,
+  formatCreditCell,
+  groupTranscriptByTermYear,
+  rowsForSelectedTerm,
+  termYearKey,
+  type TranscriptRow,
+} from '../../lib/academicsTranscriptDisplay'
 
 type AcademicsMode = 'quarter' | 'transcript'
-type TranscriptRow = StudentAcademicsResponse['transcript'][number]
 
 const SCHOOL_TITLE = 'Alhambra Medical University'
-
-function termYearKey(term: string, year: number): string {
-  return `${term}\t${year}`
-}
-
-function defaultTermKey(data: StudentAcademicsResponse): string | null {
-  const ct = data.currentTerm
-  if (ct) {
-    const inList = data.availableTerms.some(
-      (t) => t.term === ct.term && t.year === ct.year,
-    )
-    if (inList) return termYearKey(ct.term, ct.year)
-  }
-  if (data.availableTerms.length > 0) {
-    const a = data.availableTerms[0]
-    return termYearKey(a.term, a.year)
-  }
-  if (ct) return termYearKey(ct.term, ct.year)
-  return null
-}
-
-function termRank(term: string): number {
-  const t = term.trim().toLowerCase()
-  if (t === 'fall') return 4
-  if (t === 'summer') return 3
-  if (t === 'spring') return 2
-  if (t === 'winter') return 1
-  return 0
-}
-
-function compareTermGroups(
-  a: { year: number; term: string },
-  b: { year: number; term: string },
-): number {
-  if (a.year !== b.year) return b.year - a.year
-  return termRank(b.term) - termRank(a.term)
-}
-
-function groupTranscriptByTermYear(
-  transcript: TranscriptRow[],
-): Array<{ year: number; term: string; rows: TranscriptRow[] }> {
-  const order: Array<{ year: number; term: string }> = []
-  const map = new Map<string, TranscriptRow[]>()
-  for (const row of transcript) {
-    const key = `${row.year}\t${row.term}`
-    if (!map.has(key)) {
-      map.set(key, [])
-      order.push({ year: row.year, term: row.term })
-    }
-    map.get(key)!.push(row)
-  }
-  const sortedKeys = [...order].sort(compareTermGroups)
-  return sortedKeys.map(({ year, term }) => ({
-    year,
-    term,
-    rows: map.get(`${year}\t${term}`)!,
-  }))
-}
 
 function formatIssueDate(): string {
   try {
@@ -79,6 +30,23 @@ function formatIssueDate(): string {
     return new Date().toISOString().slice(0, 10)
   }
 }
+
+function CourseTitleCell({ row }: { row: TranscriptRow }) {
+  const { primary, secondary } = bilingualCourseTitleParts(row)
+  return (
+    <td className="portal-academics-course-title-cell">
+      <span className="portal-academics-course-title__en">{primary}</span>
+      {secondary ? (
+        <span className="portal-academics-course-title__zh" lang="zh-Hant">
+          {secondary}
+        </span>
+      ) : null}
+    </td>
+  )
+}
+
+const GRADES_TABLE_CLASS =
+  'portal-table portal-table--grades portal-academics-portal-grades-table'
 
 export function AcademicsPortalPage() {
   const { currentStudentId } = useAccount()
@@ -112,7 +80,8 @@ export function AcademicsPortalPage() {
         const data = await fetchStudentAcademics(id, { signal: ac.signal })
         if (ac.signal.aborted) return
         setAcademics(data)
-        setSelectedKey(defaultTermKey(data))
+        const opts = buildTranscriptTermOptions(data.transcript)
+        setSelectedKey(defaultTermKeyFromTranscript(data, opts))
         setError(null)
       } catch (e) {
         if (ac.signal.aborted) return
@@ -131,6 +100,23 @@ export function AcademicsPortalPage() {
 
     return () => ac.abort()
   }, [currentStudentId, reloadKey])
+
+  const termOptions = useMemo(
+    () => (academics ? buildTranscriptTermOptions(academics.transcript) : []),
+    [academics],
+  )
+
+  useEffect(() => {
+    if (!academics) return
+    if (termOptions.length === 0) {
+      if (selectedKey != null) setSelectedKey(null)
+      return
+    }
+    const valid = new Set(termOptions.map((o) => o.key))
+    if (selectedKey != null && !valid.has(selectedKey)) {
+      setSelectedKey(defaultTermKeyFromTranscript(academics, termOptions))
+    }
+  }, [academics, termOptions, selectedKey])
 
   const grouped = useMemo(
     () =>
@@ -151,16 +137,18 @@ export function AcademicsPortalPage() {
   }
 
   const quarterRows =
-    academics && selectedTerm && Number.isFinite(selectedYear)
-      ? academics.transcript.filter(
-          (r) => r.term === selectedTerm && r.year === selectedYear,
+    academics && selectedKey
+      ? rowsForSelectedTerm(
+          academics.transcript,
+          selectedTerm,
+          selectedYear,
         )
       : []
 
   const issueDate = formatIssueDate()
 
   return (
-    <main className="portal-page">
+    <main className="portal-page portal-stack">
       <div
         className="portal-academics-print-hide"
         role="tablist"
@@ -251,8 +239,8 @@ export function AcademicsPortalPage() {
       ) : null}
 
       {!showEmpty && !sectionLoading && !error && academics && mode === 'quarter' ? (
-        <>
-          <div className="portal-stack portal-account-ledger__toolbar portal-academics-print-hide">
+        <section className="portal-stack" aria-label="Quarter grades">
+          <div className="portal-account-ledger__toolbar portal-academics-print-hide">
             <label
               className="portal-account-ledger__quarter-label"
               htmlFor="academics-term-select"
@@ -264,14 +252,11 @@ export function AcademicsPortalPage() {
                 value={selectedKey ?? ''}
                 onChange={(e) => setSelectedKey(e.target.value || null)}
               >
-                {academics.availableTerms.length === 0 ? (
+                {termOptions.length === 0 ? (
                   <option value="">No terms on file</option>
                 ) : null}
-                {academics.availableTerms.map((t) => (
-                  <option
-                    key={termYearKey(t.term, t.year)}
-                    value={termYearKey(t.term, t.year)}
-                  >
+                {termOptions.map((t) => (
+                  <option key={t.key} value={t.key}>
                     {t.label}
                   </option>
                 ))}
@@ -279,19 +264,20 @@ export function AcademicsPortalPage() {
             </label>
           </div>
           <div className="portal-table-wrap">
-            <table className="portal-table portal-table--grades">
+            <table className={GRADES_TABLE_CLASS}>
               <thead>
                 <tr>
                   <th scope="col">Code</th>
-                  <th scope="col">Course Title</th>
+                  <th scope="col">Course title</th>
                   <th scope="col">Grade</th>
-                  <th scope="col">Numeric Grade</th>
+                  <th scope="col">Numeric grade</th>
+                  <th scope="col">Credit</th>
                 </tr>
               </thead>
               <tbody>
                 {quarterRows.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="portal-card-note">
+                    <td colSpan={5} className="portal-card-note">
                       No graded courses for this term.
                     </td>
                   </tr>
@@ -301,29 +287,26 @@ export function AcademicsPortalPage() {
                       key={`${row.courseCode}-${row.term}-${row.year}-${idx}`}
                     >
                       <td>{row.courseCode}</td>
-                      <td>{row.courseTitle}</td>
-                      <td>
-                        <span className="portal-status">
-                          {row.grade?.trim() ? row.grade : '—'}
-                        </span>
-                      </td>
+                      <CourseTitleCell row={row} />
+                      <td>{row.grade?.trim() ? row.grade : '—'}</td>
                       <td>
                         {row.numericGrade != null &&
                         Number.isFinite(row.numericGrade)
                           ? String(row.numericGrade)
                           : '—'}
                       </td>
+                      <td>{formatCreditCell(row)}</td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
-        </>
+        </section>
       ) : null}
 
       {!showEmpty && !sectionLoading && !error && academics && mode === 'transcript' ? (
-        <div className="portal-academics-transcript-preview">
+        <div className="portal-academics-transcript-preview portal-stack">
           <div className="portal-academics-print-hide portal-academics-transcript-preview__actions">
             <button
               type="button"
@@ -393,20 +376,23 @@ export function AcademicsPortalPage() {
               <div className="portal-academics-transcript-sheet__terms">
                 {grouped.map((g) => (
                   <section
-                    key={`${g.year}-${g.term}`}
+                    key={termYearKey(g.term, g.year)}
                     className="portal-academics-transcript-sheet__term-block"
                   >
                     <h3 className="portal-academics-transcript-sheet__term-heading">
                       {g.term} {g.year}
                     </h3>
                     <div className="portal-table-wrap">
-                      <table className="portal-table portal-table--grades portal-academics-transcript-sheet__table">
+                      <table
+                        className={`${GRADES_TABLE_CLASS} portal-academics-transcript-sheet__table`}
+                      >
                         <thead>
                           <tr>
                             <th scope="col">Code</th>
-                            <th scope="col">Course Title</th>
+                            <th scope="col">Course title</th>
                             <th scope="col">Grade</th>
                             <th scope="col">Numeric</th>
+                            <th scope="col">Credit</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -415,16 +401,15 @@ export function AcademicsPortalPage() {
                               key={`${row.courseCode}-${g.term}-${g.year}-${idx}`}
                             >
                               <td>{row.courseCode}</td>
-                              <td>{row.courseTitle}</td>
-                              <td>
-                                {row.grade?.trim() ? row.grade : '—'}
-                              </td>
+                              <CourseTitleCell row={row} />
+                              <td>{row.grade?.trim() ? row.grade : '—'}</td>
                               <td>
                                 {row.numericGrade != null &&
                                 Number.isFinite(row.numericGrade)
                                   ? String(row.numericGrade)
                                   : '—'}
                               </td>
+                              <td>{formatCreditCell(row)}</td>
                             </tr>
                           ))}
                         </tbody>

@@ -296,6 +296,13 @@ export type StudentAcademicsResponse = {
     year: number
     grade: string | null
     numericGrade: number | null
+    credits?: number | null
+    titleEn?: string | null
+    titleZh?: string | null
+    courseTitleEn?: string | null
+    courseTitleZh?: string | null
+    course_title_en?: string | null
+    course_title_zh?: string | null
   }>
   enrollmentHistory: Array<{
     courseCode: string

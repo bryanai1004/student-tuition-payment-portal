@@ -987,8 +987,7 @@
   }
 }
 
-/* —— Module layouts: local sub-navigation (Academics, Clinical, Documents) —— */
-.portal-academics-module,
+/* —— Module layouts: local sub-navigation (Clinical, Documents) —— */
 .portal-clinical-module,
 .portal-documents-module {
   max-width: min(var(--portal-module-max), 100%);
@@ -996,9 +995,10 @@
   width: 100%;
 }
 
-/* Registration + Finances: fill the main column (no centered island) */
+/* Registration + Finances + Academics: fill the main column (no centered island) */
 .portal-registration-module,
-.portal-finances-module {
+.portal-finances-module,
+.portal-academics-module {
   max-width: none;
   width: 100%;
   margin: 0;
@@ -1514,6 +1514,31 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Academics portal: center all grade/transcript columns (overrides nth-child rules above) */
+table.portal-academics-portal-grades-table.portal-table--grades th,
+table.portal-academics-portal-grades-table.portal-table--grades td {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.portal-academics-course-title-cell {
+  max-width: 22rem;
+  text-align: center;
+}
+
+.portal-academics-course-title__en,
+.portal-academics-course-title__zh {
+  display: block;
+  line-height: 1.35;
+}
+
+.portal-academics-course-title__zh {
+  margin-top: 0.2rem;
+  font-size: 0.8125rem;
+  color: var(--portal-text-muted);
+}
+
 .portal-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1606,12 +1631,14 @@
 }
 
 .portal-academics-transcript-sheet {
-  max-width: 48rem;
+  max-width: none;
+  width: 100%;
   padding: 1.5rem 1.75rem;
   border: 1px solid var(--portal-border);
   border-radius: var(--portal-radius);
   background: var(--portal-surface);
   box-shadow: var(--portal-shadow);
+  box-sizing: border-box;
 }
 
 .portal-academics-transcript-sheet__masthead {

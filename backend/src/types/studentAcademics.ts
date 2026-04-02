@@ -29,6 +29,8 @@ export type StudentAcademicsTranscriptItem = {
   year: number;
   grade: string | null;
   numericGrade: number | null;
+  /** Credit / unit hours from legacy `marks.units` when present. */
+  credits: number | null;
 };
 
 export type StudentAcademicsEnrollmentItem = {
