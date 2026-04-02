@@ -341,3 +341,43 @@ export async function fetchStudentAcademics(
   }
   return data as StudentAcademicsResponse
 }
+
+/** GET /api/students/:studentId/transcript-preview — merged marks + clinic, English titles from courses. */
+export type StudentTranscriptPreviewResponse = {
+  studentId: string
+  studentName: string
+  availableTerms: Array<{
+    term: string
+    year: number
+    label: string
+  }>
+  transcript: Array<{
+    courseCode: string
+    courseTitle: string
+    term: string
+    year: number
+    grade: string | null
+    numericGrade: number | null
+    credits: number | null
+    source: 'marks' | 'clinic'
+  }>
+}
+
+export async function fetchStudentTranscriptPreview(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<StudentTranscriptPreviewResponse> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/transcript-preview`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected transcript preview response')
+  }
+  const o = data as Record<string, unknown>
+  if (typeof o.studentId !== 'string' || typeof o.studentName !== 'string') {
+    throw new Error('Unexpected transcript preview response')
+  }
+  if (!Array.isArray(o.availableTerms) || !Array.isArray(o.transcript)) {
+    throw new Error('Unexpected transcript preview response')
+  }
+  return data as StudentTranscriptPreviewResponse
+}

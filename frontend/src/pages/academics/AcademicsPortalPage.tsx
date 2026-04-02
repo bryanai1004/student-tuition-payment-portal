@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAccount } from '../../context/AccountContext'
 import {
   fetchStudentAcademics,
+  fetchStudentTranscriptPreview,
   type StudentAcademicsResponse,
+  type StudentTranscriptPreviewResponse,
 } from '../../lib/api'
 import {
   bilingualCourseTitleParts,
@@ -54,6 +56,13 @@ export function AcademicsPortalPage() {
   const [academics, setAcademics] = useState<StudentAcademicsResponse | null>(
     null,
   )
+  const [transcriptPreview, setTranscriptPreview] =
+    useState<StudentTranscriptPreviewResponse | null>(null)
+  const [transcriptPreviewError, setTranscriptPreviewError] = useState<
+    string | null
+  >(null)
+  const [transcriptPreviewLoading, setTranscriptPreviewLoading] =
+    useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -63,6 +72,9 @@ export function AcademicsPortalPage() {
     const id = currentStudentId?.trim()
     if (!id) {
       setAcademics(null)
+      setTranscriptPreview(null)
+      setTranscriptPreviewError(null)
+      setTranscriptPreviewLoading(false)
       setLoading(false)
       setError(null)
       setSelectedKey(null)
@@ -71,6 +83,9 @@ export function AcademicsPortalPage() {
 
     const ac = new AbortController()
     setAcademics(null)
+    setTranscriptPreview(null)
+    setTranscriptPreviewError(null)
+    setTranscriptPreviewLoading(true)
     setLoading(true)
     setError(null)
     setSelectedKey(null)
@@ -98,6 +113,29 @@ export function AcademicsPortalPage() {
       }
     })()
 
+    ;(async () => {
+      try {
+        const data = await fetchStudentTranscriptPreview(id, {
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        setTranscriptPreview(data)
+        setTranscriptPreviewError(null)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setTranscriptPreview(null)
+        setTranscriptPreviewError(
+          e instanceof Error
+            ? e.message
+            : 'Could not load transcript preview.',
+        )
+      } finally {
+        if (!ac.signal.aborted) {
+          setTranscriptPreviewLoading(false)
+        }
+      }
+    })()
+
     return () => ac.abort()
   }, [currentStudentId, reloadKey])
 
@@ -118,10 +156,14 @@ export function AcademicsPortalPage() {
     }
   }, [academics, termOptions, selectedKey])
 
-  const grouped = useMemo(
+  const groupedPreview = useMemo(
     () =>
-      academics ? groupTranscriptByTermYear(academics.transcript) : [],
-    [academics],
+      transcriptPreview
+        ? groupTranscriptByTermYear(
+            transcriptPreview.transcript as TranscriptRow[],
+          )
+        : [],
+    [transcriptPreview],
   )
 
   const id = currentStudentId?.trim()
@@ -317,6 +359,42 @@ export function AcademicsPortalPage() {
             </button>
           </div>
 
+          {transcriptPreviewLoading && !transcriptPreview && !transcriptPreviewError ? (
+            <section
+              className="portal-card portal-profile-state"
+              aria-busy="true"
+              aria-live="polite"
+            >
+              <p className="portal-profile-state__title">Loading transcript preview</p>
+              <p className="portal-profile-state__detail">
+                Please wait while we load your transcript.
+              </p>
+            </section>
+          ) : null}
+
+          {transcriptPreviewError ? (
+            <section
+              className="portal-card portal-profile-state portal-profile-state--error"
+              role="alert"
+              aria-live="assertive"
+            >
+              <p className="portal-profile-state__title">
+                We could not load transcript preview
+              </p>
+              <p className="portal-profile-state__detail">{transcriptPreviewError}</p>
+              <div className="portal-actions portal-profile-state__actions">
+                <button
+                  type="button"
+                  className="portal-btn portal-btn--secondary"
+                  onClick={() => setReloadKey((k) => k + 1)}
+                >
+                  Try again
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {transcriptPreview ? (
           <div className="portal-academics-transcript-sheet">
             <header className="portal-academics-transcript-sheet__masthead">
               <p className="portal-academics-transcript-sheet__school">
@@ -330,11 +408,11 @@ export function AcademicsPortalPage() {
             <dl className="portal-academics-transcript-sheet__meta">
               <div className="portal-academics-transcript-sheet__meta-row">
                 <dt>Student name</dt>
-                <dd>{academics.studentName}</dd>
+                <dd>{transcriptPreview.studentName}</dd>
               </div>
               <div className="portal-academics-transcript-sheet__meta-row">
                 <dt>Student ID</dt>
-                <dd>{academics.studentId}</dd>
+                <dd>{transcriptPreview.studentId}</dd>
               </div>
               <div className="portal-academics-transcript-sheet__meta-row">
                 <dt>Date issued</dt>
@@ -370,11 +448,11 @@ export function AcademicsPortalPage() {
               This web preview is unofficial and not certified for external use.
             </p>
 
-            {grouped.length === 0 ? (
+            {groupedPreview.length === 0 ? (
               <p className="portal-card-note">No transcript rows on file yet.</p>
             ) : (
               <div className="portal-academics-transcript-sheet__terms">
-                {grouped.map((g) => (
+                {groupedPreview.map((g) => (
                   <section
                     key={termYearKey(g.term, g.year)}
                     className="portal-academics-transcript-sheet__term-block"
@@ -401,7 +479,13 @@ export function AcademicsPortalPage() {
                               key={`${row.courseCode}-${g.term}-${g.year}-${idx}`}
                             >
                               <td>{row.courseCode}</td>
-                              <CourseTitleCell row={row} />
+                              <td className="portal-academics-course-title-cell">
+                                <span className="portal-academics-course-title__en">
+                                  {row.courseTitle?.trim()
+                                    ? row.courseTitle.trim()
+                                    : '—'}
+                                </span>
+                              </td>
                               <td>{row.grade?.trim() ? row.grade : '—'}</td>
                               <td>
                                 {row.numericGrade != null &&
@@ -420,6 +504,7 @@ export function AcademicsPortalPage() {
               </div>
             )}
           </div>
+          ) : null}
         </div>
       ) : null}
     </main>
