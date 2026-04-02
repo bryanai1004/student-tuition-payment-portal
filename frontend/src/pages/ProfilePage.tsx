@@ -5,30 +5,10 @@ import {
   fetchStudentProfile,
   type StudentProfileResponse,
 } from '../lib/api'
-import { formatMoney } from '../lib/formatMoney'
-import type { MahmAccountMock } from '../mock/mahmAccountMock'
 
 function dashText(value: string | null | undefined): string {
   const s = value?.trim() ?? ''
   return s.length > 0 ? s : '—'
-}
-
-function termDisplay(account: MahmAccountMock): string {
-  const t = (account.student.term ?? '').trim()
-  const y = account.student.year
-  if (t && typeof y === 'number' && Number.isFinite(y)) {
-    return `${t} ${y}`
-  }
-  if (t) return t
-  if (typeof y === 'number' && Number.isFinite(y)) {
-    return String(y)
-  }
-  return '—'
-}
-
-function safeFormatMoney(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return '—'
-  return formatMoney(n)
 }
 
 /** Display ISO `YYYY-MM-DD` (or datetime) as MM/DD/YYYY. */
@@ -59,13 +39,7 @@ function displayCredits(n: number | null | undefined): string {
 }
 
 export function ProfilePage() {
-  const {
-    fetchedAccount,
-    loading: accountLoading,
-    error: accountError,
-    currentStudentId,
-    reload: reloadAccount,
-  } = useAccount()
+  const { currentStudentId } = useAccount()
 
   const [profile, setProfile] = useState<StudentProfileResponse | null>(null)
   const [profileLoading, setProfileLoading] = useState(false)
@@ -107,11 +81,6 @@ export function ProfilePage() {
 
     return () => ac.abort()
   }, [currentStudentId, profileReloadKey])
-
-  const retryAll = () => {
-    reloadAccount()
-    setProfileReloadKey((k) => k + 1)
-  }
 
   const profileSectionLoading =
     profileLoading && profile === null && profileError === null
@@ -228,93 +197,6 @@ export function ProfilePage() {
             <div className="portal-row">
               <dt>Email</dt>
               <dd>{dashText(profile.email ?? undefined)}</dd>
-            </div>
-          </dl>
-        </section>
-      ) : null}
-
-      {accountLoading && !accountError ? (
-        <section
-          className="portal-card portal-profile-state"
-          aria-busy="true"
-          aria-live="polite"
-        >
-          <p className="portal-profile-state__title">Loading billing snapshot</p>
-          <p className="portal-profile-state__detail">
-            Please wait while we load your account summary.
-          </p>
-        </section>
-      ) : null}
-
-      {!accountLoading && accountError ? (
-        <section
-          className="portal-card portal-profile-state portal-profile-state--error"
-          role="alert"
-          aria-live="assertive"
-        >
-          <p className="portal-profile-state__title">We could not load your account</p>
-          <p className="portal-profile-state__detail">{accountError}</p>
-          <div className="portal-actions portal-profile-state__actions">
-            <button
-              type="button"
-              className="portal-btn portal-btn--secondary"
-              onClick={() => reloadAccount()}
-            >
-              Try again
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      {!accountLoading && !accountError && !fetchedAccount ? (
-        <section className="portal-card portal-profile-state">
-          <p className="portal-profile-state__title">Account information unavailable</p>
-          <p className="portal-profile-state__detail">
-            We do not have billing details to show right now. Try again, or sign out
-            and sign back in if this continues.
-          </p>
-          <div className="portal-actions portal-profile-state__actions">
-            <button
-              type="button"
-              className="portal-btn portal-btn--secondary"
-              onClick={() => retryAll()}
-            >
-              Try again
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      {!accountLoading && !accountError && fetchedAccount ? (
-        <section
-          className="portal-card portal-stack portal-profile-card"
-          aria-labelledby="profile-billing-heading"
-        >
-          <h2 id="profile-billing-heading" className="portal-section-heading">
-            Billing snapshot
-          </h2>
-          <dl>
-            <div className="portal-row">
-              <dt>Program</dt>
-              <dd>{dashText(fetchedAccount.program)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>Current term</dt>
-              <dd>{termDisplay(fetchedAccount)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>Outstanding balance</dt>
-              <dd className="portal-profile-balance">
-                {safeFormatMoney(fetchedAccount.summary.outstandingBalance)}
-              </dd>
-            </div>
-            <div className="portal-row">
-              <dt>Billing status</dt>
-              <dd>{dashText(fetchedAccount.billingStatus)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>Term charges effective</dt>
-              <dd>{formatUsMdY(fetchedAccount.termChargeEffectiveDate)}</dd>
             </div>
           </dl>
         </section>

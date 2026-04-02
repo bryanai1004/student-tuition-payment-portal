@@ -8,15 +8,10 @@ import {
 } from '../../lib/accountDisplay'
 import { formatMoney } from '../../lib/formatMoney'
 
-function dashCell(value: number | null) {
-  if (value == null) return '—'
-  return String(value)
-}
-
 /** Account summary body shared by Finances overview and legacy `/overview` flows. */
 export function AccountSummaryContent() {
   const { account } = useAccount()
-  const { summary, lineItems, scheduleRows, installmentPlan, billingStatus } = account
+  const { summary, installmentPlan, billingStatus } = account
   const otherTotal = summary.otherTotal ?? 0
   const installmentRows = toInstallmentRows(installmentPlan.schedule)
   const nextDueRow = nextInstallmentRow(installmentRows)
@@ -105,74 +100,6 @@ export function AccountSummaryContent() {
             </dd>
           </div>
         </dl>
-      </section>
-
-      <section className="portal-stack" aria-labelledby="itemized-heading">
-        <h2 id="itemized-heading" className="portal-section-heading">
-          Itemized charges ({termLabel})
-        </h2>
-        <div className="portal-table-wrap">
-          <table className="portal-table portal-table--courses">
-            <caption className="visually-hidden">Posted charges by category for the current term</caption>
-            <thead>
-              <tr>
-                <th scope="col">Description</th>
-                <th scope="col">Category</th>
-                <th scope="col">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lineItems.map((row, index) => (
-                <tr key={`${index}-${row.description}`}>
-                  <td>{row.description}</td>
-                  <td className="portal-table-cell-capitalize">{row.category}</td>
-                  <td>{formatMoney(row.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="portal-stack" aria-labelledby="schedule-heading">
-        <h2 id="schedule-heading" className="portal-section-heading">
-          Term schedule and charges
-        </h2>
-        <div className="portal-table-wrap">
-          <table className="portal-table portal-table--courses">
-            <caption className="visually-hidden">
-              Enrolled courses with units, clinical hours, and computed charges
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Course</th>
-                <th scope="col">Units</th>
-                <th scope="col">Hours</th>
-                <th scope="col">Charge</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scheduleRows.map((row) => (
-                <tr key={row.courseCode}>
-                  <td>
-                    {row.title} ({row.courseCode})
-                  </td>
-                  <td>{dashCell(row.units)}</td>
-                  <td>{dashCell(row.hours)}</td>
-                  <td>{formatMoney(row.charge)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <th scope="row">Course subtotal (tuition + clinical)</th>
-                <td>—</td>
-                <td>—</td>
-                <td>{formatMoney(summary.tuitionTotal + summary.clinicalTotal)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
       </section>
     </>
   )
