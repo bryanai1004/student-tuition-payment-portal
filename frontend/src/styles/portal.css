@@ -1555,6 +1555,184 @@
   margin-bottom: var(--portal-space-section);
 }
 
+/* —— Academics unified portal (quarter grades / transcript preview) —— */
+.portal-academics-mode-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--portal-border-subtle);
+  border-radius: var(--portal-radius);
+  overflow: hidden;
+  background: var(--portal-surface);
+  margin-bottom: 1.25rem;
+}
+
+.portal-academics-mode-toggle__btn {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border: none;
+  border-right: 1px solid var(--portal-border-subtle);
+  background: var(--portal-surface);
+  color: var(--portal-text);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.portal-academics-mode-toggle__btn:last-child {
+  border-right: none;
+}
+
+.portal-academics-mode-toggle__btn:hover {
+  background: #f8f9fb;
+}
+
+.portal-academics-mode-toggle__btn:focus-visible {
+  outline: 2px solid var(--portal-accent);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.portal-academics-mode-toggle__btn--active {
+  background: var(--portal-accent-soft);
+  color: var(--portal-accent);
+}
+
+.portal-academics-transcript-preview__actions {
+  margin-bottom: 1rem;
+}
+
+.portal-academics-transcript-sheet {
+  max-width: 48rem;
+  padding: 1.5rem 1.75rem;
+  border: 1px solid var(--portal-border);
+  border-radius: var(--portal-radius);
+  background: var(--portal-surface);
+  box-shadow: var(--portal-shadow);
+}
+
+.portal-academics-transcript-sheet__masthead {
+  text-align: center;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--portal-text);
+}
+
+.portal-academics-transcript-sheet__school {
+  margin: 0 0 0.35rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--portal-text);
+}
+
+.portal-academics-transcript-sheet__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.portal-academics-transcript-sheet__meta {
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.35rem 1rem;
+}
+
+.portal-academics-transcript-sheet__meta-row {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.portal-academics-transcript-sheet__meta-row dt {
+  margin: 0;
+  font-weight: 600;
+  color: var(--portal-text-muted);
+}
+
+.portal-academics-transcript-sheet__meta-row dd {
+  margin: 0;
+  color: var(--portal-text);
+}
+
+.portal-academics-transcript-sheet__omitted {
+  color: var(--portal-text-faint);
+  font-style: italic;
+}
+
+.portal-academics-transcript-sheet__disclaimer {
+  margin: 0 0 1rem;
+  font-size: 0.75rem;
+  color: var(--portal-text-muted);
+}
+
+.portal-academics-transcript-sheet__terms {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.portal-academics-transcript-sheet__term-heading {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.portal-academics-transcript-sheet__table {
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 520px) {
+  .portal-academics-transcript-sheet__meta-row {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-academics-transcript-sheet__meta-row dt {
+    margin-bottom: -0.2rem;
+  }
+}
+
+@media print {
+  .portal-academics-print-hide {
+    display: none !important;
+  }
+
+  .portal-shell--authenticated .portal-app-header,
+  .portal-shell--authenticated .portal-sidebar--desktop,
+  .portal-shell--authenticated .portal-nav-drawer {
+    display: none !important;
+  }
+
+  .portal-shell--authenticated .portal-main {
+    margin-left: 0 !important;
+    padding-top: 0 !important;
+    min-height: 0 !important;
+  }
+
+  .portal-shell--authenticated {
+    background: #fff !important;
+  }
+
+  .portal-academics-transcript-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: none;
+    padding: 0;
+  }
+
+  .portal-page {
+    max-width: none !important;
+  }
+}
+
 /* —— Registration landing (action cards) —— */
 .portal-registration-action-grid {
   display: grid;

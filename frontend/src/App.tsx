@@ -11,7 +11,7 @@ import { SchedulePage } from './pages/registration/SchedulePage'
 import { FinancesLayout } from './pages/finances/FinancesLayout'
 import { FinancesOverviewPage } from './pages/finances/FinancesOverviewPage'
 import { AcademicsLayout } from './pages/academics/AcademicsLayout'
-import { AcademicsHomePage } from './pages/academics/AcademicsHomePage'
+import { AcademicsPortalPage } from './pages/academics/AcademicsPortalPage'
 import { GradesPage } from './pages/academics/GradesPage'
 import { TranscriptPage } from './pages/academics/TranscriptPage'
 import { GpaPage } from './pages/academics/GpaPage'
@@ -66,7 +66,7 @@ export default function App() {
             <Route path="late-fees" element={<Navigate to="/finances/overview" replace />} />
           </Route>
           <Route path="/academics" element={<AcademicsLayout />}>
-            <Route index element={<AcademicsHomePage />} />
+            <Route index element={<AcademicsPortalPage />} />
             <Route path="grades" element={<GradesPage />} />
             <Route path="transcript" element={<TranscriptPage />} />
             <Route path="gpa" element={<GpaPage />} />
