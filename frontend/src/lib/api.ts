@@ -268,3 +268,69 @@ export async function fetchAccountingLedger(
   }
   throw new Error('Unexpected accounting ledger response')
 }
+
+/** GET /api/students/:studentId/academics — schedule, transcript, and term metadata. */
+export type StudentAcademicsResponse = {
+  studentId: string
+  studentName: string
+  currentTerm: { term: string; year: number } | null
+  availableTerms: Array<{
+    term: string
+    year: number
+    label: string
+  }>
+  currentSchedule: Array<{
+    courseCode: string
+    courseTitle: string
+    days: string | null
+    timeFrom: string | null
+    timeTo: string | null
+    instructor: string | null
+    term: string
+    year: number
+  }>
+  transcript: Array<{
+    courseCode: string
+    courseTitle: string
+    term: string
+    year: number
+    grade: string | null
+    numericGrade: number | null
+  }>
+  enrollmentHistory: Array<{
+    courseCode: string
+    courseTitle: string
+    term: string
+    year: number
+  }>
+}
+
+export async function fetchStudentAcademics(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<StudentAcademicsResponse> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/academics`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected student academics response')
+  }
+  const o = data as Record<string, unknown>
+  if (typeof o.studentId !== 'string' || typeof o.studentName !== 'string') {
+    throw new Error('Unexpected student academics response')
+  }
+  if (
+    o.currentTerm != null &&
+    (typeof o.currentTerm !== 'object' ||
+      typeof (o.currentTerm as { term?: unknown }).term !== 'string' ||
+      typeof (o.currentTerm as { year?: unknown }).year !== 'number')
+  ) {
+    throw new Error('Unexpected student academics response')
+  }
+  if (!Array.isArray(o.availableTerms) || !Array.isArray(o.currentSchedule)) {
+    throw new Error('Unexpected student academics response')
+  }
+  if (!Array.isArray(o.transcript) || !Array.isArray(o.enrollmentHistory)) {
+    throw new Error('Unexpected student academics response')
+  }
+  return data as StudentAcademicsResponse
+}
