@@ -1,5 +1,7 @@
-
-"source": "/((?!api).*)",
+{
+  "rewrites": [
+    {
+      "source": "/((?!api).*)",
       "destination": "/index.html"
     }
   ]
