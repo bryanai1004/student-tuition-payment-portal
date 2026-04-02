@@ -3,7 +3,7 @@ import { env } from "../config/env.js";
 import { pool } from "../lib/db.js";
 
 export function getHealth(_req: Request, res: Response): void {
-  res.json({ ok: true, service: "student-portal-api" });
+  res.json({ status: "ok" });
 }
 
 export async function getHealthDb(

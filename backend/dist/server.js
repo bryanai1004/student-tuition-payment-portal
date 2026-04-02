@@ -11,7 +11,17 @@ if (env.nodeEnv === "development") {
     });
 }
 async function start() {
-    await testDatabaseConnection();
+    try {
+        await testDatabaseConnection();
+    }
+    catch (err) {
+        if (env.nodeEnv === "development") {
+            console.warn("[server] database unreachable — starting anyway (API routes that need DB will fail). /api/health is available.");
+        }
+        else {
+            throw err;
+        }
+    }
     const server = app.listen(env.port, () => {
         console.log(`API http://127.0.0.1:${env.port}`);
         console.log(`Verify demo JSON: http://127.0.0.1:${env.port}/api/demo/account?term=Fall&year=2026`);
