@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { fetchStudentAccount } from '../lib/api'
+import { fetchStudentAccount, fetchStudentProfile } from '../lib/api'
 import { mahmAccountMock } from '../mock/mahmAccountMock'
 import type {
   MahmAccountMock,
@@ -404,9 +404,13 @@ function normalizeApiStudentAccount(raw: unknown): MahmAccountMock {
 }
 
 /** Placeholder while signed in but account JSON has not arrived yet — avoids showing demo names/amounts. */
-function authenticatedPlaceholderAccount(studentId: string): MahmAccountMock {
+function authenticatedPlaceholderAccount(
+  studentId: string,
+  studentName?: string,
+): MahmAccountMock {
+  const name = (studentName ?? '').trim()
   const student = {
-    name: '',
+    name,
     studentId: studentId.trim(),
     term: '',
     year: 0,
@@ -545,10 +549,18 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         setError(null)
       } catch (e) {
         if (ac.signal.aborted) return
-        setFetchedAccount(null)
-        setError(
-          e instanceof Error ? e.message : 'Something went wrong loading your account.',
-        )
+        const accountError =
+          e instanceof Error ? e.message : 'Something went wrong loading your account.'
+        try {
+          const profile = await fetchStudentProfile(id, { signal: ac.signal })
+          if (ac.signal.aborted) return
+          setFetchedAccount(authenticatedPlaceholderAccount(id, profile.fullName))
+          setError(null)
+        } catch {
+          if (ac.signal.aborted) return
+          setFetchedAccount(null)
+          setError(accountError)
+        }
       } finally {
         if (!ac.signal.aborted) {
           setLoading(false)
