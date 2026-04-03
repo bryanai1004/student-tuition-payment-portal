@@ -19,9 +19,8 @@ function nullableTrim(s: string): string | null {
 function parseRequirementsId(s: string): number | null | 'invalid' {
   const t = s.trim()
   if (t === '') return null
-  const n = Number.parseInt(t, 10)
-  if (!Number.isFinite(n)) return 'invalid'
-  return n
+  if (!/^\d+$/.test(t)) return 'invalid'
+  return Number.parseInt(t, 10)
 }
 
 function localCalendarDateIso(): string {
@@ -128,19 +127,50 @@ export function AdminStudentCreatePage() {
     [requirementsId],
   )
 
-  const formValid =
-    canPreview &&
-    previewError == null &&
-    name.trim() !== '' &&
-    initialPassword.trim() !== '' &&
-    requirementsParsed !== 'invalid'
+  const submitBlockers = useMemo(() => {
+    const reasons: string[] = []
+    if (division !== 'Chinese' && division !== 'English') {
+      reasons.push('Division is required')
+    }
+    if (division === 'Chinese' || division === 'English') {
+      if (!isValidEntryDateIso(entryDate.trim())) {
+        reasons.push('Entry date is invalid')
+      }
+    }
+    if (canPreview && previewError) {
+      reasons.push('Could not generate next student ID')
+    }
+    if (name.trim() === '') {
+      reasons.push('Name is required')
+    }
+    if (initialPassword.trim() === '') {
+      reasons.push('Initial password is required')
+    }
+    if (requirementsParsed === 'invalid') {
+      reasons.push('Requirements ID must be a whole number or blank')
+    }
+    return reasons
+  }, [
+    canPreview,
+    division,
+    entryDate,
+    initialPassword,
+    name,
+    previewError,
+    requirementsParsed,
+  ])
+
+  const formValid = submitBlockers.length === 0
+
+  const submitHintId = 'admin-create-student-submit-hint'
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (!formValid) return
     if (division !== 'Chinese' && division !== 'English') return
 
-    const reqId = requirementsParsed
+    const reqId: number | null =
+      requirementsParsed === 'invalid' ? null : requirementsParsed
 
     const body: CreateAdminStudentBody = {
       division,
@@ -228,7 +258,7 @@ export function AdminStudentCreatePage() {
               role="alert"
               style={{ margin: 0 }}
             >
-              {previewError}
+              <strong>Could not generate next student ID.</strong> {previewError}
             </p>
           ) : null}
           {!previewLoading && previewId ? (
@@ -363,18 +393,19 @@ export function AdminStudentCreatePage() {
 
           <div className="portal-stack" style={{ gap: '0.35rem' }}>
             <label htmlFor="admin-create-req" className="portal-card-note" style={{ margin: 0 }}>
-              Requirements ID
+              Requirements ID (optional)
             </label>
             <input
               id="admin-create-req"
               className="admin-input"
               style={{ width: '100%', maxWidth: '100%' }}
+              inputMode="numeric"
               value={requirementsId}
               onChange={(ev) => setRequirementsId(ev.target.value)}
             />
             {requirementsParsed === 'invalid' ? (
               <span className="portal-profile-state--error" style={{ fontSize: '0.875rem' }}>
-                Enter a whole number or leave blank.
+                Must be a whole number or blank.
               </span>
             ) : null}
           </div>
@@ -511,6 +542,9 @@ export function AdminStudentCreatePage() {
             type="submit"
             className="portal-btn portal-btn--primary"
             disabled={saving || !formValid}
+            aria-describedby={
+              !saving && submitBlockers.length > 0 ? submitHintId : undefined
+            }
           >
             {saving ? 'Creating…' : 'Create student'}
           </button>
@@ -518,6 +552,41 @@ export function AdminStudentCreatePage() {
             Cancel
           </Link>
         </div>
+
+        {!saving && submitBlockers.length > 0 ? (
+          <div
+            id={submitHintId}
+            className="portal-stack"
+            style={{ gap: '0.35rem' }}
+          >
+            <p
+              className="portal-profile-state__detail"
+              style={{ margin: 0, fontSize: '0.8125rem' }}
+            >
+              Create student is disabled until these are resolved:
+            </p>
+            <ul
+              style={{
+                margin: 0,
+                paddingLeft: '1.25rem',
+                fontSize: '0.8125rem',
+              }}
+            >
+              {submitBlockers.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            {canPreview && previewError ? (
+              <p
+                className="portal-profile-state__detail portal-profile-state--error"
+                role="alert"
+                style={{ margin: 0, fontSize: '0.8125rem' }}
+              >
+                Next ID preview: {previewError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </form>
     </main>
   )
