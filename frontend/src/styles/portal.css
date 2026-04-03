@@ -1676,7 +1676,6 @@ table.portal-academics-portal-grades-table.portal-table--grades td {
 .portal-academics-transcript-sheet__school {
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .portal-academics-transcript-sheet__title {
@@ -1728,6 +1727,52 @@ table.portal-academics-portal-grades-table.portal-table--grades td {
   font-size: 0.8125rem;
 }
 
+.portal-academics-transcript-sheet__cumulative {
+  margin-top: 1.125rem;
+  padding-top: 0.65rem;
+  border-top: 2px solid var(--portal-text);
+}
+
+.portal-academics-transcript-sheet__cumulative-heading {
+  margin: 0 0 0.45rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  color: var(--portal-text);
+}
+
+.portal-academics-transcript-sheet__cumulative-dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.portal-academics-transcript-sheet__cumulative-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.75rem 1.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.portal-academics-transcript-sheet__cumulative-row dt {
+  margin: 0;
+  font-weight: 600;
+  color: var(--portal-text-muted);
+}
+
+.portal-academics-transcript-sheet__cumulative-row dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--portal-text);
+  text-align: right;
+  white-space: nowrap;
+}
+
 @media (max-width: 520px) {
   .portal-academics-transcript-sheet__meta-row {
     grid-template-columns: 1fr;
@@ -1740,8 +1785,9 @@ table.portal-academics-portal-grades-table.portal-table--grades td {
 
 @media print {
   /*
-   * Browser print headers/footers (URL, date, page title) are controlled in the print dialog,
-   * not CSS — turn them off there for a clean document-style PDF.
+   * Transcript print: hide portal chrome via rules below. Browser-controlled print headers/footers
+   * (URL, date, page title, page numbers) are not suppressible from CSS — disable them in the
+   * browser print dialog for a clean unofficial transcript PDF.
    */
   @page {
     size: letter;
@@ -1778,6 +1824,26 @@ table.portal-academics-portal-grades-table.portal-table--grades td {
     background: #fff !important;
   }
 
+  /* Academics module: strip layout chrome so only the transcript sheet remains visible. */
+  .portal-academics-module:has(.portal-academics-transcript-sheet) {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .portal-academics-module:has(.portal-academics-transcript-sheet) .portal-academics-outlet {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+
+  main.portal-page.portal-stack:has(.portal-academics-transcript-sheet) {
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
   /* Transcript preview: print only the sheet (not actions, loading, or error panels). */
   .portal-academics-transcript-preview.portal-stack {
     gap: 0 !important;
@@ -1795,6 +1861,28 @@ table.portal-academics-portal-grades-table.portal-table--grades td {
     max-width: none;
     width: 100%;
     padding: 0;
+  }
+
+  .portal-academics-transcript-sheet__terms .portal-table-wrap {
+    box-shadow: none !important;
+    border: 1px solid #bbb !important;
+    border-radius: 0 !important;
+    margin-bottom: 0.65rem !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .portal-academics-transcript-sheet__terms
+    .portal-academics-transcript-sheet__term-block:last-child
+    .portal-table-wrap {
+    margin-bottom: 0 !important;
+  }
+
+  .portal-academics-transcript-sheet__cumulative {
+    margin-top: 0.85rem !important;
+    padding-top: 0.5rem !important;
+    page-break-inside: avoid;
   }
 
   .portal-page {

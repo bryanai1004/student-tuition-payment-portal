@@ -19,7 +19,8 @@ import {
 
 type AcademicsMode = 'quarter' | 'transcript'
 
-const SCHOOL_TITLE = 'Alhambra Medical University'
+/** Displayed in transcript masthead (print + screen). */
+const SCHOOL_TITLE = 'ALHAMBRA MEDICAL UNIVERSITY'
 
 function formatIssueDate(): string {
   try {
@@ -406,9 +407,9 @@ export function AcademicsPortalPage() {
                 <p className="portal-academics-transcript-sheet__school">
                   {SCHOOL_TITLE}
                 </p>
-                <h2 className="portal-academics-transcript-sheet__title">
+                <p className="portal-academics-transcript-sheet__title">
                   UNOFFICIAL TRANSCRIPT
-                </h2>
+                </p>
               </div>
             </header>
 
@@ -482,6 +483,40 @@ export function AcademicsPortalPage() {
                 ))}
               </div>
             )}
+
+            <section
+              className="portal-academics-transcript-sheet__cumulative"
+              aria-labelledby="transcript-cumulative-heading"
+            >
+              <h3
+                id="transcript-cumulative-heading"
+                className="portal-academics-transcript-sheet__cumulative-heading"
+              >
+                Cumulative Total
+              </h3>
+              <dl className="portal-academics-transcript-sheet__cumulative-dl">
+                <div className="portal-academics-transcript-sheet__cumulative-row">
+                  <dt>Units Transferred</dt>
+                  <dd>45.0</dd>
+                </div>
+                <div className="portal-academics-transcript-sheet__cumulative-row">
+                  <dt>Clinic Hour Transferred</dt>
+                  <dd>100 Hours</dd>
+                </div>
+                <div className="portal-academics-transcript-sheet__cumulative-row">
+                  <dt>Units Completed</dt>
+                  <dd>198.0</dd>
+                </div>
+                <div className="portal-academics-transcript-sheet__cumulative-row">
+                  <dt>Clinic Completed</dt>
+                  <dd>980 Hours</dd>
+                </div>
+                <div className="portal-academics-transcript-sheet__cumulative-row">
+                  <dt>GPA</dt>
+                  <dd>3.76</dd>
+                </div>
+              </dl>
+            </section>
           </div>
           ) : null}
         </div>
