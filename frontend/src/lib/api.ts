@@ -386,6 +386,55 @@ export async function createAdminStudent(
   throw new Error('Unexpected create student response')
 }
 
+export type DeleteSelectedAdminStudentsResponse = {
+  ok: true
+  deletedStudentIds: string[]
+  blocked: Array<{
+    studentId: string
+    reason: string
+  }>
+}
+
+export async function deleteSelectedAdminStudents(
+  studentIds: string[],
+  options?: { signal?: AbortSignal },
+): Promise<DeleteSelectedAdminStudentsResponse> {
+  const data = (await fetchApiJson('/api/admin/students/delete-selected', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentIds }),
+    signal: options?.signal,
+  })) as unknown
+  if (
+    data != null &&
+    typeof data === 'object' &&
+    (data as { ok?: unknown }).ok === true &&
+    Array.isArray((data as { deletedStudentIds?: unknown }).deletedStudentIds) &&
+    Array.isArray((data as { blocked?: unknown }).blocked)
+  ) {
+    const deletedStudentIds = (data as { deletedStudentIds: unknown[] })
+      .deletedStudentIds
+    const blockedRaw = (data as { blocked: unknown[] }).blocked
+    for (const id of deletedStudentIds) {
+      if (typeof id !== 'string') {
+        throw new Error('Unexpected delete-selected response')
+      }
+    }
+    for (const b of blockedRaw) {
+      if (
+        b == null ||
+        typeof b !== 'object' ||
+        typeof (b as { studentId?: unknown }).studentId !== 'string' ||
+        typeof (b as { reason?: unknown }).reason !== 'string'
+      ) {
+        throw new Error('Unexpected delete-selected response')
+      }
+    }
+    return data as DeleteSelectedAdminStudentsResponse
+  }
+  throw new Error('Unexpected delete-selected response')
+}
+
 export async function fetchStudentProfile(
   studentId: string,
   options?: { signal?: AbortSignal },

@@ -4,6 +4,7 @@ import {
   getAdminStudents,
   getNextAdminStudentId,
   postAdminStudent,
+  postDeleteSelectedAdminStudents,
   putAdminStudent,
 } from "../controllers/adminStudentController.js";
 import {
@@ -60,6 +61,7 @@ const adminRouter = Router();
 adminRouter.get("/students", getAdminStudents);
 adminRouter.get("/students/next-id", getNextAdminStudentId);
 adminRouter.post("/students", postAdminStudent);
+adminRouter.post("/students/delete-selected", postDeleteSelectedAdminStudents);
 adminRouter.get("/students/:studentId", getAdminStudent);
 adminRouter.put("/students/:studentId", putAdminStudent);
 adminRouter.post("/course-sections", postAdminCourseSection);

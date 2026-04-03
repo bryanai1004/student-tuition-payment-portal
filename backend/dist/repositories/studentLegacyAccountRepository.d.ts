@@ -135,5 +135,12 @@ export declare function legacyStudentPasswordRowExists(pool: LegacyMysqlClient, 
  * Insert one legacy `students` row with safe defaults for columns not exposed in the admin create form.
  */
 export declare function createLegacyStudentMasterRow(pool: LegacyMysqlClient, input: LegacyStudentMasterInsert): Promise<void>;
-export declare function createLegacyStudentPasswordRow(pool: LegacyMysqlClient, studentId: string, password: string): Promise<void>;
+/** Legacy `password_stu.password` values are MD5 hex (32 chars), matching the school database. */
+export declare function legacyStudentPasswordMd5Hex(plainPassword: string): string;
+export declare function createLegacyStudentPasswordRow(pool: LegacyMysqlClient, studentId: string, plainPassword: string): Promise<void>;
+export declare function hasLegacyStudentRegistration(pool: LegacyMysqlClient, studentId: string): Promise<boolean>;
+export declare function hasLegacyStudentAccounting(pool: LegacyMysqlClient, studentId: string): Promise<boolean>;
+export declare function hasLegacyStudentMarks(pool: LegacyMysqlClient, studentId: string): Promise<boolean>;
+export declare function deleteLegacyStudentPasswordRow(pool: LegacyMysqlClient, studentId: string): Promise<void>;
+export declare function deleteLegacyStudentMasterRow(pool: LegacyMysqlClient, studentId: string): Promise<void>;
 //# sourceMappingURL=studentLegacyAccountRepository.d.ts.map

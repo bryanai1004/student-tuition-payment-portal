@@ -1,4 +1,4 @@
-import { createAdminStudent, getAdminStudentDetail, listAdminStudents, previewNextAdminStudentId, updateAdminStudent, } from "../services/adminStudentService.js";
+import { createAdminStudent, deleteSelectedAdminStudents, getAdminStudentDetail, listAdminStudents, previewNextAdminStudentId, updateAdminStudent, } from "../services/adminStudentService.js";
 function isRecord(v) {
     return v != null && typeof v === "object" && !Array.isArray(v);
 }
@@ -162,6 +162,26 @@ export async function postAdminStudent(req, res) {
     catch (e) {
         console.error(e);
         res.status(500).json({ error: "Failed to create student" });
+    }
+}
+export async function postDeleteSelectedAdminStudents(req, res) {
+    const raw = req.body;
+    const studentIds = raw?.studentIds;
+    try {
+        const result = await deleteSelectedAdminStudents(studentIds);
+        if (!result.ok) {
+            res.status(result.status).json({ error: result.message });
+            return;
+        }
+        res.json({
+            ok: true,
+            deletedStudentIds: result.deletedStudentIds,
+            blocked: result.blocked,
+        });
+    }
+    catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to delete students" });
     }
 }
 export async function putAdminStudent(req, res) {

@@ -2,8 +2,13 @@ import { pool } from "../lib/db.js";
 import {
   createLegacyStudentMasterRow,
   createLegacyStudentPasswordRow,
+  deleteLegacyStudentMasterRow,
+  deleteLegacyStudentPasswordRow,
   findLatestLegacyTermYear,
   getNextLegacyStudentId,
+  hasLegacyStudentAccounting,
+  hasLegacyStudentMarks,
+  hasLegacyStudentRegistration,
   legacyStudentMasterExists,
   legacyStudentPasswordRowExists,
   listLegacyAdminStudentRows,
@@ -520,4 +525,116 @@ export async function createAdminStudent(
   } finally {
     connection.release();
   }
+}
+
+const ADMIN_STUDENT_ID_BODY = /^[A-Za-z0-9._-]{1,64}$/;
+
+export type DeleteSelectedAdminStudentsSuccess = {
+  ok: true;
+  deletedStudentIds: string[];
+  blocked: Array<{ studentId: string; reason: string }>;
+};
+
+export type DeleteSelectedAdminStudentsResult =
+  | DeleteSelectedAdminStudentsSuccess
+  | { ok: false; status: 400; message: string };
+
+export async function deleteSelectedAdminStudents(
+  rawStudentIds: unknown,
+): Promise<DeleteSelectedAdminStudentsResult> {
+  if (!Array.isArray(rawStudentIds)) {
+    return {
+      ok: false,
+      status: 400,
+      message: "studentIds must be a non-empty array.",
+    };
+  }
+  if (rawStudentIds.length === 0) {
+    return {
+      ok: false,
+      status: 400,
+      message: "studentIds must be a non-empty array.",
+    };
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const item of rawStudentIds) {
+    if (typeof item !== "string") {
+      return {
+        ok: false,
+        status: 400,
+        message: "Each student id must be a string.",
+      };
+    }
+    const t = item.trim();
+    if (t === "") continue;
+    if (!ADMIN_STUDENT_ID_BODY.test(t)) {
+      return {
+        ok: false,
+        status: 400,
+        message: `Invalid student id: ${t}`,
+      };
+    }
+    if (!seen.has(t)) {
+      seen.add(t);
+      normalized.push(t);
+    }
+  }
+
+  if (normalized.length === 0) {
+    return {
+      ok: false,
+      status: 400,
+      message: "studentIds must contain at least one valid id.",
+    };
+  }
+
+  const deletedStudentIds: string[] = [];
+  const blocked: Array<{ studentId: string; reason: string }> = [];
+
+  for (const studentId of normalized) {
+    if (!(await legacyStudentMasterExists(pool, studentId))) {
+      blocked.push({ studentId, reason: "Student not found." });
+      continue;
+    }
+    if (await hasLegacyStudentRegistration(pool, studentId)) {
+      blocked.push({
+        studentId,
+        reason: "Student has registration history",
+      });
+      continue;
+    }
+    if (await hasLegacyStudentAccounting(pool, studentId)) {
+      blocked.push({
+        studentId,
+        reason: "Student has accounting records",
+      });
+      continue;
+    }
+    if (await hasLegacyStudentMarks(pool, studentId)) {
+      blocked.push({
+        studentId,
+        reason: "Student has marks history",
+      });
+      continue;
+    }
+
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      await deleteLegacyStudentPasswordRow(connection, studentId);
+      await deleteLegacyStudentMasterRow(connection, studentId);
+      await connection.commit();
+      deletedStudentIds.push(studentId);
+    } catch (e) {
+      await connection.rollback();
+      const msg = e instanceof Error ? e.message : "Delete failed.";
+      blocked.push({ studentId, reason: msg });
+    } finally {
+      connection.release();
+    }
+  }
+
+  return { ok: true, deletedStudentIds, blocked };
 }

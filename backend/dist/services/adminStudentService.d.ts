@@ -27,4 +27,18 @@ export type AdminStudentCreateResult = {
     message: string;
 };
 export declare function createAdminStudent(body: AdminStudentCreateBody): Promise<AdminStudentCreateResult>;
+export type DeleteSelectedAdminStudentsSuccess = {
+    ok: true;
+    deletedStudentIds: string[];
+    blocked: Array<{
+        studentId: string;
+        reason: string;
+    }>;
+};
+export type DeleteSelectedAdminStudentsResult = DeleteSelectedAdminStudentsSuccess | {
+    ok: false;
+    status: 400;
+    message: string;
+};
+export declare function deleteSelectedAdminStudents(rawStudentIds: unknown): Promise<DeleteSelectedAdminStudentsResult>;
 //# sourceMappingURL=adminStudentService.d.ts.map

@@ -1,4 +1,5 @@
-import { findLegacyStudentById } from "../repositories/studentLegacyAuthRepository.js";
+import { legacyStudentPasswordMd5Hex } from "../repositories/studentLegacyAccountRepository.js";
+import { findLegacyStudentById, findLegacyStudentPasswordStored, } from "../repositories/studentLegacyAuthRepository.js";
 /**
  * Last-name initial for legacy password derivation.
  * - If a comma exists: first character of the trimmed substring before the comma (uppercased).
@@ -41,6 +42,15 @@ export function buildExpectedLegacyPassword(studentName, studentId) {
         return null;
     return initial + legacyPasswordIdSuffix(studentId);
 }
+function storedPasswordMatchesInput(inputPlain, stored) {
+    const s = stored.trim();
+    if (s.length === 0)
+        return false;
+    if (/^[a-f0-9]{32}$/i.test(s)) {
+        return legacyStudentPasswordMd5Hex(inputPlain) === s.toLowerCase();
+    }
+    return inputPlain.trim() === s;
+}
 export async function authenticateLegacyStudent(pool, studentIdRaw, passwordRaw) {
     const studentId = studentIdRaw.trim();
     const password = passwordRaw.trim();
@@ -49,13 +59,22 @@ export async function authenticateLegacyStudent(pool, studentIdRaw, passwordRaw)
     const row = await findLegacyStudentById(pool, studentId);
     if (!row)
         return null;
+    const storedPw = await findLegacyStudentPasswordStored(pool, studentId);
+    if (storedPw != null && storedPasswordMatchesInput(password, storedPw)) {
+        const displayName = row.name.trim();
+        return {
+            studentId: row.id,
+            displayName: displayName.length > 0 ? displayName : row.id,
+        };
+    }
     const expected = buildExpectedLegacyPassword(row.name, studentId);
-    if (expected == null || password !== expected)
-        return null;
-    const displayName = row.name.trim();
-    return {
-        studentId: row.id,
-        displayName: displayName.length > 0 ? displayName : row.id,
-    };
+    if (expected != null && password === expected) {
+        const displayName = row.name.trim();
+        return {
+            studentId: row.id,
+            displayName: displayName.length > 0 ? displayName : row.id,
+        };
+    }
+    return null;
 }
 //# sourceMappingURL=studentLegacyAuthService.js.map

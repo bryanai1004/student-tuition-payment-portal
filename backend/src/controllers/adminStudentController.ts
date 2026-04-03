@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import {
   createAdminStudent,
+  deleteSelectedAdminStudents,
   getAdminStudentDetail,
   listAdminStudents,
   previewNextAdminStudentId,
@@ -183,6 +184,29 @@ export async function postAdminStudent(
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Failed to create student" });
+  }
+}
+
+export async function postDeleteSelectedAdminStudents(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const raw = req.body as Record<string, unknown> | null | undefined;
+  const studentIds = raw?.studentIds;
+  try {
+    const result = await deleteSelectedAdminStudents(studentIds);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.message });
+      return;
+    }
+    res.json({
+      ok: true,
+      deletedStudentIds: result.deletedStudentIds,
+      blocked: result.blocked,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to delete students" });
   }
 }
 

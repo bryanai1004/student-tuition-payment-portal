@@ -6,6 +6,10 @@ import {
   type AdminDivision,
   type CreateAdminStudentBody,
 } from '../../lib/api'
+import {
+  ADMIN_GENDER_SELECT_VALUES,
+  ADMIN_HIGHEST_DEGREE_VALUES,
+} from '../../lib/adminStudentFields'
 
 function nullableTrim(s: string): string | null {
   const t = s.trim()
@@ -126,8 +130,6 @@ export function AdminStudentCreatePage() {
 
   const formValid =
     canPreview &&
-    !previewLoading &&
-    previewId != null &&
     previewError == null &&
     name.trim() !== '' &&
     initialPassword.trim() !== '' &&
@@ -343,13 +345,20 @@ export function AdminStudentCreatePage() {
             <label htmlFor="admin-create-gender" className="portal-card-note" style={{ margin: 0 }}>
               Gender
             </label>
-            <input
+            <select
               id="admin-create-gender"
               className="admin-input"
               style={{ width: '100%', maxWidth: '100%' }}
               value={gender}
               onChange={(ev) => setGender(ev.target.value)}
-            />
+            >
+              <option value="">Select…</option>
+              {ADMIN_GENDER_SELECT_VALUES.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="portal-stack" style={{ gap: '0.35rem' }}>
@@ -374,13 +383,20 @@ export function AdminStudentCreatePage() {
             <label htmlFor="admin-create-degree" className="portal-card-note" style={{ margin: 0 }}>
               Highest degree
             </label>
-            <input
+            <select
               id="admin-create-degree"
               className="admin-input"
               style={{ width: '100%', maxWidth: '100%' }}
               value={highestDegree}
               onChange={(ev) => setHighestDegree(ev.target.value)}
-            />
+            >
+              <option value="">Select…</option>
+              {ADMIN_HIGHEST_DEGREE_VALUES.map((deg) => (
+                <option key={deg} value={deg}>
+                  {deg}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="portal-stack" style={{ gap: '0.35rem' }}>

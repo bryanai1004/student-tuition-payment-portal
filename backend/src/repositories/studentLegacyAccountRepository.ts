@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Pool, PoolConnection, RowDataPacket } from "mysql2/promise";
 
 /** Pool or a single connection (for transactions). */
@@ -591,13 +592,68 @@ export async function createLegacyStudentMasterRow(
   );
 }
 
+/** Legacy `password_stu.password` values are MD5 hex (32 chars), matching the school database. */
+export function legacyStudentPasswordMd5Hex(plainPassword: string): string {
+  return createHash("md5").update(plainPassword, "utf8").digest("hex");
+}
+
 export async function createLegacyStudentPasswordRow(
   pool: LegacyMysqlClient,
   studentId: string,
-  password: string,
+  plainPassword: string,
 ): Promise<void> {
+  const hash = legacyStudentPasswordMd5Hex(plainPassword);
   await pool.execute(`INSERT INTO password_stu (id, password) VALUES (?, ?)`, [
     studentId,
-    password,
+    hash,
   ]);
+}
+
+export async function hasLegacyStudentRegistration(
+  pool: LegacyMysqlClient,
+  studentId: string,
+): Promise<boolean> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT 1 AS ok FROM registration WHERE TRIM(id) = ? LIMIT 1`,
+    [studentId.trim()],
+  );
+  return rows.length > 0;
+}
+
+export async function hasLegacyStudentAccounting(
+  pool: LegacyMysqlClient,
+  studentId: string,
+): Promise<boolean> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT 1 AS ok FROM accounting WHERE TRIM(id) = ? LIMIT 1`,
+    [studentId.trim()],
+  );
+  return rows.length > 0;
+}
+
+export async function hasLegacyStudentMarks(
+  pool: LegacyMysqlClient,
+  studentId: string,
+): Promise<boolean> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT 1 AS ok FROM marks WHERE TRIM(id) = ? LIMIT 1`,
+    [studentId.trim()],
+  );
+  return rows.length > 0;
+}
+
+export async function deleteLegacyStudentPasswordRow(
+  pool: LegacyMysqlClient,
+  studentId: string,
+): Promise<void> {
+  await pool.execute(`DELETE FROM password_stu WHERE TRIM(id) = ?`, [
+    studentId.trim(),
+  ]);
+}
+
+export async function deleteLegacyStudentMasterRow(
+  pool: LegacyMysqlClient,
+  studentId: string,
+): Promise<void> {
+  await pool.execute(`DELETE FROM students WHERE id = ?`, [studentId.trim()]);
 }

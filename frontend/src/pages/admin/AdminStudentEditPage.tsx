@@ -6,6 +6,12 @@ import {
   type AdminStudentDetail,
   type AdminStudentUpdatePayload,
 } from '../../lib/api'
+import {
+  ADMIN_GENDER_SELECT_VALUES,
+  ADMIN_HIGHEST_DEGREE_VALUES,
+  genderToSelectValue,
+  highestDegreeToSelectValue,
+} from '../../lib/adminStudentFields'
 
 function nullableTrim(s: string): string | null {
   const t = s.trim()
@@ -13,12 +19,18 @@ function nullableTrim(s: string): string | null {
 }
 
 function detailToFormState(d: AdminStudentDetail): Record<string, string> {
+  const gRaw = d.gender ?? ''
+  const gender = genderToSelectValue(gRaw) || gRaw.trim()
+  const degRaw = d.highestDegree ?? ''
+  const highestDegree =
+    highestDegreeToSelectValue(degRaw) || degRaw.trim()
+
   return {
     name: d.name,
     email: d.email ?? '',
-    gender: d.gender ?? '',
+    gender,
     backgroundSchool: d.backgroundSchool ?? '',
-    highestDegree: d.highestDegree ?? '',
+    highestDegree,
     requirementsId: d.requirementsId ?? '',
     address: d.address ?? '',
     city: d.city ?? '',
@@ -115,6 +127,9 @@ export function AdminStudentEditPage() {
       setSaving(false)
     }
   }
+
+  const genderOptions = ADMIN_GENDER_SELECT_VALUES as readonly string[]
+  const degreeOptions = ADMIN_HIGHEST_DEGREE_VALUES as readonly string[]
 
   function field(
     key: keyof ReturnType<typeof detailToFormState>,
@@ -229,9 +244,80 @@ export function AdminStudentEditPage() {
             </legend>
             {field('name', 'Name *')}
             {field('email', 'Email')}
-            {field('gender', 'Gender')}
+            {form ? (
+              <div className="portal-stack" style={{ gap: '0.35rem' }}>
+                <label
+                  htmlFor="admin-edit-gender"
+                  className="portal-card-note"
+                  style={{ margin: 0 }}
+                >
+                  Gender
+                </label>
+                <select
+                  id="admin-edit-gender"
+                  className="admin-input"
+                  style={{ width: '100%', maxWidth: '100%' }}
+                  value={form.gender}
+                  onChange={(ev) =>
+                    setForm((prev) =>
+                      prev ? { ...prev, gender: ev.target.value } : prev,
+                    )
+                  }
+                  disabled={saving}
+                >
+                  <option value="">Select…</option>
+                  {!genderOptions.includes(form.gender) && form.gender !== '' ? (
+                    <option value={form.gender}>
+                      {form.gender} (legacy)
+                    </option>
+                  ) : null}
+                  {ADMIN_GENDER_SELECT_VALUES.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             {field('backgroundSchool', 'Background school')}
-            {field('highestDegree', 'Highest degree')}
+            {form ? (
+              <div className="portal-stack" style={{ gap: '0.35rem' }}>
+                <label
+                  htmlFor="admin-edit-degree"
+                  className="portal-card-note"
+                  style={{ margin: 0 }}
+                >
+                  Highest degree
+                </label>
+                <select
+                  id="admin-edit-degree"
+                  className="admin-input"
+                  style={{ width: '100%', maxWidth: '100%' }}
+                  value={form.highestDegree}
+                  onChange={(ev) =>
+                    setForm((prev) =>
+                      prev
+                        ? { ...prev, highestDegree: ev.target.value }
+                        : prev,
+                    )
+                  }
+                  disabled={saving}
+                >
+                  <option value="">Select…</option>
+                  {!degreeOptions.includes(form.highestDegree) &&
+                  form.highestDegree !== '' ? (
+                    <option value={form.highestDegree}>
+                      {form.highestDegree} (legacy)
+                    </option>
+                  ) : null}
+                  {ADMIN_HIGHEST_DEGREE_VALUES.map((deg) => (
+                    <option key={deg} value={deg}>
+                      {deg}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             {field('requirementsId', 'Requirements ID')}
             {field('address', 'Address')}
             {field('city', 'City')}
