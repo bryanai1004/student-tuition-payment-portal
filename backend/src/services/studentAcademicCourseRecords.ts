@@ -100,6 +100,8 @@ export function inferAcademicCourseStatus(args: {
   const letter = gradeDisplay?.trim() ?? "";
   if (isLegacyWithdrawalGrade(letter)) return "withdrawn";
 
+  if (hasCompletedSignal(gradeDisplay, numericGrade)) return "completed";
+
   if (
     activeTerm != null &&
     year === activeTerm.year &&
@@ -108,7 +110,6 @@ export function inferAcademicCourseStatus(args: {
     return "active";
   }
 
-  if (hasCompletedSignal(gradeDisplay, numericGrade)) return "completed";
   return "unknown";
 }
 
@@ -149,6 +150,46 @@ export function resolveActiveTermFromCourseRecords(
   return { term: first.term, year };
 }
 
+/** True when this legacy `marks` row has a final recorded outcome (grade) or a withdrawal. */
+export function marksRowAcademicallyClosed(m: MarksRow): boolean {
+  const letter = m.grade?.trim() ?? "";
+  if (isLegacyWithdrawalGrade(letter)) return true;
+  const gradeDisplay = transcriptGrade(m.grade);
+  const numericGrade = numericGradeFromDb(m.grade2);
+  return hasCompletedSignal(gradeDisplay, numericGrade);
+}
+
+/**
+ * Academic “current” quarter: the legacy registration term only while it is not fully concluded on
+ * `marks`. If there are no rows yet for that term, the term is still treated as active (schedule may
+ * be empty). If every row for that term is closed, returns null (e.g. graduated / term complete).
+ */
+export function resolveRegistrationAnchoredAcademicTerm(
+  registrationTerm: { term: string; year: number } | null,
+  marks: MarksRow[],
+): { term: string; year: number } | null {
+  if (registrationTerm == null) return null;
+  const term = registrationTerm.term.trim();
+  const year = Math.trunc(Number(registrationTerm.year));
+  if (
+    term.length === 0 ||
+    !Number.isFinite(year) ||
+    year < MIN_TERM_YEAR ||
+    year > MAX_TERM_YEAR
+  ) {
+    return null;
+  }
+  const inTerm = marks.filter(
+    (m) => m.year === year && termsMatch(m.term, term),
+  );
+  if (inTerm.length === 0) {
+    return { term: registrationTerm.term, year };
+  }
+  const allClosed = inTerm.every((m) => marksRowAcademicallyClosed(m));
+  if (allClosed) return null;
+  return { term: registrationTerm.term, year };
+}
+
 export function normalizeEnglishTitle(
   code: string,
   rawTitle: string,
@@ -160,6 +201,15 @@ export function normalizeEnglishTitle(
   const eng = entry?.eng_name?.trim();
   if (eng && eng.length > 0) return eng;
   return rawTitle.trim();
+}
+
+/** Prefer English catalog title; otherwise legacy `marks.course_title` / `clinic.course_title`. */
+export function resolveCourseDisplayTitle(
+  code: string,
+  legacyTitle: string,
+  lookup: Map<string, CourseTranscriptLookupEntry>,
+): string {
+  return normalizeEnglishTitle(code, legacyTitle, lookup);
 }
 
 export function isClinicalCourse(courseCode: string, courseTitle: string): boolean {
@@ -268,7 +318,7 @@ export function buildAcademicCourseRecordsFromMarksWithLookup(
       studentId,
       r,
       resolved,
-      normalizeEnglishTitle(r.code, r.course_title, lookup),
+      resolveCourseDisplayTitle(r.code, r.course_title, lookup),
     ),
   );
 }
@@ -284,7 +334,7 @@ export function buildAcademicCourseRecordsFromClinicWithLookupAndActiveTerm(
     clinicRowToAcademicCourseRecord(
       studentId,
       r,
-      normalizeEnglishTitle(r.code, r.course_title, lookup),
+      resolveCourseDisplayTitle(r.code, r.course_title, lookup),
       activeTerm,
     ),
   );
@@ -355,6 +405,7 @@ export function courseRecordToTranscriptItem(
 
 export function courseRecordToEnrollmentItem(
   r: StudentAcademicCourseRecord,
+  feedback?: { submitted: boolean; submittedAt: string | null },
 ): StudentAcademicsEnrollmentItem {
   return {
     courseCode: r.courseCode,
@@ -366,6 +417,8 @@ export function courseRecordToEnrollmentItem(
     status: r.status,
     instructor: r.instructor,
     feedbackEligible: r.status === "completed",
+    feedbackSubmitted: feedback?.submitted ?? false,
+    feedbackSubmittedAt: feedback?.submittedAt ?? null,
   };
 }
 
@@ -426,7 +479,8 @@ export function scheduleRowFromAcademicCourseRecord(
     hours: clinical ? (units != null && units > 0 ? units : null) : null,
     charge: 0,
     schedule: scheduleText || null,
-    location: instructor.length > 0 ? instructor : null,
+    location: null,
+    instructor: instructor.length > 0 ? instructor : null,
   };
 }
 

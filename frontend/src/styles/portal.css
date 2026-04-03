@@ -12,6 +12,10 @@
 }
 
 /* —— Design tokens —— */
+.portal-text-muted {
+  color: var(--portal-text-muted, #5c6578);
+}
+
 .portal-shell {
   --portal-bg: var(--page-gray);
   --portal-surface: var(--amu-card);
@@ -2618,6 +2622,129 @@ table.portal-academics-portal-grades-table.portal-table--grades td {
   line-height: 1.35;
 }
 
+.portal-course-feedback-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  box-sizing: border-box;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.portal-course-feedback-modal {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 28rem;
+  max-height: min(90vh, 36rem);
+  overflow: auto;
+  padding: 1.25rem 1.35rem;
+  border-radius: var(--portal-radius);
+  border: 1px solid var(--portal-border-subtle);
+  background: var(--portal-surface);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+}
+
+.portal-course-feedback-modal__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--portal-text);
+}
+
+.portal-course-feedback-modal__meta {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  color: var(--portal-text-muted);
+  line-height: 1.4;
+}
+
+.portal-course-feedback-modal__field {
+  margin-bottom: 0.85rem;
+}
+
+.portal-course-feedback-modal__field label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--portal-text);
+}
+
+.portal-course-feedback-modal__field select,
+.portal-course-feedback-modal__field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  font: inherit;
+  font-size: 0.875rem;
+  border: 1px solid var(--portal-border-subtle);
+  border-radius: calc(var(--portal-radius) * 0.85);
+  background: var(--portal-surface);
+  color: var(--portal-text);
+}
+
+.portal-course-feedback-modal__field textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.portal-course-feedback-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1.1rem;
+}
+
+.portal-course-feedback-modal__readonly-dl {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.portal-course-feedback-modal__readonly-dl > div {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.portal-course-feedback-modal__readonly-dl dt {
+  margin: 0;
+  font-weight: 600;
+  color: var(--portal-text-muted);
+}
+
+.portal-course-feedback-modal__readonly-dl dd {
+  margin: 0;
+  color: var(--portal-text);
+}
+
+.portal-academics-feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+
+.portal-btn.portal-btn--link {
+  padding: 0.15rem 0.35rem;
+  min-height: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--portal-accent, #2563eb);
+  background: transparent;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.portal-btn.portal-btn--link:hover {
+  opacity: 0.88;
+}
+
 /* Quarter grades: term dropdown only (no visible label); align with tab row. */
 .portal-academics-term-toolbar {
   justify-content: flex-start;
@@ -4758,15 +4885,19 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 }
 
 .portal-dashboard-courses-col-title {
-  width: 35%;
+  width: 28%;
 }
 
 .portal-dashboard-courses-col-schedule {
-  width: 30%;
+  width: 22%;
+}
+
+.portal-dashboard-courses-col-instructor {
+  width: 18%;
 }
 
 .portal-dashboard-courses-col-location {
-  width: 20%;
+  width: 17%;
 }
 
 .portal-dashboard-courses-table th,

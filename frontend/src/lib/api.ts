@@ -342,6 +342,9 @@ export type StudentAcademicsResponse = {
     status: StudentAcademicCourseStatus
     instructor: string | null
     feedbackEligible: boolean
+    /** Omitted on older API versions; treat as false when missing. */
+    feedbackSubmitted?: boolean
+    feedbackSubmittedAt?: string | null
   }>
   /** Normalized marks rows; `currentSchedule`, `transcript`, and `enrollmentHistory` are views of this list. */
   courseRecords: StudentAcademicCourseRecord[]
@@ -378,6 +381,74 @@ export async function fetchStudentAcademics(
     throw new Error('Unexpected student academics response')
   }
   return data as StudentAcademicsResponse
+}
+
+export type CourseFeedbackApiItem = {
+  id: number
+  courseCode: string
+  term: string
+  year: number
+  rating: number
+  workloadRating: number
+  difficultyRating: number
+  comments: string | null
+  submittedAt: string
+}
+
+export type CourseFeedbackListResponse = {
+  studentId: string
+  items: CourseFeedbackApiItem[]
+}
+
+/** GET /api/students/:studentId/course-feedback */
+export async function fetchStudentCourseFeedback(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<CourseFeedbackListResponse> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/course-feedback`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected course feedback response')
+  }
+  const o = data as Record<string, unknown>
+  if (typeof o.studentId !== 'string' || !Array.isArray(o.items)) {
+    throw new Error('Unexpected course feedback response')
+  }
+  return data as CourseFeedbackListResponse
+}
+
+export type PostCourseFeedbackBody = {
+  courseCode: string
+  term: string
+  year: number
+  rating: number
+  workloadRating: number
+  difficultyRating: number
+  comments?: string | null
+}
+
+/** POST /api/students/:studentId/course-feedback — 201 { id, ok: true } */
+export async function postStudentCourseFeedback(
+  studentId: string,
+  body: PostCourseFeedbackBody,
+  options?: { signal?: AbortSignal },
+): Promise<{ id: number; ok: boolean }> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/course-feedback`
+  const data = (await fetchApiJson(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })) as unknown
+  if (
+    data != null &&
+    typeof data === 'object' &&
+    typeof (data as { id?: unknown }).id === 'number' &&
+    (data as { ok?: unknown }).ok === true
+  ) {
+    return data as { id: number; ok: boolean }
+  }
+  throw new Error('Unexpected course feedback submit response')
 }
 
 /** GET /api/students/:studentId/transcript-preview — merged marks + clinic, English titles from courses. */

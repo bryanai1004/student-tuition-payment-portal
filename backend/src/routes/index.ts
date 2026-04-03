@@ -16,6 +16,10 @@ import {
   getAccountingQuarters,
 } from "../controllers/studentLedgerController.js";
 import { getStudentAcademics } from "../controllers/studentAcademicsController.js";
+import {
+  getStudentCourseFeedback,
+  postStudentCourseFeedback,
+} from "../controllers/studentCourseFeedbackController.js";
 import { getStudentTranscriptPreview } from "../controllers/studentTranscriptController.js";
 import {
   getDemoAccount,
@@ -53,6 +57,14 @@ apiRouter.use("/admin", adminRouter);
 
 apiRouter.get("/students/:studentId/profile", getStudentProfile);
 apiRouter.get("/students/:studentId/academics", getStudentAcademics);
+apiRouter.get(
+  "/students/:studentId/course-feedback",
+  getStudentCourseFeedback,
+);
+apiRouter.post(
+  "/students/:studentId/course-feedback",
+  postStudentCourseFeedback,
+);
 apiRouter.get(
   "/students/:studentId/transcript-preview",
   getStudentTranscriptPreview,

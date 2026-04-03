@@ -73,6 +73,10 @@ export type StudentAcademicsEnrollmentItem = {
   instructor: string | null;
   /** True only for `completed`; reserved for future course feedback. */
   feedbackEligible: boolean;
+  /** True when a row exists in `student_course_feedback` for this enrollment key. */
+  feedbackSubmitted: boolean;
+  /** ISO-8601 timestamp of submission, when `feedbackSubmitted` is true. */
+  feedbackSubmittedAt: string | null;
 };
 
 export type StudentAcademicsResponse = {

@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type MouseEvent } from 'react'
 import { useAccount } from '../../context/AccountContext'
 import {
   fetchStudentAcademics,
+  fetchStudentCourseFeedback,
   fetchStudentTranscriptPreview,
+  postStudentCourseFeedback,
+  type CourseFeedbackApiItem,
   type StudentAcademicsResponse,
   type StudentTranscriptPreviewResponse,
 } from '../../lib/api'
@@ -16,6 +19,7 @@ import {
   noCurrentCoursesMessage,
 } from '../../lib/academicCourseRecordsDisplay'
 import {
+  courseRowDisplayTitle,
   formatCreditCell,
   groupRowsByTermYear,
   groupTranscriptByTermYear,
@@ -23,6 +27,322 @@ import {
 } from '../../lib/academicsTranscriptDisplay'
 
 type AcademicsTab = 'current' | 'history' | 'transcript'
+
+type EnrollmentHistoryRow = StudentAcademicsResponse['enrollmentHistory'][number]
+
+function findFeedbackItemForRow(
+  items: CourseFeedbackApiItem[],
+  row: Pick<EnrollmentHistoryRow, 'courseCode' | 'term' | 'year'>,
+): CourseFeedbackApiItem | undefined {
+  const code = row.courseCode.trim()
+  const term = row.term.trim().toLowerCase()
+  return items.find(
+    (it) =>
+      it.courseCode.trim() === code &&
+      it.year === row.year &&
+      it.term.trim().toLowerCase() === term,
+  )
+}
+
+function CourseFeedbackCell({
+  row,
+  onOpenSubmit,
+  onOpenView,
+}: {
+  row: EnrollmentHistoryRow
+  onOpenSubmit: (row: EnrollmentHistoryRow) => void
+  onOpenView: (row: EnrollmentHistoryRow) => void
+}) {
+  const submitted = row.feedbackSubmitted === true
+  if (!row.feedbackEligible) {
+    return <span className="portal-text-muted">Not eligible</span>
+  }
+  if (!submitted) {
+    return (
+      <button
+        type="button"
+        className="portal-btn portal-btn--secondary portal-btn--compact"
+        onClick={() => onOpenSubmit(row)}
+      >
+        Submit Feedback
+      </button>
+    )
+  }
+  return (
+    <div className="portal-academics-feedback-actions">
+      <span>Submitted</span>
+      <button
+        type="button"
+        className="portal-btn portal-btn--link"
+        onClick={() => onOpenView(row)}
+      >
+        View
+      </button>
+    </div>
+  )
+}
+
+function CourseFeedbackModal({
+  mode,
+  row,
+  studentId,
+  onClose,
+  onSubmitted,
+}: {
+  mode: 'submit' | 'view'
+  row: EnrollmentHistoryRow
+  studentId: string
+  onClose: () => void
+  onSubmitted: () => void
+}) {
+  const [rating, setRating] = useState('')
+  const [workload, setWorkload] = useState('')
+  const [difficulty, setDifficulty] = useState('')
+  const [comments, setComments] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [viewLoading, setViewLoading] = useState(mode === 'view')
+  const [viewError, setViewError] = useState<string | null>(null)
+  const [viewItem, setViewItem] = useState<CourseFeedbackApiItem | null>(null)
+
+  useEffect(() => {
+    if (mode !== 'view') return
+    const ac = new AbortController()
+    ;(async () => {
+      try {
+        const res = await fetchStudentCourseFeedback(studentId, { signal: ac.signal })
+        if (ac.signal.aborted) return
+        const item = findFeedbackItemForRow(res.items, row)
+        if (!item) {
+          setViewItem(null)
+          setViewError('Could not find submitted feedback for this course.')
+        } else {
+          setViewItem(item)
+          setViewError(null)
+        }
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setViewError(e instanceof Error ? e.message : 'Could not load feedback.')
+      } finally {
+        if (!ac.signal.aborted) setViewLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [mode, studentId, row.courseCode, row.term, row.year])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  function backdropMouseDown(e: MouseEvent<HTMLDivElement>) {
+    if (e.target === e.currentTarget) onClose()
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setFormError(null)
+    const r = Number(rating)
+    const w = Number(workload)
+    const d = Number(difficulty)
+    if (![r, w, d].every((n) => Number.isInteger(n) && n >= 1 && n <= 5)) {
+      setFormError('Please choose a whole number from 1 to 5 for overall rating, workload, and difficulty.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await postStudentCourseFeedback(studentId, {
+        courseCode: row.courseCode,
+        term: row.term,
+        year: row.year,
+        rating: r,
+        workloadRating: w,
+        difficultyRating: d,
+        comments: comments.trim() || null,
+      })
+      onSubmitted()
+      onClose()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not submit feedback.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const titleId = 'course-feedback-modal-title'
+  const courseLabel = `${row.courseCode.trim()} — ${courseRowDisplayTitle(row)}`
+
+  return (
+    <div
+      className="portal-course-feedback-modal-backdrop"
+      onMouseDown={backdropMouseDown}
+      role="presentation"
+    >
+      <div
+        className="portal-course-feedback-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        {mode === 'submit' ? (
+          <>
+            <h2 id={titleId} className="portal-course-feedback-modal__title">
+              Course evaluation
+            </h2>
+            <p className="portal-course-feedback-modal__meta">
+              {courseLabel}
+              <br />
+              {row.term} {row.year}
+            </p>
+            <form onSubmit={handleSubmit}>
+              <div className="portal-course-feedback-modal__field">
+                <label htmlFor="cfb-rating">Overall rating (required)</label>
+                <select
+                  id="cfb-rating"
+                  value={rating}
+                  onChange={(e) => setRating(e.target.value)}
+                  required
+                >
+                  <option value="">Select…</option>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="portal-course-feedback-modal__field">
+                <label htmlFor="cfb-workload">Workload (required)</label>
+                <select
+                  id="cfb-workload"
+                  value={workload}
+                  onChange={(e) => setWorkload(e.target.value)}
+                  required
+                >
+                  <option value="">Select…</option>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="portal-course-feedback-modal__field">
+                <label htmlFor="cfb-difficulty">Difficulty (required)</label>
+                <select
+                  id="cfb-difficulty"
+                  value={difficulty}
+                  onChange={(e) => setDifficulty(e.target.value)}
+                  required
+                >
+                  <option value="">Select…</option>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="portal-course-feedback-modal__field">
+                <label htmlFor="cfb-comments">Comments (optional)</label>
+                <textarea
+                  id="cfb-comments"
+                  value={comments}
+                  onChange={(e) => setComments(e.target.value)}
+                  maxLength={8000}
+                  rows={4}
+                />
+              </div>
+              {formError ? (
+                <p className="portal-card-note portal-profile-state--error" role="alert">
+                  {formError}
+                </p>
+              ) : null}
+              <div className="portal-course-feedback-modal__actions">
+                <button
+                  type="button"
+                  className="portal-btn portal-btn--secondary"
+                  onClick={onClose}
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="portal-btn portal-btn--primary"
+                  disabled={submitting}
+                >
+                  {submitting ? 'Submitting…' : 'Submit evaluation'}
+                </button>
+              </div>
+            </form>
+          </>
+        ) : null}
+
+        {mode === 'view' ? (
+          <>
+            <h2 id={titleId} className="portal-course-feedback-modal__title">
+              Submitted evaluation
+            </h2>
+            <p className="portal-course-feedback-modal__meta">
+              {courseLabel}
+              <br />
+              {row.term} {row.year}
+            </p>
+            {viewLoading ? (
+              <p className="portal-card-note">Loading…</p>
+            ) : null}
+            {viewError && !viewLoading ? (
+              <p className="portal-card-note portal-profile-state--error" role="alert">
+                {viewError}
+              </p>
+            ) : null}
+            {viewItem && !viewLoading ? (
+              <dl className="portal-course-feedback-modal__readonly-dl">
+                <div>
+                  <dt>Overall</dt>
+                  <dd>{viewItem.rating}</dd>
+                </div>
+                <div>
+                  <dt>Workload</dt>
+                  <dd>{viewItem.workloadRating}</dd>
+                </div>
+                <div>
+                  <dt>Difficulty</dt>
+                  <dd>{viewItem.difficultyRating}</dd>
+                </div>
+                <div>
+                  <dt>Submitted</dt>
+                  <dd>
+                    {(() => {
+                      try {
+                        return new Date(viewItem.submittedAt).toLocaleString()
+                      } catch {
+                        return viewItem.submittedAt
+                      }
+                    })()}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Comments</dt>
+                  <dd>{viewItem.comments?.trim() ? viewItem.comments : '—'}</dd>
+                </div>
+              </dl>
+            ) : null}
+            <div className="portal-course-feedback-modal__actions">
+              <button type="button" className="portal-btn portal-btn--secondary" onClick={onClose}>
+                Close
+              </button>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </div>
+  )
+}
 
 /** Displayed in transcript masthead (print + screen). */
 const SCHOOL_TITLE = 'ALHAMBRA MEDICAL UNIVERSITY'
@@ -47,17 +367,6 @@ function instructorCell(v: string | null | undefined): string {
   return s && s.length > 0 ? s : '—'
 }
 
-function FeedbackReadinessCell({ eligible }: { eligible: boolean }) {
-  if (!eligible) {
-    return <span>—</span>
-  }
-  return (
-    <span className="portal-academics-feedback-placeholder">
-      Feedback available after implementation
-    </span>
-  )
-}
-
 export function AcademicsPortalPage() {
   const { currentStudentId } = useAccount()
   const [tab, setTab] = useState<AcademicsTab>('current')
@@ -69,6 +378,11 @@ export function AcademicsPortalPage() {
   const [transcriptPreviewError, setTranscriptPreviewError] = useState<string | null>(null)
   const [transcriptPreviewLoading, setTranscriptPreviewLoading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  const [feedbackModal, setFeedbackModal] = useState<
+    | { mode: 'submit'; row: EnrollmentHistoryRow }
+    | { mode: 'view'; row: EnrollmentHistoryRow }
+    | null
+  >(null)
 
   useEffect(() => {
     const id = currentStudentId?.trim()
@@ -157,6 +471,16 @@ export function AcademicsPortalPage() {
 
   return (
     <main className="portal-page portal-stack">
+      {id && feedbackModal ? (
+        <CourseFeedbackModal
+          key={`${feedbackModal.mode}-${feedbackModal.row.courseCode}-${feedbackModal.row.term}-${feedbackModal.row.year}`}
+          mode={feedbackModal.mode}
+          row={feedbackModal.row}
+          studentId={id}
+          onClose={() => setFeedbackModal(null)}
+          onSubmitted={() => setReloadKey((k) => k + 1)}
+        />
+      ) : null}
       <div
         className="portal-academics-print-hide"
         role="tablist"
@@ -247,7 +571,7 @@ export function AcademicsPortalPage() {
                   <p className="portal-academics-empty-state__text">
                     {academics.currentTerm
                       ? noCurrentCoursesMessage(termPhrase)
-                      : 'No current-term enrollment is on file.'}
+                      : 'There is no active enrollment term on file. Completed coursework appears under Registration History and Transcript.'}
                   </p>
                 </div>
               ) : (
@@ -272,7 +596,7 @@ export function AcademicsPortalPage() {
                           <td>{row.courseCode}</td>
                           <td className="portal-academics-course-title-cell">
                             <span className="portal-academics-course-title__en">
-                              {row.courseTitle?.trim() ? row.courseTitle.trim() : '—'}
+                              {courseRowDisplayTitle(row)}
                             </span>
                           </td>
                           <td>{formatCreditsCell(row.credits)}</td>
@@ -354,7 +678,7 @@ export function AcademicsPortalPage() {
                               <td>{row.courseCode}</td>
                               <td className="portal-academics-course-title-cell">
                                 <span className="portal-academics-course-title__en">
-                                  {row.courseTitle?.trim() ? row.courseTitle.trim() : '—'}
+                                  {courseRowDisplayTitle(row)}
                                 </span>
                               </td>
                               <td>{formatCreditsCell(row.credits)}</td>
@@ -362,7 +686,11 @@ export function AcademicsPortalPage() {
                               <td>{formatGradeCell(row.grade)}</td>
                               <td>{instructorCell(row.instructor)}</td>
                               <td>
-                                <FeedbackReadinessCell eligible={row.feedbackEligible} />
+                                <CourseFeedbackCell
+                                  row={row}
+                                  onOpenSubmit={(r) => setFeedbackModal({ mode: 'submit', row: r })}
+                                  onOpenView={(r) => setFeedbackModal({ mode: 'view', row: r })}
+                                />
                               </td>
                             </tr>
                           ))}
@@ -475,7 +803,7 @@ export function AcademicsPortalPage() {
                                   <td>{row.courseCode}</td>
                                   <td className="portal-academics-course-title-cell">
                                     <span className="portal-academics-course-title__en">
-                                      {row.courseTitle?.trim() ? row.courseTitle.trim() : '—'}
+                                      {courseRowDisplayTitle(row)}
                                     </span>
                                   </td>
                                   <td>{row.grade?.trim() ? row.grade : '—'}</td>
