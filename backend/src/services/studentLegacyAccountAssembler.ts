@@ -1,8 +1,19 @@
+import type { MarksRow } from "../repositories/studentAcademicsRepository.js";
 import type {
   LegacyAccountingRow,
   LegacyAccountSnapshot,
 } from "../repositories/studentLegacyAccountRepository.js";
 import type { PaymentRecord, StudentAccountPayload } from "../types/studentAccount.js";
+import {
+  buildAcademicCourseRecordsFromMarks,
+  resolveActiveTermFromCourseRecords,
+  scheduleRowsFromAcademicCourseRecords,
+  termsMatch,
+} from "./studentAcademicCourseRecords.js";
+import {
+  buildAccountCurrentTerm,
+  deriveAccountRegistration,
+} from "./studentAccountDashboard.js";
 
 function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
@@ -32,6 +43,8 @@ function typeNorm(type: string): string {
 export function assembleLegacyStudentAccountPayload(
   snap: LegacyAccountSnapshot,
   accountingRows: LegacyAccountingRow[],
+  /** All `marks` rows for the student (newest term first), same source as `/academics`. */
+  allMarksRows: MarksRow[],
 ): StudentAccountPayload {
   const regFees = roundMoney(snap.totalFees);
 
@@ -83,6 +96,30 @@ export function assembleLegacyStudentAccountPayload(
       }));
   }
 
+  const courseRecords = buildAcademicCourseRecordsFromMarks(
+    snap.studentId,
+    allMarksRows,
+  );
+  const activeTerm = resolveActiveTermFromCourseRecords(courseRecords);
+  const currentTermMarks =
+    activeTerm != null
+      ? courseRecords.filter(
+          (r) =>
+            r.year === activeTerm.year && termsMatch(r.term, activeTerm.term),
+        )
+      : [];
+  const scheduleRows = scheduleRowsFromAcademicCourseRecords(currentTermMarks);
+  const currentTerm =
+    activeTerm != null
+      ? buildAccountCurrentTerm(activeTerm.term, activeTerm.year)
+      : buildAccountCurrentTerm(snap.term, snap.year);
+  const registration = deriveAccountRegistration({
+    scheduleRows,
+    enrollmentSourceCount:
+      currentTermMarks.length > 0 ? currentTermMarks.length : allMarksRows.length,
+    termLabel: currentTerm.label,
+  });
+
   return {
     program: null,
     term: snap.term,
@@ -91,8 +128,8 @@ export function assembleLegacyStudentAccountPayload(
     student: {
       name: snap.displayName,
       studentId: snap.studentId,
-      term: snap.term,
-      year: snap.year,
+      term: currentTerm.term,
+      year: currentTerm.year,
     },
     preference: null,
     lineItems: [],
@@ -105,7 +142,9 @@ export function assembleLegacyStudentAccountPayload(
       payments: paymentsTotal,
       outstandingBalance,
     },
-    scheduleRows: [],
+    scheduleRows,
+    currentTerm,
+    registration,
     payments,
     installmentSchedule: [],
     installmentPolicy: [],
