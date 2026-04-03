@@ -1100,6 +1100,13 @@ button.portal-tab {
   box-sizing: border-box;
 }
 
+@media (min-width: 769px) {
+  .portal-main-body:has(.portal-documents-module) {
+    padding-left: clamp(0.625rem, 0.22rem + 0.65vw, 0.95rem);
+    padding-right: clamp(0.625rem, 0.22rem + 0.65vw, 0.95rem);
+  }
+}
+
 /* Registration + Finances + Academics: fill the main column (no centered island) */
 .portal-registration-module,
 .portal-finances-module,
@@ -1126,12 +1133,12 @@ button.portal-tab {
   min-width: 0;
 }
 
-/* Documents: full-width inner column (no outer white card); content max ~1152px */
+/* Documents: full-width inner column (no outer white card); controls align start */
 .portal-documents-content {
   box-sizing: border-box;
   width: 100%;
-  max-width: 72rem;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   padding: 0;
   min-width: 0;
   background: transparent;
@@ -1153,6 +1160,13 @@ button.portal-tab {
 
 .portal-documents-home__panel {
   min-width: 0;
+}
+
+/* Registration form preview: keep former ~72rem reading width, centered in full-width column */
+.portal-documents-home .portal-registration-form-sheet {
+  max-width: 72rem;
+  width: 100%;
+  margin-inline: auto;
 }
 
 .portal-registration-forms {
@@ -1195,6 +1209,54 @@ button.portal-tab {
 .portal-registration-form-filters__actions {
   display: flex;
   align-items: center;
+}
+
+/* Documents home: filters row — selects + Generate share height and tab-adjacent styling */
+.portal-documents-home .portal-registration-form-filters .portal-account-ledger__select {
+  box-sizing: border-box;
+  min-height: 2.25rem;
+  padding-top: 0.3125rem;
+  padding-bottom: 0.3125rem;
+}
+
+.portal-registration-form-filters__generate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 2.25rem;
+  margin: 0;
+  padding: 0.375rem 0.875rem;
+  font-family: inherit;
+  font-size: var(--portal-body-font-size);
+  font-weight: 400;
+  line-height: 1.2;
+  text-decoration: none;
+  border-radius: var(--portal-radius);
+  border: 1px solid var(--portal-border-subtle);
+  background: var(--portal-accent-soft);
+  color: var(--portal-accent-hover);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.portal-registration-form-filters__generate:hover:not(:disabled) {
+  background: #e8eaee;
+  border-color: var(--portal-border);
+  color: var(--portal-text);
+}
+
+.portal-registration-form-filters__generate:focus-visible {
+  outline: 2px solid var(--portal-accent);
+  outline-offset: 2px;
+}
+
+.portal-registration-form-filters__generate:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .portal-registration-form-sheet {
@@ -1428,13 +1490,13 @@ button.portal-tab {
   min-width: 0;
 }
 
-.portal-documents-agreement-body__school {
-  margin: 0 0 0.35rem;
-  font-family: 'Cinzel', ui-serif, Georgia, serif;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #a6192e;
-  text-align: center;
+.portal-documents-agreement-body__logo {
+  display: block;
+  margin: 0 auto 0.5rem;
+  max-height: 2.625rem;
+  width: auto;
+  max-width: min(13.5rem, 88%);
+  object-fit: contain;
 }
 
 .portal-documents-agreement-body__title {

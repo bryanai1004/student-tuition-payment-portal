@@ -57,7 +57,7 @@ export function RegistrationFormFilters({
       <div className="portal-registration-form-filters__actions">
         <button
           type="button"
-          className="portal-btn portal-btn--primary"
+          className="portal-registration-form-filters__generate"
           onClick={onGenerate}
           disabled={busy}
         >

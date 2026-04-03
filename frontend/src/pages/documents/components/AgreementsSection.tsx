@@ -88,7 +88,11 @@ export function AgreementsSection() {
           <div className="portal-doc-quiz-entry-card__expand">
             <div className="portal-doc-quiz-expand-form">
               <div className="portal-doc-quiz-expand-form__inner portal-documents-agreement-body">
-                <h3 className="portal-documents-agreement-body__school">Alhambra Medical University</h3>
+                <img
+                  className="portal-documents-agreement-body__logo"
+                  src="/AMULogo.png"
+                  alt="Alhambra Medical University"
+                />
                 <h4 className="portal-documents-agreement-body__title">Copyright Release Agreement</h4>
                 {COPYRIGHT_RELEASE_PARAGRAPHS.map((para, i) => (
                   <p key={i} className="portal-documents-agreement-body__para">
