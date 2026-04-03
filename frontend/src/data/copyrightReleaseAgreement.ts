@@ -1,0 +1,14 @@
+/** Full agreement body (paragraphs). Name line is templated in the UI. */
+export const COPYRIGHT_RELEASE_PARAGRAPHS = [
+  'In accordance with the courses, lectures, seminars, workshops, trainings and/or other presentations and activities provided as on-site and/or online at Alhambra Medical University (AMU), the university would like to record (in any audio and/or video formats) and use any materials utilized in the related activities for the educational purpose and promoting the overall program and university to the public.',
+  'This copyright release agreement is enacted to ensure that both parties between the presenter and AMU understand and have the necessary rights, privileges and protections against privacy and confidentiality. This agreement also serves our purpose to continue providing mutual use of the recorded materials from the activities and to enhance our educational purpose. AMU holds the copyright to all recording materials and shall have the option to continue utilizing the related recorded materials and producing archive copies from the recorded materials.',
+  'In supporting the copyright release agreement, the following terms and conditions shall apply to me:\n1. AMU receives my full permission and right to capture and record my activities, and shall use my name and biographical information to utilize, promote, publish and/or related activities with regards to the recordings.\n2. AMU owns the recording materials and receives my full rights and interests as a copyright holder entitled to the recording materials.\n3. AMU receives my full permission and right to use the recording materials for the educational purposes, program and university promotion in which the recordings and their related materials shall be utilized and produced in various forms, archive copies, including but not limited to creation of DVDs, CDs, direct of indirect through third parties for public distribution and website publication.',
+] as const
+
+export const COPYRIGHT_RELEASE_CLOSING_TEMPLATE =
+  'I {{NAME}}, hereby stated that I have read, understood and agreed to the copyright release agreement described above and acknowledge that this copyright release is governed by the California law and serves as a legally binding agreement. I confirmed and validated that I have the authority to enter into this agreement and that I will be subject to its terms and conditions. Any further disagreement to the terms and conditions provided in this agreement shall be discussed separately between me and AMU in meeting the mutual conclusion to the both parties.'
+
+export const COPYRIGHT_RELEASE_SUBMIT_NOTE =
+  'By clicking on the button “Submit”, I stated that I have read, understood and agreed the above statements, terms and conditions.'
+
+export const COPYRIGHT_AGREEMENT_STORAGE_KEY = 'portal_agreement_copyright_release_v1'

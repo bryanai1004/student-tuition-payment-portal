@@ -27,10 +27,6 @@ import { ClinicalRequiredHoursPage } from './pages/clinical/ClinicalRequiredHour
 import { ClinicalCompliancePage } from './pages/clinical/ClinicalCompliancePage'
 import { DocumentsLayout } from './pages/documents/DocumentsLayout'
 import { DocumentsHomePage } from './pages/documents/DocumentsHomePage'
-import { DocumentsPoliciesPage } from './pages/documents/DocumentsPoliciesPage'
-import { DocumentsFormsPage } from './pages/documents/DocumentsFormsPage'
-import { DocumentsHandbookPage } from './pages/documents/DocumentsHandbookPage'
-import { DocumentsUploadsPage } from './pages/documents/DocumentsUploadsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { DashboardPage } from './pages/DashboardPage'
 import './styles/portal.css'
@@ -84,10 +80,10 @@ export default function App() {
           </Route>
           <Route path="/documents" element={<DocumentsLayout />}>
             <Route index element={<DocumentsHomePage />} />
-            <Route path="policies" element={<DocumentsPoliciesPage />} />
-            <Route path="forms" element={<DocumentsFormsPage />} />
-            <Route path="handbook" element={<DocumentsHandbookPage />} />
-            <Route path="uploads" element={<DocumentsUploadsPage />} />
+            <Route path="policies" element={<Navigate to="/documents" replace />} />
+            <Route path="forms" element={<Navigate to="/documents" replace />} />
+            <Route path="handbook" element={<Navigate to="/documents" replace />} />
+            <Route path="uploads" element={<Navigate to="/documents" replace />} />
           </Route>
           <Route path="/profile" element={<ProfilePage />} />
         </Route>

@@ -574,9 +574,10 @@
   padding-right: var(--portal-dashboard-padding-x);
 }
 
-/* Registration + Finances (sidebar routes): main column width + tighter gutters */
+/* Registration + Finances + Documents (sidebar routes): main column width + tighter gutters */
 .portal-main-body:has(.portal-registration-module),
-.portal-main-body:has(.portal-finances-module) {
+.portal-main-body:has(.portal-finances-module),
+.portal-main-body:has(.portal-documents-module) {
   --portal-registration-main-padding-x: clamp(1rem, 0.45rem + 1vw, 1.5rem);
   padding-left: var(--portal-registration-main-padding-x);
   padding-right: var(--portal-registration-main-padding-x);
@@ -584,28 +585,32 @@
 
 @media (min-width: 1280px) {
   .portal-main-body:has(.portal-registration-module),
-  .portal-main-body:has(.portal-finances-module) {
+  .portal-main-body:has(.portal-finances-module),
+  .portal-main-body:has(.portal-documents-module) {
     --portal-registration-main-padding-x: clamp(0.875rem, 0.45rem + 0.38vw, 1.125rem);
   }
 }
 
 @media (min-width: 1440px) {
   .portal-main-body:has(.portal-registration-module),
-  .portal-main-body:has(.portal-finances-module) {
+  .portal-main-body:has(.portal-finances-module),
+  .portal-main-body:has(.portal-documents-module) {
     --portal-registration-main-padding-x: clamp(0.75rem, 0.4rem + 0.28vw, 1rem);
   }
 }
 
 @media (min-width: 1600px) {
   .portal-main-body:has(.portal-registration-module),
-  .portal-main-body:has(.portal-finances-module) {
+  .portal-main-body:has(.portal-finances-module),
+  .portal-main-body:has(.portal-documents-module) {
     --portal-registration-main-padding-x: clamp(0.75rem, 0.35rem + 0.22vw, 0.875rem);
   }
 }
 
 @media (min-width: 1920px) {
   .portal-main-body:has(.portal-registration-module),
-  .portal-main-body:has(.portal-finances-module) {
+  .portal-main-body:has(.portal-finances-module),
+  .portal-main-body:has(.portal-documents-module) {
     --portal-registration-main-padding-x: clamp(0.625rem, 0.28rem + 0.16vw, 0.75rem);
   }
 }
@@ -688,7 +693,8 @@
   }
 
   .portal-main-body:has(.portal-registration-module),
-  .portal-main-body:has(.portal-finances-module) {
+  .portal-main-body:has(.portal-finances-module),
+  .portal-main-body:has(.portal-documents-module) {
     padding-left: var(--portal-main-padding-x);
     padding-right: var(--portal-main-padding-x);
   }
@@ -1118,6 +1124,374 @@ button.portal-tab {
 .portal-clinical-outlet,
 .portal-documents-outlet {
   min-width: 0;
+}
+
+/* Documents: full-width inner column (no outer white card); content max ~1152px */
+.portal-documents-content {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0;
+  min-width: 0;
+  background: transparent;
+}
+
+.portal-documents-home {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.portal-documents-home .portal-tab:not(.portal-tab--active) {
+  background: #fff;
+  color: var(--portal-text-muted);
+}
+
+.portal-documents-home__panel {
+  min-width: 0;
+}
+
+.portal-registration-forms {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.portal-registration-form-hint {
+  margin: 0;
+  font-size: var(--portal-body-font-size);
+  line-height: var(--portal-body-line-height);
+  color: var(--portal-text-muted);
+}
+
+.portal-registration-form-hint--warn {
+  color: var(--portal-text);
+}
+
+.portal-registration-form-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem 1.25rem;
+}
+
+.portal-registration-form-filters__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.portal-registration-form-filters__label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--portal-text-muted);
+}
+
+.portal-registration-form-filters__actions {
+  display: flex;
+  align-items: center;
+}
+
+.portal-registration-form-sheet {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem 1.35rem 1.75rem;
+  background: #fff;
+  border: 1px solid #d8dce3;
+  border-radius: var(--portal-radius);
+  font-family: 'Times New Roman', Times, ui-serif, Georgia, serif;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #1a1a1a;
+  overflow-x: auto;
+}
+
+.portal-registration-form-sheet__masthead {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.portal-registration-form-sheet__school {
+  margin: 0 0 0.35rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.portal-registration-form-sheet__office,
+.portal-registration-form-sheet__contact {
+  margin: 0.15rem 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.portal-registration-form-sheet__doc-title {
+  margin: 1rem 0 1rem;
+  text-align: center;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.portal-registration-form-sheet__student-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 2rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .portal-registration-form-sheet__student-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.portal-registration-form-sheet__dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.portal-registration-form-sheet__dl > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.35rem 0.5rem;
+  align-items: baseline;
+}
+
+.portal-registration-form-sheet__dl dt {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.portal-registration-form-sheet__dl dd {
+  margin: 0;
+  font-size: 0.75rem;
+  border-bottom: 1px solid #bbb;
+  min-height: 1.25rem;
+}
+
+.portal-registration-form-sheet__section {
+  margin: 1rem 0;
+}
+
+.portal-registration-form-table-wrap {
+  overflow-x: auto;
+  margin: 0;
+}
+
+.portal-registration-form-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.6875rem;
+  table-layout: fixed;
+}
+
+.portal-registration-form-table th,
+.portal-registration-form-table td {
+  border: 1px solid #9a9a9a;
+  padding: 0.28rem 0.35rem;
+  vertical-align: top;
+  word-wrap: break-word;
+}
+
+.portal-registration-form-table th {
+  font-weight: 700;
+  text-align: center;
+  background: #f5f5f5;
+}
+
+.portal-registration-form-table__empty td {
+  height: 1.35rem;
+}
+
+.portal-registration-form-table tfoot th,
+.portal-registration-form-table tfoot td {
+  font-weight: 700;
+  background: #fafafa;
+}
+
+.portal-registration-form-sheet__confirm {
+  margin: 1.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.portal-registration-form-sheet__confirm p {
+  margin: 0;
+  font-size: 0.75rem;
+  text-align: justify;
+}
+
+.portal-registration-form-sheet__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.portal-registration-form-signatures {
+  margin: 1.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.portal-registration-form-signatures__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+.portal-registration-form-signatures__line {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  border-bottom: 1px solid #333;
+  min-height: 1.1rem;
+}
+
+.portal-registration-form-signatures__line--short {
+  flex: 0 1 5rem;
+  min-width: 4rem;
+}
+
+.portal-registration-form-office {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 2px solid #333;
+}
+
+.portal-registration-form-office__title {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.portal-registration-form-office__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 720px) {
+  .portal-registration-form-office__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.portal-registration-form-office__label {
+  margin: 0 0 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.portal-registration-form-office__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.portal-registration-form-office__list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.6875rem;
+  border-bottom: 1px dotted #aaa;
+  padding-bottom: 0.2rem;
+}
+
+.portal-registration-form-sheet__print-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.portal-documents-agreements {
+  min-width: 0;
+}
+
+.portal-documents-agreement-body__school {
+  margin: 0 0 0.35rem;
+  font-family: 'Cinzel', ui-serif, Georgia, serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #a6192e;
+  text-align: center;
+}
+
+.portal-documents-agreement-body__title {
+  margin: 0 0 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.portal-documents-agreement-body__para {
+  margin: 0 0 0.85rem;
+  font-size: var(--portal-body-font-size);
+  line-height: 1.55;
+  color: var(--portal-text);
+}
+
+.portal-documents-agreement-body__success {
+  margin: 1rem 0 0;
+  padding: 0.75rem 1rem;
+  border-radius: var(--portal-radius);
+  border: 1px solid #b6d4c9;
+  background: #f0faf4;
+  color: #1e4d36;
+  font-size: var(--portal-body-font-size);
+}
+
+.portal-documents-agreement-body__actions {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.portal-documents-agreement-body__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: var(--portal-body-font-size);
+  line-height: 1.45;
+  color: var(--portal-text);
+}
+
+.portal-documents-agreement-body__submit {
+  min-width: 7rem;
+}
+
+@media print {
+  .portal-registration-form-sheet {
+    border: 1px solid #000;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .portal-registration-form-sheet__print-actions {
+    display: none !important;
+  }
 }
 
 /* Finances: legacy accounting ledger quarter selector */
