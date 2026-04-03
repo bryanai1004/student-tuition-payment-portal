@@ -11,18 +11,10 @@ function parseNullableStringField(v) {
     const s = trimStr(v);
     return s === "" ? null : s;
 }
-function parseProgramCode(raw) {
-    if (raw === "MAHM" || raw === "DAHM")
-        return raw;
-    return null;
-}
 function parseUpdateBody(raw) {
     if (!isRecord(raw))
         return null;
     if (typeof raw.name !== "string")
-        return null;
-    const program = parseProgramCode(raw.program);
-    if (program == null)
         return null;
     return {
         name: raw.name,
@@ -30,7 +22,6 @@ function parseUpdateBody(raw) {
         gender: parseNullableStringField(raw.gender),
         backgroundSchool: parseNullableStringField(raw.backgroundSchool),
         highestDegree: parseNullableStringField(raw.highestDegree),
-        program,
         requirementsId: parseNullableStringField(raw.requirementsId),
         address: parseNullableStringField(raw.address),
         city: parseNullableStringField(raw.city),
@@ -72,9 +63,6 @@ function parseCreateBody(raw) {
         return null;
     if (typeof raw.initialPassword !== "string")
         return null;
-    const program = parseProgramCode(raw.program);
-    if (program == null)
-        return null;
     const entryDate = parseEntryDateFromBody(raw.entryDate);
     if (entryDate == null)
         return null;
@@ -86,7 +74,6 @@ function parseCreateBody(raw) {
         division: raw.division,
         entryDate,
         name: raw.name,
-        program,
         email: parseNullableStringField(raw.email),
         gender: parseNullableStringField(raw.gender),
         requirementsId: requirementsId === undefined ? null : requirementsId,

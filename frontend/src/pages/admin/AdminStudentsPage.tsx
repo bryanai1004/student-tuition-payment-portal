@@ -61,8 +61,7 @@ export function AdminStudentsPage() {
       (r) =>
         r.studentId.toLowerCase().includes(s) ||
         r.name.toLowerCase().includes(s) ||
-        (r.email ?? '').toLowerCase().includes(s) ||
-        (r.program ?? '').toLowerCase().includes(s),
+        (r.email ?? '').toLowerCase().includes(s),
     )
   }, [q, rows])
 
@@ -76,7 +75,7 @@ export function AdminStudentsPage() {
           <input
             type="search"
             className="admin-input admin-input--search"
-            placeholder="Search by student ID, name, email, or program"
+            placeholder="Search by student ID, name, or email"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             aria-label="Search students"
@@ -133,7 +132,6 @@ export function AdminStudentsPage() {
                 <th scope="col">Division</th>
                 <th scope="col">Name</th>
                 <th scope="col">Email</th>
-                <th scope="col">Program</th>
                 <th scope="col">Signed Date</th>
                 <th scope="col">Latest Registration Term</th>
                 <th scope="col">Action</th>
@@ -142,7 +140,7 @@ export function AdminStudentsPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="portal-card-note">
+                  <td colSpan={7} className="portal-card-note">
                     {rows.length === 0
                       ? 'No students on file.'
                       : 'No students match your search.'}
@@ -155,7 +153,6 @@ export function AdminStudentsPage() {
                     <td>{r.division}</td>
                     <td>{r.name}</td>
                     <td>{displayCell(r.email)}</td>
-                    <td>{displayCell(r.program)}</td>
                     <td>{formatTableDate(r.signedDate)}</td>
                     <td>{displayCell(r.latestRegistrationTerm)}</td>
                     <td>

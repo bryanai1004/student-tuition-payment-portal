@@ -172,10 +172,6 @@ export function AdminStudentDetailPage() {
                 <dt>Email</dt>
                 <dd>{dashText(detail.email)}</dd>
               </div>
-              <div className="portal-row">
-                <dt>Program</dt>
-                <dd>{dashText(detail.program)}</dd>
-              </div>
             </dl>
           </section>
 
