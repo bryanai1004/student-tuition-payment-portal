@@ -16,14 +16,12 @@ export function AdminLoginPage() {
   }, [isAuthenticated, navigate])
 
   function handleSignIn() {
-    const u = username.trim()
-    const pw = password.trim()
-    if (!u || !pw) {
-      setFormError('Username or Email and Password are required')
+    setFormError(null)
+    const result = login(username, password)
+    if (!result.ok) {
+      setFormError(result.error)
       return
     }
-    setFormError(null)
-    login()
     navigate('/admin', { replace: true })
   }
 

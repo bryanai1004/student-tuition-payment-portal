@@ -9,9 +9,27 @@ import {
 
 const ADMIN_SESSION_KEY = 'amu_admin_session'
 
+const ADMIN_EMAILS = [
+  'wanpanelami@gmail.com',
+  'bingchen.li@wanpanel.ai',
+] as const
+const ADMIN_PASSWORD = 'amuadmin123'
+
+const ADMIN_EMAIL_SET = new Set(
+  ADMIN_EMAILS.map((e) => e.toLowerCase()),
+)
+
+function isAllowedAdminEmail(email: string): boolean {
+  return ADMIN_EMAIL_SET.has(email.trim().toLowerCase())
+}
+
+type AdminLoginResult =
+  | { ok: true }
+  | { ok: false; error: string }
+
 type AdminAuthContextValue = {
   isAuthenticated: boolean
-  login: () => void
+  login: (email: string, password: string) => AdminLoginResult
   logout: () => void
 }
 
@@ -28,13 +46,24 @@ function readSession(): boolean {
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(readSession)
 
-  const login = useCallback(() => {
+  const login = useCallback((email: string, password: string): AdminLoginResult => {
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) {
+      return { ok: false, error: 'Username or Email is required' }
+    }
+    if (password === '') {
+      return { ok: false, error: 'Password is required' }
+    }
+    if (!isAllowedAdminEmail(trimmedEmail) || password !== ADMIN_PASSWORD) {
+      return { ok: false, error: 'Invalid email or password.' }
+    }
     try {
       sessionStorage.setItem(ADMIN_SESSION_KEY, '1')
     } catch {
       /* ignore */
     }
     setIsAuthenticated(true)
+    return { ok: true }
   }, [])
 
   const logout = useCallback(() => {
