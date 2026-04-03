@@ -27,7 +27,6 @@ const initialCertified = (): Record<QuizId, boolean> => ({
  * Layout header and back link live in DocumentsLayout.
  */
 export function DocumentsPage() {
-  const [activeSection, setActiveSection] = useState<'quiz' | null>(null)
   const [expandedQuizId, setExpandedQuizId] = useState<QuizId | null>(null)
   const [answersByQuiz, setAnswersByQuiz] =
     useState<Record<QuizId, Record<string, string>>>(emptyAnswers)
@@ -60,67 +59,50 @@ export function DocumentsPage() {
     [answersByQuiz, certifiedByQuiz],
   )
 
-  const quizSectionOpen = activeSection === 'quiz'
-
   return (
     <div className="portal-documents-quiz-page">
-      <h2 className="portal-documents-quiz-page-title">DOCUMENTS</h2>
-
       <div
         className="portal-academics-print-hide portal-documents-quiz-entry-toggle"
-        role="group"
-        aria-label="Documents options"
+        role="tablist"
+        aria-label="Documents and forms"
       >
-        <div className="portal-tab-group portal-academics-portal-tabs">
-          <button
-            type="button"
-            className={[
-              'portal-tab',
-              quizSectionOpen ? 'portal-tab--active' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            aria-pressed={quizSectionOpen}
-            onClick={() => {
-              setActiveSection((s) => {
-                if (s === 'quiz') {
-                  setExpandedQuizId(null)
-                  return null
-                }
-                return 'quiz'
-              })
-            }}
-          >
-            Quiz
-          </button>
-        </div>
+        <ul className="portal-tab-group portal-academics-portal-tabs">
+          <li>
+            <span
+              className="portal-tab portal-tab--active"
+              role="tab"
+              aria-selected
+              aria-current="page"
+            >
+              Quiz
+            </span>
+          </li>
+        </ul>
       </div>
 
-      {quizSectionOpen ? (
-        <QuizEntrySection
-          quizzes={DOCUMENT_QUIZZES}
-          expandedQuizId={expandedQuizId}
-          completedByQuiz={completedByQuiz}
-          answersByQuiz={answersByQuiz}
-          certifiedByQuiz={certifiedByQuiz}
-          onToggleExpand={handleToggleExpand}
-          onAnswerChange={(quizId, questionId, option) => {
-            setAnswersByQuiz((prev) => ({
-              ...prev,
-              [quizId]: {
-                ...(prev[quizId] ?? {}),
-                [questionId]: option,
-              },
-            }))
-          }}
-          onCertifiedChange={(quizId, next) => {
-            setCertifiedByQuiz((prev) => ({ ...prev, [quizId]: next }))
-          }}
-          onSubmit={(quizId) => {
-            void handleSubmit(quizId)
-          }}
-        />
-      ) : null}
+      <QuizEntrySection
+        quizzes={DOCUMENT_QUIZZES}
+        expandedQuizId={expandedQuizId}
+        completedByQuiz={completedByQuiz}
+        answersByQuiz={answersByQuiz}
+        certifiedByQuiz={certifiedByQuiz}
+        onToggleExpand={handleToggleExpand}
+        onAnswerChange={(quizId, questionId, option) => {
+          setAnswersByQuiz((prev) => ({
+            ...prev,
+            [quizId]: {
+              ...(prev[quizId] ?? {}),
+              [questionId]: option,
+            },
+          }))
+        }}
+        onCertifiedChange={(quizId, next) => {
+          setCertifiedByQuiz((prev) => ({ ...prev, [quizId]: next }))
+        }}
+        onSubmit={(quizId) => {
+          void handleSubmit(quizId)
+        }}
+      />
     </div>
   )
 }
