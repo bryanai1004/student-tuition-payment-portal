@@ -138,6 +138,62 @@ export type StudentProfileResponse = {
   email: string | null
 }
 
+/** GET /api/admin/students — legacy `students` roster (admin UI). */
+export type AdminStudentListItem = {
+  studentId: string
+  name: string
+  program: string | null
+  status: string | null
+  email: string | null
+  balance: number | null
+}
+
+function parseNullableString(v: unknown): string | null {
+  if (v === null || v === undefined) return null
+  if (typeof v === 'string') return v
+  throw new Error('Unexpected admin students response')
+}
+
+function parseNullableNumber(v: unknown): number | null {
+  if (v === null || v === undefined) return null
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  throw new Error('Unexpected admin students response')
+}
+
+export async function fetchAdminStudents(options?: {
+  signal?: AbortSignal
+}): Promise<AdminStudentListItem[]> {
+  const data = (await fetchApiJson('/api/admin/students', {
+    signal: options?.signal,
+  })) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected admin students response')
+  }
+  const raw = (data as { students?: unknown }).students
+  if (!Array.isArray(raw)) {
+    throw new Error('Unexpected admin students response')
+  }
+  const students: AdminStudentListItem[] = []
+  for (const row of raw) {
+    if (row == null || typeof row !== 'object') {
+      throw new Error('Unexpected admin students response')
+    }
+    const o = row as Record<string, unknown>
+    if (typeof o.studentId !== 'string' || typeof o.name !== 'string') {
+      throw new Error('Unexpected admin students response')
+    }
+    students.push({
+      studentId: o.studentId,
+      name: o.name,
+      program: parseNullableString(o.program),
+      status: parseNullableString(o.status),
+      email: parseNullableString(o.email),
+      balance: parseNullableNumber(o.balance),
+    })
+  }
+  return students
+}
+
 export async function fetchStudentProfile(
   studentId: string,
   options?: { signal?: AbortSignal },

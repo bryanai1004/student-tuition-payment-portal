@@ -105,7 +105,7 @@ function creditsFromDb(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function trackFromRequirementsId(v: unknown): string | null {
+export function trackFromRequirementsId(v: unknown): string | null {
   if (v == null || v === "") return null;
   const s = String(v).trim();
   return s.length > 0 ? s : null;
