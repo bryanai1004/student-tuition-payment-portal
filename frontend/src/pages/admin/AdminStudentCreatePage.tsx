@@ -20,13 +20,36 @@ function parseRequirementsId(s: string): number | null | 'invalid' {
   return n
 }
 
-const defaultEntryYear = new Date().getFullYear()
+function localCalendarDateIso(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function isValidEntryDateIso(s: string): boolean {
+  const t = s.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return false
+  const y = Number(t.slice(0, 4))
+  const mo = Number(t.slice(5, 7))
+  const d = Number(t.slice(8, 10))
+  if (!Number.isFinite(y) || mo < 1 || mo > 12 || d < 1 || d > 31) return false
+  const check = new Date(y, mo - 1, d)
+  return (
+    check.getFullYear() === y &&
+    check.getMonth() === mo - 1 &&
+    check.getDate() === d
+  )
+}
+
+const defaultEntryDate = localCalendarDateIso()
 
 export function AdminStudentCreatePage() {
   const navigate = useNavigate()
 
   const [division, setDivision] = useState<AdminDivision | ''>('')
-  const [entryYear, setEntryYear] = useState<number>(defaultEntryYear)
+  const [entryDate, setEntryDate] = useState<string>(defaultEntryDate)
 
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -52,10 +75,7 @@ export function AdminStudentCreatePage() {
 
   const canPreview =
     division === 'Chinese' || division === 'English'
-      ? Number.isFinite(entryYear) &&
-        Number.isInteger(entryYear) &&
-        entryYear >= 1900 &&
-        entryYear <= 2100
+      ? isValidEntryDateIso(entryDate)
       : false
 
   useEffect(() => {
@@ -77,7 +97,7 @@ export function AdminStudentCreatePage() {
 
     ;(async () => {
       try {
-        const id = await fetchNextAdminStudentId(division, entryYear, {
+        const id = await fetchNextAdminStudentId(division, entryDate.trim(), {
           signal: ac.signal,
         })
         if (ac.signal.aborted) return
@@ -97,7 +117,7 @@ export function AdminStudentCreatePage() {
     })()
 
     return () => ac.abort()
-  }, [canPreview, division, entryYear])
+  }, [canPreview, division, entryDate])
 
   const requirementsParsed = useMemo(
     () => parseRequirementsId(requirementsId),
@@ -122,7 +142,7 @@ export function AdminStudentCreatePage() {
 
     const body: CreateAdminStudentBody = {
       division,
-      entryYear: Math.trunc(entryYear),
+      entryDate: entryDate.trim(),
       name: name.trim(),
       initialPassword,
       email: nullableTrim(email),
@@ -219,8 +239,7 @@ export function AdminStudentCreatePage() {
           ) : null}
           {!previewLoading && !canPreview ? (
             <p className="portal-profile-state__detail" style={{ margin: 0 }}>
-              Select division and a valid entry year (1900–2100) to preview the
-              next id.
+              Select division and a valid entry date to preview the next id.
             </p>
           ) : null}
           {!previewLoading &&
@@ -262,19 +281,20 @@ export function AdminStudentCreatePage() {
           </div>
 
           <div className="portal-stack" style={{ gap: '0.35rem' }}>
-            <label htmlFor="admin-create-year" className="portal-card-note" style={{ margin: 0 }}>
-              Entry year *
+            <label htmlFor="admin-create-entry-date" className="portal-card-note" style={{ margin: 0 }}>
+              Entry date *
             </label>
             <input
-              id="admin-create-year"
-              type="number"
-              min={1900}
-              max={2100}
+              id="admin-create-entry-date"
+              type="date"
               className="admin-input"
               style={{ maxWidth: '28rem', width: '100%' }}
-              value={entryYear}
-              onChange={(ev) => setEntryYear(Number(ev.target.value))}
+              value={entryDate}
+              onChange={(ev) => setEntryDate(ev.target.value)}
             />
+            <p className="portal-profile-state__detail" style={{ margin: 0, fontSize: '0.8125rem' }}>
+              Student ID uses division, the entry year (last two digits), and the entry month from this date.
+            </p>
           </div>
 
           <div className="portal-stack" style={{ gap: '0.35rem' }}>

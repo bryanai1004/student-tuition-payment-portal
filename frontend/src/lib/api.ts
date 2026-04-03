@@ -320,7 +320,8 @@ export type PreviewNextStudentIdResponse = {
 
 export type CreateAdminStudentBody = {
   division: AdminDivision
-  entryYear: number
+  /** ISO `YYYY-MM-DD`; id bucket uses calendar year + month from this date. */
+  entryDate: string
   name: string
   email?: string | null
   gender?: string | null
@@ -339,12 +340,12 @@ export type CreateAdminStudentBody = {
 
 export async function fetchNextAdminStudentId(
   division: AdminDivision,
-  year: number,
+  entryDate: string,
   options?: { signal?: AbortSignal },
 ): Promise<string> {
   const params = new URLSearchParams()
   params.set('division', division)
-  params.set('year', String(Math.trunc(year)))
+  params.set('entryDate', entryDate.trim())
   const path = `/api/admin/students/next-id?${params.toString()}`
   const data = (await fetchApiJson(path, {
     signal: options?.signal,

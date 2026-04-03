@@ -326,55 +326,62 @@ function parseDivisionParam(
   };
 }
 
-function parseEntryYearParam(
+function parseEntryDateParam(
   raw: unknown,
 ):
-  | { ok: true; value: number }
+  | { ok: true; year: number; month: number }
   | { ok: false; status: 400; message: string } {
-  if (raw == null || raw === "") {
+  if (raw == null || String(raw).trim() === "") {
     return {
       ok: false,
       status: 400,
-      message: "year is required.",
+      message: "entryDate is required.",
     };
   }
-  const n =
-    typeof raw === "number"
-      ? raw
-      : Number.parseInt(String(raw).trim(), 10);
-  if (!Number.isFinite(n) || !Number.isInteger(n)) {
+  const iso = legacyDbDateToIso(raw);
+  if (!iso) {
     return {
       ok: false,
       status: 400,
-      message: "year must be an integer.",
+      message: "entryDate must be a valid calendar date (YYYY-MM-DD).",
     };
   }
-  if (n < ENTRY_YEAR_MIN || n > ENTRY_YEAR_MAX) {
+  const y = Number.parseInt(iso.slice(0, 4), 10);
+  const month = Number.parseInt(iso.slice(5, 7), 10);
+  if (!Number.isFinite(y) || y < ENTRY_YEAR_MIN || y > ENTRY_YEAR_MAX) {
     return {
       ok: false,
       status: 400,
-      message: "year is out of range.",
+      message: "entry date year is out of range.",
     };
   }
-  return { ok: true, value: n };
+  if (!Number.isFinite(month) || month < 1 || month > 12) {
+    return {
+      ok: false,
+      status: 400,
+      message: "entry date month is invalid.",
+    };
+  }
+  return { ok: true, year: y, month };
 }
 
 export async function previewNextAdminStudentId(
   divisionRaw: unknown,
-  yearRaw: unknown,
+  entryDateRaw: unknown,
 ): Promise<
   | { ok: true; studentId: string }
   | { ok: false; status: 400; message: string }
 > {
   const div = parseDivisionParam(divisionRaw);
   if (!div.ok) return div;
-  const yr = parseEntryYearParam(yearRaw);
-  if (!yr.ok) return yr;
+  const dt = parseEntryDateParam(entryDateRaw);
+  if (!dt.ok) return dt;
   try {
     const studentId = await getNextLegacyStudentId(
       pool,
       div.value,
-      yr.value,
+      dt.year,
+      dt.month,
     );
     return { ok: true, studentId };
   } catch (e) {
@@ -395,9 +402,9 @@ export async function createAdminStudent(
     return { ok: false, status: 400, message: div.message };
   }
 
-  const yr = parseEntryYearParam(body.entryYear);
-  if (!yr.ok) {
-    return { ok: false, status: 400, message: yr.message };
+  const dt = parseEntryDateParam(body.entryDate);
+  if (!dt.ok) {
+    return { ok: false, status: 400, message: dt.message };
   }
 
   const name = str(body.name);
@@ -460,7 +467,8 @@ export async function createAdminStudent(
     const studentId = await getNextLegacyStudentId(
       connection,
       div.value,
-      yr.value,
+      dt.year,
+      dt.month,
     );
 
     if (await legacyStudentMasterExists(connection, studentId)) {

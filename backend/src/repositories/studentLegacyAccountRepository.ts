@@ -446,54 +446,75 @@ export type LegacyStudentMasterInsert = {
 };
 
 /**
- * Next student id in a division+year bucket: prefix (C|E) + 2-digit year + 3-digit sequence.
- * Query uses `LIKE 'E26%'` style pattern; empty bucket starts at ...001.
+ * Legacy id: [C|E][YY][M][NN] — month M is 1–12 without leading zero; NN is 2-digit sequence in that bucket.
+ * Parses sequence as the last two characters; month is the substring between YY and NN.
+ */
+function parseSequenceFromLegacyStudentId(
+  id: string,
+  head: string,
+  expectedMonthStr: string,
+): number | null {
+  const trimmed = id.trim();
+  if (trimmed.length < head.length + 3) return null;
+  if (!trimmed.toUpperCase().startsWith(head.toUpperCase())) return null;
+  const rest = trimmed.slice(head.length);
+  if (rest.length < 3) return null;
+  const seqStr = rest.slice(-2);
+  const monthStr = rest.slice(0, -2);
+  if (monthStr !== expectedMonthStr) return null;
+  const month = Number.parseInt(monthStr, 10);
+  const seq = Number.parseInt(seqStr, 10);
+  if (!Number.isFinite(month) || month < 1 || month > 12) return null;
+  if (!Number.isFinite(seq) || seq < 1 || seq > 99) return null;
+  if (String(month) !== monthStr) return null;
+  return seq;
+}
+
+/**
+ * Next student id in a division + calendar year + month bucket.
+ * Query uses `LIKE 'C174%'` (prefix + YY + month); empty bucket starts at ...01.
  */
 export async function getNextLegacyStudentId(
   pool: LegacyMysqlClient,
   division: "Chinese" | "English",
   entryYear: number,
+  entryMonth: number,
 ): Promise<string> {
-  const prefix = division === "Chinese" ? "C" : "E";
+  const letter = division === "Chinese" ? "C" : "E";
   const y = Math.trunc(entryYear);
+  const m = Math.trunc(entryMonth);
+  if (m < 1 || m > 12) {
+    throw new Error("Entry month must be between 1 and 12.");
+  }
   const year2 = String(((y % 100) + 100) % 100).padStart(2, "0");
-  const likePattern = `${prefix}${year2}%`;
+  const monthStr = String(m);
+  const head = `${letter}${year2}`;
+  /** Anchored match so month `1` does not pick up `C1710…` (October) rows. */
+  const regexpPattern = `^${head}${monthStr}[0-9]{2}$`;
 
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT TRIM(id) AS id
      FROM students
-     WHERE id LIKE ?
-     ORDER BY id DESC
-     LIMIT 1`,
-    [likePattern],
+     WHERE TRIM(id) REGEXP ?`,
+    [regexpPattern],
   );
 
-  const re = new RegExp(
-    `^${prefix}${year2}(\\d{3})$`,
-    "i",
-  );
-
-  let nextSeq = 1;
-  const row = rows[0];
-  const lastId =
-    row?.id != null && String(row.id).trim() !== ""
-      ? String(row.id).trim()
-      : "";
-  const m = lastId ? re.exec(lastId) : null;
-  if (m) {
-    const n = Number.parseInt(m[1]!, 10);
-    if (Number.isFinite(n)) {
-      nextSeq = n + 1;
-    }
+  let maxSeq = 0;
+  for (const row of rows) {
+    const rawId = row?.id != null ? String(row.id).trim() : "";
+    if (rawId === "") continue;
+    const seq = parseSequenceFromLegacyStudentId(rawId, head, monthStr);
+    if (seq != null && seq > maxSeq) maxSeq = seq;
   }
 
-  if (nextSeq > 999) {
+  const nextSeq = maxSeq + 1;
+  if (nextSeq > 99) {
     throw new Error(
-      `Legacy student id sequence overflow for ${prefix}${year2} (max 999).`,
+      `Legacy student id sequence overflow for ${head}${monthStr} (max 99).`,
     );
   }
 
-  return `${prefix}${year2}${String(nextSeq).padStart(3, "0")}`;
+  return `${head}${monthStr}${String(nextSeq).padStart(2, "0")}`;
 }
 
 export async function legacyStudentMasterExists(

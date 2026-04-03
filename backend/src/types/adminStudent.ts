@@ -56,7 +56,8 @@ export type AdminDivision = "Chinese" | "English";
 /** POST /api/admin/students — create legacy student + password row. */
 export type AdminStudentCreateBody = {
   division: AdminDivision;
-  entryYear: number;
+  /** ISO calendar date `YYYY-MM-DD`; year and month drive student id bucket. */
+  entryDate: string;
   name: string;
   email?: string | null;
   gender?: string | null;

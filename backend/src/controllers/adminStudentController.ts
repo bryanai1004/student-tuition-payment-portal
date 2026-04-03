@@ -44,15 +44,10 @@ function parseUpdateBody(raw: unknown): AdminStudentUpdateBody | null {
   };
 }
 
-function parseEntryYearFromBody(raw: unknown): number | null {
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return raw;
-  }
-  if (typeof raw === "string" && raw.trim() !== "") {
-    const n = Number.parseInt(raw.trim(), 10);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
+function parseEntryDateFromBody(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  return t === "" ? null : t;
 }
 
 function parseRequirementsIdFromBody(raw: unknown): number | null | undefined {
@@ -75,15 +70,15 @@ function parseCreateBody(raw: unknown): AdminStudentCreateBody | null {
   if (raw.division !== "Chinese" && raw.division !== "English") return null;
   if (typeof raw.name !== "string") return null;
   if (typeof raw.initialPassword !== "string") return null;
-  const entryYear = parseEntryYearFromBody(raw.entryYear);
-  if (entryYear == null) return null;
+  const entryDate = parseEntryDateFromBody(raw.entryDate);
+  if (entryDate == null) return null;
   const requirementsId = parseRequirementsIdFromBody(raw.requirementsId);
   if (requirementsId === undefined && raw.requirementsId != null) {
     return null;
   }
   return {
     division: raw.division,
-    entryYear,
+    entryDate,
     name: raw.name,
     email: parseNullableStringField(raw.email),
     gender: parseNullableStringField(raw.gender),
@@ -155,9 +150,9 @@ export async function getNextAdminStudentId(
   res: Response,
 ): Promise<void> {
   const division = req.query.division;
-  const year = req.query.year;
+  const entryDate = req.query.entryDate;
   try {
-    const result = await previewNextAdminStudentId(division, year);
+    const result = await previewNextAdminStudentId(division, entryDate);
     if (!result.ok) {
       res.status(result.status).json({ error: result.message });
       return;
