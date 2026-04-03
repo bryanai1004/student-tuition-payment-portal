@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAdminStudent, getAdminStudents, putAdminStudent, } from "../controllers/adminStudentController.js";
+import { getAdminStudent, getAdminStudents, getNextAdminStudentId, postAdminStudent, putAdminStudent, } from "../controllers/adminStudentController.js";
 import { deleteAdminCourseSection, patchAdminCourseSection, postAdminCourseSection, } from "../controllers/adminCourseSectionController.js";
 import { deleteCourseBinItemHandler, getCourseBin, postCourseBin, } from "../controllers/courseBinController.js";
 import { getCourseSections, getCourses } from "../controllers/courseController.js";
@@ -23,6 +23,8 @@ apiRouter.delete("/course-bin/:studentId/:itemId", deleteCourseBinItemHandler);
 /** Admin section CRUD: protect with auth / role checks before exposing publicly. */
 const adminRouter = Router();
 adminRouter.get("/students", getAdminStudents);
+adminRouter.get("/students/next-id", getNextAdminStudentId);
+adminRouter.post("/students", postAdminStudent);
 adminRouter.get("/students/:studentId", getAdminStudent);
 adminRouter.put("/students/:studentId", putAdminStudent);
 adminRouter.post("/course-sections", postAdminCourseSection);

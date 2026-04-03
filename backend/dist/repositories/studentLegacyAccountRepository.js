@@ -252,4 +252,124 @@ export async function updateLegacyStudentMasterRow(pool, studentId, patch) {
     const header = result;
     return (header.affectedRows ?? 0) > 0;
 }
+/**
+ * Legacy id: [C|E][YY][M][NN] — month M is 1–12 without leading zero; NN is 2-digit sequence in that bucket.
+ * Parses sequence as the last two characters; month is the substring between YY and NN.
+ */
+function parseSequenceFromLegacyStudentId(id, head, expectedMonthStr) {
+    const trimmed = id.trim();
+    if (trimmed.length < head.length + 3)
+        return null;
+    if (!trimmed.toUpperCase().startsWith(head.toUpperCase()))
+        return null;
+    const rest = trimmed.slice(head.length);
+    if (rest.length < 3)
+        return null;
+    const seqStr = rest.slice(-2);
+    const monthStr = rest.slice(0, -2);
+    if (monthStr !== expectedMonthStr)
+        return null;
+    const month = Number.parseInt(monthStr, 10);
+    const seq = Number.parseInt(seqStr, 10);
+    if (!Number.isFinite(month) || month < 1 || month > 12)
+        return null;
+    if (!Number.isFinite(seq) || seq < 1 || seq > 99)
+        return null;
+    if (String(month) !== monthStr)
+        return null;
+    return seq;
+}
+/**
+ * Next student id in a division + calendar year + month bucket.
+ * Query uses `LIKE 'C174%'` (prefix + YY + month); empty bucket starts at ...01.
+ */
+export async function getNextLegacyStudentId(pool, division, entryYear, entryMonth) {
+    const letter = division === "Chinese" ? "C" : "E";
+    const y = Math.trunc(entryYear);
+    const m = Math.trunc(entryMonth);
+    if (m < 1 || m > 12) {
+        throw new Error("Entry month must be between 1 and 12.");
+    }
+    const year2 = String(((y % 100) + 100) % 100).padStart(2, "0");
+    const monthStr = String(m);
+    const head = `${letter}${year2}`;
+    /** Anchored match so month `1` does not pick up `C1710…` (October) rows. */
+    const regexpPattern = `^${head}${monthStr}[0-9]{2}$`;
+    const [rows] = await pool.query(`SELECT TRIM(id) AS id
+     FROM students
+     WHERE TRIM(id) REGEXP ?`, [regexpPattern]);
+    let maxSeq = 0;
+    for (const row of rows) {
+        const rawId = row?.id != null ? String(row.id).trim() : "";
+        if (rawId === "")
+            continue;
+        const seq = parseSequenceFromLegacyStudentId(rawId, head, monthStr);
+        if (seq != null && seq > maxSeq)
+            maxSeq = seq;
+    }
+    const nextSeq = maxSeq + 1;
+    if (nextSeq > 99) {
+        throw new Error(`Legacy student id sequence overflow for ${head}${monthStr} (max 99).`);
+    }
+    return `${head}${monthStr}${String(nextSeq).padStart(2, "0")}`;
+}
+export async function legacyStudentMasterExists(pool, studentId) {
+    const [rows] = await pool.query(`SELECT 1 AS ok FROM students WHERE id = ? LIMIT 1`, [studentId]);
+    return rows.length > 0;
+}
+export async function legacyStudentPasswordRowExists(pool, studentId) {
+    const [rows] = await pool.query(`SELECT 1 AS ok FROM password_stu WHERE id = ? LIMIT 1`, [studentId]);
+    return rows.length > 0;
+}
+/**
+ * Insert one legacy `students` row with safe defaults for columns not exposed in the admin create form.
+ */
+export async function createLegacyStudentMasterRow(pool, input) {
+    await pool.execute(`INSERT INTO students (
+       name, alias, id, dob,
+       address, address2, city, state, zip, country, ssn,
+       gender, race, status,
+       phone1, phone2, phone3, email,
+       background, tertiary, visa,
+       regis_fee, clinic_fee, admission_credits,
+       notes, cpr, toefl, exam, level1exam, level2exam, level3exam, cnt,
+       hold, signed_date, grad_date, grad_term, grad_year, withdraw_date,
+       required_units_to_grad, marital, citizenship,
+       EnrollStartDate, requirements_id, financial_aid, grad_check_out,
+       cale_license, cale_date, level1practice
+     ) VALUES (
+       ?, '', ?, '0000-00-00',
+       ?, ?, ?, ?, ?, '', '',
+       ?, '', '',
+       '', '', '', ?,
+       ?, ?, '',
+       0, 0, 0,
+       '', '', '', '', '', '', '', '',
+       0, ?, '0000-00-00', '-', 0, '0000-00-00',
+       0, '', '',
+       ?, ?, 0, 0,
+       NULL, '0000-00-00', ''
+     )`, [
+        input.name,
+        input.studentId,
+        input.address,
+        input.address2,
+        input.city,
+        input.state,
+        input.zip,
+        input.gender,
+        input.email,
+        input.background,
+        input.tertiary,
+        input.signed_date_sql,
+        input.enroll_start_sql,
+        input.requirements_id,
+    ]);
+}
+export async function createLegacyStudentPasswordRow(pool, studentId, password) {
+    await pool.execute(`INSERT INTO password_stu (id, password) VALUES (?, ?)`, [
+        studentId,
+        password,
+    ]);
+}
 //# sourceMappingURL=studentLegacyAccountRepository.js.map

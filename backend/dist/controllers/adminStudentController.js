@@ -1,4 +1,4 @@
-import { getAdminStudentDetail, listAdminStudents, updateAdminStudent, } from "../services/adminStudentService.js";
+import { createAdminStudent, getAdminStudentDetail, listAdminStudents, previewNextAdminStudentId, updateAdminStudent, } from "../services/adminStudentService.js";
 function isRecord(v) {
     return v != null && typeof v === "object" && !Array.isArray(v);
 }
@@ -29,6 +29,64 @@ function parseUpdateBody(raw) {
         zip: parseNullableStringField(raw.zip),
         signedDate: parseNullableStringField(raw.signedDate),
         enrollStartDate: parseNullableStringField(raw.enrollStartDate),
+    };
+}
+function parseEntryDateFromBody(raw) {
+    if (typeof raw !== "string")
+        return null;
+    const t = raw.trim();
+    return t === "" ? null : t;
+}
+function parseRequirementsIdFromBody(raw) {
+    if (raw === undefined)
+        return undefined;
+    if (raw === null)
+        return null;
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+        return Math.trunc(raw);
+    }
+    if (typeof raw === "string") {
+        const t = raw.trim();
+        if (t === "")
+            return null;
+        const n = Number.parseInt(t, 10);
+        return Number.isFinite(n) ? n : undefined;
+    }
+    return undefined;
+}
+function parseCreateBody(raw) {
+    if (!isRecord(raw))
+        return null;
+    if (raw.division !== "Chinese" && raw.division !== "English")
+        return null;
+    if (typeof raw.name !== "string")
+        return null;
+    if (typeof raw.initialPassword !== "string")
+        return null;
+    const entryDate = parseEntryDateFromBody(raw.entryDate);
+    if (entryDate == null)
+        return null;
+    const requirementsId = parseRequirementsIdFromBody(raw.requirementsId);
+    if (requirementsId === undefined && raw.requirementsId != null) {
+        return null;
+    }
+    return {
+        division: raw.division,
+        entryDate,
+        name: raw.name,
+        email: parseNullableStringField(raw.email),
+        gender: parseNullableStringField(raw.gender),
+        requirementsId: requirementsId === undefined ? null : requirementsId,
+        highestDegree: parseNullableStringField(raw.highestDegree),
+        backgroundSchool: parseNullableStringField(raw.backgroundSchool),
+        signedDate: parseNullableStringField(raw.signedDate),
+        enrollStartDate: parseNullableStringField(raw.enrollStartDate),
+        address: parseNullableStringField(raw.address),
+        address2: parseNullableStringField(raw.address2),
+        city: parseNullableStringField(raw.city),
+        state: parseNullableStringField(raw.state),
+        zip: parseNullableStringField(raw.zip),
+        initialPassword: raw.initialPassword,
     };
 }
 const STUDENT_ID_PARAM = /^[A-Za-z0-9._-]{1,64}$/;
@@ -69,6 +127,41 @@ export async function getAdminStudent(req, res) {
     catch (e) {
         console.error(e);
         res.status(500).json({ error: "Failed to load student" });
+    }
+}
+export async function getNextAdminStudentId(req, res) {
+    const division = req.query.division;
+    const entryDate = req.query.entryDate;
+    try {
+        const result = await previewNextAdminStudentId(division, entryDate);
+        if (!result.ok) {
+            res.status(result.status).json({ error: result.message });
+            return;
+        }
+        res.json({ studentId: result.studentId });
+    }
+    catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to compute next student id" });
+    }
+}
+export async function postAdminStudent(req, res) {
+    const body = parseCreateBody(req.body);
+    if (!body) {
+        res.status(400).json({ error: "Invalid request body." });
+        return;
+    }
+    try {
+        const result = await createAdminStudent(body);
+        if (!result.ok) {
+            res.status(result.status).json({ error: result.message });
+            return;
+        }
+        res.status(201).json({ ok: true, studentId: result.studentId });
+    }
+    catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to create student" });
     }
 }
 export async function putAdminStudent(req, res) {

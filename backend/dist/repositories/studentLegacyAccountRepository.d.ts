@@ -1,4 +1,6 @@
-import type { Pool, RowDataPacket } from "mysql2/promise";
+import type { Pool, PoolConnection, RowDataPacket } from "mysql2/promise";
+/** Pool or a single connection (for transactions). */
+export type LegacyMysqlClient = Pool | PoolConnection;
 /**
  * Legacy MySQL tables (live school DB):
  * - `students.id` — login / account key (e.g. C17310)
@@ -106,4 +108,32 @@ export type LegacyStudentMasterUpdate = {
  * Date strings must already be validated SQL `YYYY-MM-DD` or `0000-00-00` for NOT NULL legacy columns.
  */
 export declare function updateLegacyStudentMasterRow(pool: Pool, studentId: string, patch: LegacyStudentMasterUpdate): Promise<boolean>;
+export type LegacyStudentMasterInsert = {
+    studentId: string;
+    name: string;
+    email: string;
+    gender: string;
+    requirements_id: number | null;
+    tertiary: string;
+    background: string;
+    signed_date_sql: string;
+    enroll_start_sql: string;
+    address: string;
+    address2: string;
+    city: string;
+    state: string;
+    zip: number;
+};
+/**
+ * Next student id in a division + calendar year + month bucket.
+ * Query uses `LIKE 'C174%'` (prefix + YY + month); empty bucket starts at ...01.
+ */
+export declare function getNextLegacyStudentId(pool: LegacyMysqlClient, division: "Chinese" | "English", entryYear: number, entryMonth: number): Promise<string>;
+export declare function legacyStudentMasterExists(pool: LegacyMysqlClient, studentId: string): Promise<boolean>;
+export declare function legacyStudentPasswordRowExists(pool: LegacyMysqlClient, studentId: string): Promise<boolean>;
+/**
+ * Insert one legacy `students` row with safe defaults for columns not exposed in the admin create form.
+ */
+export declare function createLegacyStudentMasterRow(pool: LegacyMysqlClient, input: LegacyStudentMasterInsert): Promise<void>;
+export declare function createLegacyStudentPasswordRow(pool: LegacyMysqlClient, studentId: string, password: string): Promise<void>;
 //# sourceMappingURL=studentLegacyAccountRepository.d.ts.map
