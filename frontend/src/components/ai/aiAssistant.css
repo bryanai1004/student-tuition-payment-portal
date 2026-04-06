@@ -362,11 +362,19 @@
 .portal-ai-assistant-brand-title__mark {
   font-family: 'Cinzel', ui-serif, Georgia, 'Times New Roman', serif;
   font-weight: 600;
-  color: #0a0a0a;
+  color: #000000;
   letter-spacing: 0.06em;
 }
 
-.portal-ai-assistant-brand-title__rest {
+/* Panel header: “AI Assist” matches portal accent red + surrounding UI typography */
+.portal-ai-assistant-brand-title--panel .portal-ai-assistant-brand-title__rest {
+  font-family: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  color: var(--portal-ai-red);
+}
+
+.portal-ai-assistant-brand-title--minimized .portal-ai-assistant-brand-title__rest {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-weight: 500;
   color: #1f2937;
