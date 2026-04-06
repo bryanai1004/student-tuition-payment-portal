@@ -78,6 +78,15 @@ export async function listCourseSectionsByCourseCode(courseCode, termFilter) {
     const [rows] = await pool.query(sql, [code]);
     return rows.map((r) => normalizeRow(r));
 }
+/** All sections offered in a legacy term + year (for admin timetable). */
+export async function listCourseSectionsByTermYear(term, year) {
+    const sql = `${SECTION_SELECT} WHERE term = ? AND year = ? ORDER BY course_code ASC, weekday ASC, start_time ASC`;
+    const [rows] = await pool.query(sql, [
+        term.trim(),
+        year,
+    ]);
+    return rows.map((r) => normalizeRow(r));
+}
 export async function createCourseSection(input) {
     const sql = `
     INSERT INTO course_sections (

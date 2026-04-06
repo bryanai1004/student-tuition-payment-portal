@@ -11,6 +11,8 @@ export declare function getSectionsForCourseCode(courseCode: string, termFilter?
  * Returns `null` when the term id is unknown.
  */
 export declare function listCourseSectionsByAcademicTermId(academicTermId: string, courseCode: string): Promise<CourseSectionDetail[] | null>;
+/** Every section in the term (all courses). Returns `null` if term id is unknown. */
+export declare function listAllCourseSectionsByAcademicTermId(academicTermId: string): Promise<CourseSectionDetail[] | null>;
 export type CourseSectionCreateWithTermIdInput = Omit<CourseSectionCreateInput, "term" | "year">;
 export declare function createCourseSectionWithAcademicTermId(academicTermId: string, input: CourseSectionCreateWithTermIdInput): Promise<CourseSectionDetail>;
 /**

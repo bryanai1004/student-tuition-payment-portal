@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { createCourseSectionWithAcademicTermId, deleteCourseSection, InvalidAcademicTermError, listCourseSectionsByAcademicTermId, updateCourseSectionWithAcademicTermId, } from "../services/courseSectionService.js";
+import { createCourseSectionWithAcademicTermId, deleteCourseSection, InvalidAcademicTermError, listAllCourseSectionsByAcademicTermId, listCourseSectionsByAcademicTermId, updateCourseSectionWithAcademicTermId, } from "../services/courseSectionService.js";
 function devMessage(e) {
     return e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
 }
@@ -44,13 +44,15 @@ export async function getAdminCourseSections(req, res) {
     try {
         const academicTermId = parseQueryString(req, "academic_term_id");
         const courseCode = parseQueryString(req, "course_code");
-        if (!academicTermId || !courseCode) {
+        if (!academicTermId) {
             res.status(400).json({
-                error: "academic_term_id and course_code query parameters are required.",
+                error: "academic_term_id query parameter is required.",
             });
             return;
         }
-        const sections = await listCourseSectionsByAcademicTermId(academicTermId, courseCode);
+        const sections = courseCode
+            ? await listCourseSectionsByAcademicTermId(academicTermId, courseCode)
+            : await listAllCourseSectionsByAcademicTermId(academicTermId);
         if (sections === null) {
             res.status(400).json({
                 error: "The selected academic term is not valid or no longer exists. Choose another term.",
