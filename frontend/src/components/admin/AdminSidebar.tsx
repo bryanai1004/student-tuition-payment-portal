@@ -1,11 +1,15 @@
 import { NavLink } from 'react-router-dom'
 
-const links = [
+type AdminNavItem = { to: string; label: string; end?: boolean }
+
+const links: AdminNavItem[] = [
   { to: '/admin/students', label: 'Students' },
   { to: '/admin/courses', label: 'Courses' },
-  { to: '/admin/course-sections', label: 'Course Sections' },
+  /** `end` avoids highlighting Course Sections when viewing the timetable sub-route. */
+  { to: '/admin/course-sections', label: 'Course Sections', end: true },
+  { to: '/admin/course-sections/timetable', label: 'Scheduling Timetable' },
   { to: '/admin/finance', label: 'Finance' },
-] as const
+]
 
 export function AdminSidebar() {
   return (
@@ -16,10 +20,11 @@ export function AdminSidebar() {
       </div>
       <nav className="admin-sidebar__nav" aria-label="Primary">
         <ul className="admin-sidebar__list">
-          {links.map(({ to, label }) => (
+          {links.map(({ to, label, end }) => (
             <li key={to}>
               <NavLink
                 to={to}
+                end={end ?? false}
                 className={({ isActive }) =>
                   `admin-sidebar__link${isActive ? ' admin-sidebar__link--active' : ''}`
                 }

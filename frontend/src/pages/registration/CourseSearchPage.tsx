@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchApiJson } from '../../lib/api'
+import { formatTimeRangeHmsForDisplay } from '../../lib/formatScheduleTime'
+import { formatWeekdaysShortFromStored } from '../../lib/weekdaySchedule'
 import { useCourseBin, type CourseBinItem } from './CourseBinContext'
 import { useRegistrationTermSearchParam } from './registrationTermSearch'
 
@@ -58,14 +60,6 @@ function cellText(value: string | number | null | undefined): string {
 function displayOrDash(value: string | number | null | undefined): string {
   const t = cellText(value)
   return t === '' ? '—' : t
-}
-
-function formatTimeSlot(start: string | null, end: string | null): string {
-  const s = cellText(start)
-  const e = cellText(end)
-  if (s === '' && e === '') return '—'
-  if (s !== '' && e !== '') return `${s} – ${e}`
-  return s || e
 }
 
 function unitsFromSectionOrCatalog(
@@ -131,8 +125,8 @@ function sectionScheduleRows(
 ): SectionScheduleRowModel[] {
   if (phase === 'data' && sectionRows && sectionRows.length > 0) {
     return sectionRows.map((sec) => {
-      const timeRaw = formatTimeSlot(sec.start_time, sec.end_time)
-      const daysRaw = cellText(sec.weekday)
+      const timeRaw = formatTimeRangeHmsForDisplay(sec.start_time, sec.end_time)
+      const daysRaw = formatWeekdaysShortFromStored(sec.weekday)
       const instRaw = cellText(sec.instructor)
       const locRaw = cellText(sec.room)
       const secCode = cellText(sec.section_code)
@@ -144,7 +138,7 @@ function sectionScheduleRows(
         units: unitsFromSectionOrCatalog(sec, course),
         registered: PLACEHOLDER_REGISTERED,
         time: timeRaw === '—' ? 'TBA' : timeRaw,
-        days: daysRaw === '' ? 'TBA' : daysRaw,
+        days: daysRaw === '—' ? 'TBA' : daysRaw,
         instructor: instRaw === '' ? 'TBA' : instRaw,
         location: locRaw === '' ? 'TBA' : locRaw,
       }

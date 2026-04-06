@@ -3,6 +3,7 @@ import {
   createCourseSection as insertCourseSection,
   deleteCourseSectionById,
   listCourseSectionsByCourseCode,
+  listCourseSectionsByTermYear,
   updateCourseSection as patchCourseSection,
   type CourseSectionCreateInput,
   type CourseSectionDetail,
@@ -47,6 +48,15 @@ export async function listCourseSectionsByAcademicTermId(
     term: row.term_name,
     year: row.year,
   });
+}
+
+/** Every section in the term (all courses). Returns `null` if term id is unknown. */
+export async function listAllCourseSectionsByAcademicTermId(
+  academicTermId: string,
+): Promise<CourseSectionDetail[] | null> {
+  const row = await getAcademicTermById(academicTermId.trim());
+  if (!row) return null;
+  return listCourseSectionsByTermYear(row.term_name, row.year);
 }
 
 export type CourseSectionCreateWithTermIdInput = Omit<

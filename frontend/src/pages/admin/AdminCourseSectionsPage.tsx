@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   createAdminCourseSection,
   deleteAdminCourseSection,
@@ -10,43 +11,27 @@ import {
   type AdminCourseSection,
   type CourseCatalogItem,
 } from '../../lib/api'
-
-const WEEKDAYS = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-] as const
+import {
+  formatTimeHmsForDisplay,
+  inputTimeToApi,
+  timeToInputValue,
+} from '../../lib/formatScheduleTime'
+import {
+  formatWeekdaysShortFromStored,
+  parseStoredWeekdaysToFullNames,
+  selectedWeekdaysToStorage,
+  WEEKDAYS_FULL_ORDERED,
+  type WeekdayFull,
+} from '../../lib/weekdaySchedule'
 
 function displayCell(value: string | null | undefined): string {
   if (value == null || String(value).trim() === '') return '—'
   return String(value)
 }
 
-/** `TIME` from API → `HH:MM` for `<input type="time" />` */
-function timeToInputValue(t: string | null): string {
-  if (t == null || t.trim() === '') return ''
-  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?/.exec(t.trim())
-  if (!m) return ''
-  const hh = m[1].padStart(2, '0')
-  return `${hh}:${m[2]}`
-}
-
-/** `<input type="time" />` value → `HH:MM:SS` for API; empty → omit / null */
-function inputTimeToApi(s: string): string | null {
-  const v = s.trim()
-  if (v === '') return null
-  if (/^\d{1,2}:\d{2}$/.test(v)) return `${v}:00`
-  if (/^\d{1,2}:\d{2}:\d{2}$/.test(v)) return v
-  return v
-}
-
 type FormState = {
   section_code: string
-  weekday: string
+  weekdays: WeekdayFull[]
   start_time: string
   end_time: string
   delivery_mode: string
@@ -57,7 +42,7 @@ type FormState = {
 
 const emptyForm = (): FormState => ({
   section_code: '',
-  weekday: 'Monday',
+  weekdays: ['Monday'],
   start_time: '',
   end_time: '',
   delivery_mode: '',
@@ -66,11 +51,23 @@ const emptyForm = (): FormState => ({
   notes: '',
 })
 
+function toggleWeekday(
+  current: WeekdayFull[],
+  day: WeekdayFull,
+  checked: boolean,
+): WeekdayFull[] {
+  const set = new Set(current)
+  if (checked) set.add(day)
+  else set.delete(day)
+  return WEEKDAYS_FULL_ORDERED.filter((d) => set.has(d))
+}
+
 export function AdminCourseSectionsPage() {
   const [terms, setTerms] = useState<AcademicTerm[] | null>(null)
   const [courses, setCourses] = useState<CourseCatalogItem[] | null>(null)
   const [academicTermId, setAcademicTermId] = useState('')
   const [courseCode, setCourseCode] = useState('')
+  const [courseSearch, setCourseSearch] = useState('')
   const [sections, setSections] = useState<AdminCourseSection[] | null>(null)
   const [sectionsLoading, setSectionsLoading] = useState(false)
   const [sectionsError, setSectionsError] = useState<string | null>(null)
@@ -148,6 +145,26 @@ export function AdminCourseSectionsPage() {
     return [...courses].sort((a, b) => a.code.localeCompare(b.code))
   }, [courses])
 
+  const filteredCoursesForSelect = useMemo(() => {
+    const q = courseSearch.trim().toLowerCase()
+    if (q === '') return sortedCourses
+    return sortedCourses.filter((c) => {
+      if (c.code.toLowerCase().includes(q)) return true
+      const title = c.eng_name?.trim().toLowerCase() ?? ''
+      return title.includes(q)
+    })
+  }, [sortedCourses, courseSearch])
+
+  const courseSelectOptions = useMemo(() => {
+    const selected = sortedCourses.find((c) => c.code === courseCode)
+    if (!selected) return filteredCoursesForSelect
+    const inFiltered = filteredCoursesForSelect.some(
+      (c) => c.code === courseCode,
+    )
+    if (inFiltered) return filteredCoursesForSelect
+    return [selected, ...filteredCoursesForSelect]
+  }, [sortedCourses, filteredCoursesForSelect, courseCode])
+
   function resetForm() {
     setForm(emptyForm())
     setEditingId(null)
@@ -156,9 +173,10 @@ export function AdminCourseSectionsPage() {
 
   const beginEdit = (row: AdminCourseSection) => {
     setEditingId(row.id)
+    const parsed = parseStoredWeekdaysToFullNames(row.weekday)
     setForm({
       section_code: row.section_code,
-      weekday: row.weekday,
+      weekdays: parsed.length > 0 ? parsed : ['Monday'],
       start_time: timeToInputValue(row.start_time),
       end_time: timeToInputValue(row.end_time),
       delivery_mode: row.delivery_mode ?? '',
@@ -167,6 +185,11 @@ export function AdminCourseSectionsPage() {
       notes: row.notes ?? '',
     })
     setFormMessage(null)
+  }
+
+  const weekdayStorage = (): string | null => {
+    const s = selectedWeekdaysToStorage(form.weekdays)
+    return s === '' ? null : s
   }
 
   const onCreate = async () => {
@@ -180,6 +203,11 @@ export function AdminCourseSectionsPage() {
       setFormMessage('Section code is required.')
       return
     }
+    const wd = weekdayStorage()
+    if (wd == null) {
+      setFormMessage('Select at least one weekday.')
+      return
+    }
     setBusy(true)
     setFormMessage(null)
     try {
@@ -187,7 +215,7 @@ export function AdminCourseSectionsPage() {
         academic_term_id: tid,
         course_code: code,
         section_code: form.section_code.trim(),
-        weekday: form.weekday.trim(),
+        weekday: wd,
         start_time: inputTimeToApi(form.start_time),
         end_time: inputTimeToApi(form.end_time),
         delivery_mode: form.delivery_mode.trim() || null,
@@ -214,6 +242,11 @@ export function AdminCourseSectionsPage() {
       setFormMessage('Select an academic term.')
       return
     }
+    const wd = weekdayStorage()
+    if (wd == null) {
+      setFormMessage('Select at least one weekday.')
+      return
+    }
     setBusy(true)
     setFormMessage(null)
     try {
@@ -221,7 +254,7 @@ export function AdminCourseSectionsPage() {
         academic_term_id: tid,
         course_code: courseCode.trim(),
         section_code: form.section_code.trim(),
-        weekday: form.weekday.trim(),
+        weekday: wd,
         start_time: inputTimeToApi(form.start_time),
         end_time: inputTimeToApi(form.end_time),
         delivery_mode: form.delivery_mode.trim() || null,
@@ -285,6 +318,12 @@ export function AdminCourseSectionsPage() {
           Course Sections
         </h1>
         <div className="admin-page__toolbar-actions admin-page__toolbar-actions--wrap">
+          <Link
+            to="/admin/course-sections/timetable"
+            className="portal-btn portal-btn--secondary portal-btn--compact"
+          >
+            View Timetable
+          </Link>
           <label className="admin-field admin-field--inline">
             <span className="admin-field__label">Academic term</span>
             <select
@@ -308,26 +347,44 @@ export function AdminCourseSectionsPage() {
               )}
             </select>
           </label>
-          <label className="admin-field admin-field--inline">
-            <span className="admin-field__label">Course</span>
-            <select
-              className="admin-input admin-input--wide"
-              value={courseCode}
-              onChange={(e) => {
-                setCourseCode(e.target.value)
-                resetForm()
-              }}
-              disabled={sortedCourses.length === 0}
-              aria-label="Course"
-            >
-              {sortedCourses.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.code}
-                  {c.eng_name ? ` — ${c.eng_name}` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="admin-course-picker">
+            <label className="admin-field admin-field--inline admin-course-picker__search">
+              <span className="admin-field__label">Search courses</span>
+              <input
+                type="search"
+                className="admin-input admin-input--search"
+                value={courseSearch}
+                onChange={(e) => setCourseSearch(e.target.value)}
+                placeholder="Code or English title…"
+                aria-label="Filter courses by code or title"
+                disabled={sortedCourses.length === 0}
+              />
+            </label>
+            <label className="admin-field admin-field--inline">
+              <span className="admin-field__label">Course</span>
+              <select
+                className="admin-input admin-input--wide"
+                value={courseCode}
+                onChange={(e) => {
+                  setCourseCode(e.target.value)
+                  resetForm()
+                }}
+                disabled={sortedCourses.length === 0}
+                aria-label="Course"
+              >
+                {courseSelectOptions.length === 0 ? (
+                  <option value="">No matches</option>
+                ) : (
+                  courseSelectOptions.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code}
+                      {c.eng_name ? ` — ${c.eng_name}` : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -367,9 +424,9 @@ export function AdminCourseSectionsPage() {
               sections?.map((row) => (
                 <tr key={row.id}>
                   <td>{row.section_code}</td>
-                  <td>{row.weekday}</td>
-                  <td>{displayCell(row.start_time)}</td>
-                  <td>{displayCell(row.end_time)}</td>
+                  <td>{formatWeekdaysShortFromStored(row.weekday)}</td>
+                  <td>{formatTimeHmsForDisplay(row.start_time)}</td>
+                  <td>{formatTimeHmsForDisplay(row.end_time)}</td>
                   <td>{displayCell(row.delivery_mode)}</td>
                   <td>{displayCell(row.room)}</td>
                   <td>{displayCell(row.instructor)}</td>
@@ -411,6 +468,8 @@ export function AdminCourseSectionsPage() {
           Term and course are taken from the selections above. The server maps{' '}
           <code className="admin-code">academic_term_id</code> to catalog term
           name and year on <code className="admin-code">course_sections</code>.
+          Multiple weekdays are stored as a comma-separated list in{' '}
+          <code className="admin-code">weekday</code>.
         </p>
         {formMessage != null && (
           <p className="admin-form-message" role="alert">
@@ -429,22 +488,30 @@ export function AdminCourseSectionsPage() {
               autoComplete="off"
             />
           </label>
-          <label className="admin-field">
-            <span className="admin-field__label">Weekday</span>
-            <select
-              className="admin-input"
-              value={form.weekday}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, weekday: e.target.value }))
-              }
+          <fieldset className="admin-field admin-field--weekdays">
+            <legend className="admin-field__label">Weekdays</legend>
+            <div
+              className="admin-weekday-checkboxes"
+              role="group"
+              aria-label="Weekdays"
             >
-              {WEEKDAYS.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
+              {WEEKDAYS_FULL_ORDERED.map((d) => (
+                <label key={d} className="admin-weekday-checkboxes__item">
+                  <input
+                    type="checkbox"
+                    checked={form.weekdays.includes(d)}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        weekdays: toggleWeekday(f.weekdays, d, e.target.checked),
+                      }))
+                    }
+                  />
+                  <span>{d}</span>
+                </label>
               ))}
-            </select>
-          </label>
+            </div>
+          </fieldset>
           <label className="admin-field">
             <span className="admin-field__label">Start time</span>
             <input

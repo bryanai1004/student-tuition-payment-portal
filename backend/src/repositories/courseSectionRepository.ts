@@ -125,6 +125,19 @@ export async function listCourseSectionsByCourseCode(
   return rows.map((r) => normalizeRow(r));
 }
 
+/** All sections offered in a legacy term + year (for admin timetable). */
+export async function listCourseSectionsByTermYear(
+  term: string,
+  year: number,
+): Promise<CourseSectionDetail[]> {
+  const sql = `${SECTION_SELECT} WHERE term = ? AND year = ? ORDER BY course_code ASC, weekday ASC, start_time ASC`;
+  const [rows] = await pool.query<RowDataPacket[]>(sql, [
+    term.trim(),
+    year,
+  ]);
+  return rows.map((r) => normalizeRow(r));
+}
+
 export async function createCourseSection(
   input: CourseSectionCreateInput,
 ): Promise<CourseSectionDetail> {

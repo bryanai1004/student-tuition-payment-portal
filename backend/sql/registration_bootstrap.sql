@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS course_sections (
   term VARCHAR(16) NOT NULL,
   year INT NOT NULL,
   section_code VARCHAR(32) NOT NULL,
-  weekday VARCHAR(16) NOT NULL,
+  weekday VARCHAR(128) NOT NULL,
   start_time TIME NULL,
   end_time TIME NULL,
   delivery_mode VARCHAR(64) NULL,

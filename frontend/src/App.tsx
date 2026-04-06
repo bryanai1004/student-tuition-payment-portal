@@ -10,6 +10,7 @@ import { AdminStudentCreatePage } from './pages/admin/AdminStudentCreatePage'
 import { AdminStudentEditPage } from './pages/admin/AdminStudentEditPage'
 import { AdminCoursesPage } from './pages/admin/AdminCoursesPage'
 import { AdminCourseSectionsPage } from './pages/admin/AdminCourseSectionsPage'
+import { AdminSchedulingTimetablePage } from './pages/admin/AdminSchedulingTimetablePage'
 import { AdminFinancePage } from './pages/admin/AdminFinancePage'
 import { LoginPage } from './pages/LoginPage'
 import { PaymentPlanPage } from './pages/PaymentPlanPage'
@@ -77,6 +78,10 @@ export default function App() {
           <Route path="students" element={<AdminStudentsPage />} />
           <Route path="courses" element={<AdminCoursesPage />} />
           <Route path="course-sections" element={<AdminCourseSectionsPage />} />
+          <Route
+            path="course-sections/timetable"
+            element={<AdminSchedulingTimetablePage />}
+          />
           <Route path="finance" element={<AdminFinancePage />} />
         </Route>
       </Route>

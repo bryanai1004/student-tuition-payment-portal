@@ -4,6 +4,7 @@ import {
   createCourseSectionWithAcademicTermId,
   deleteCourseSection,
   InvalidAcademicTermError,
+  listAllCourseSectionsByAcademicTermId,
   listCourseSectionsByAcademicTermId,
   updateCourseSectionWithAcademicTermId,
   type CourseSectionCreateWithTermIdInput,
@@ -58,17 +59,15 @@ export async function getAdminCourseSections(
   try {
     const academicTermId = parseQueryString(req, "academic_term_id");
     const courseCode = parseQueryString(req, "course_code");
-    if (!academicTermId || !courseCode) {
+    if (!academicTermId) {
       res.status(400).json({
-        error:
-          "academic_term_id and course_code query parameters are required.",
+        error: "academic_term_id query parameter is required.",
       });
       return;
     }
-    const sections = await listCourseSectionsByAcademicTermId(
-      academicTermId,
-      courseCode,
-    );
+    const sections = courseCode
+      ? await listCourseSectionsByAcademicTermId(academicTermId, courseCode)
+      : await listAllCourseSectionsByAcademicTermId(academicTermId);
     if (sections === null) {
       res.status(400).json({
         error:

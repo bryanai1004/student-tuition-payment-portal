@@ -6071,6 +6071,115 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   gap: 0.35rem;
 }
 
+.admin-course-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem 1rem;
+}
+
+.admin-course-picker__search {
+  align-items: flex-end;
+}
+
+.admin-field--weekdays {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.admin-field--weekdays .admin-field__label {
+  padding: 0;
+}
+
+.admin-weekday-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #cccccc;
+  border-radius: var(--portal-radius);
+  background: var(--amu-card);
+}
+
+.admin-weekday-checkboxes__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-weekday-checkboxes__item input {
+  margin: 0;
+}
+
+.admin-timetable-wrap {
+  overflow-x: auto;
+  margin-top: 0.5rem;
+  border: 1px solid var(--portal-border-subtle);
+  border-radius: 10px;
+  background: var(--amu-card);
+}
+
+.admin-timetable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  table-layout: fixed;
+}
+
+.admin-timetable th,
+.admin-timetable td {
+  border: 1px solid var(--portal-border-subtle);
+  padding: 0.35rem 0.4rem;
+  vertical-align: top;
+}
+
+.admin-timetable th {
+  background: var(--page-gray);
+  font-weight: 600;
+  text-align: center;
+}
+
+.admin-timetable__time {
+  width: 5.5rem;
+  white-space: nowrap;
+  font-weight: 600;
+  background: var(--page-gray);
+}
+
+.admin-timetable__cell {
+  min-height: 3.25rem;
+  background: var(--amu-card);
+}
+
+.admin-timetable__blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.admin-timetable__block {
+  padding: 0.35rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(139, 0, 0, 0.06);
+  border: 1px solid rgba(139, 0, 0, 0.18);
+  line-height: 1.35;
+}
+
+.admin-timetable__block-title {
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.admin-timetable__block-meta {
+  font-size: 0.7rem;
+  color: var(--portal-text-muted);
+}
+
 .admin-dashboard-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -1245,12 +1245,14 @@ function parseAdminCourseSectionList(data: unknown): AdminCourseSection[] {
 
 export async function fetchAdminCourseSections(params: {
   academicTermId: string
-  courseCode: string
+  /** When omitted, returns all sections for the term (e.g. timetable). */
+  courseCode?: string
   signal?: AbortSignal
 }): Promise<AdminCourseSection[]> {
   const qs = new URLSearchParams()
   qs.set('academic_term_id', params.academicTermId.trim())
-  qs.set('course_code', params.courseCode.trim())
+  const code = params.courseCode?.trim() ?? ''
+  if (code !== '') qs.set('course_code', code)
   const data = (await fetchApiJson(
     `/api/admin/course-sections?${qs.toString()}`,
     { signal: params.signal },
