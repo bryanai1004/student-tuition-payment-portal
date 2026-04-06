@@ -3140,7 +3140,43 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   }
 }
 
-/* —— Registration landing (action cards) —— */
+/* —— Registration landing (term selector + action cards) —— */
+.portal-registration-term-panel .portal-module-panel-heading {
+  margin-bottom: 0.75rem;
+}
+
+.portal-registration-term-status {
+  margin: 0;
+  font-size: var(--portal-body-font-size);
+  line-height: var(--portal-body-line-height);
+}
+
+.portal-registration-term-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  max-width: 22rem;
+}
+
+.portal-registration-term-label {
+  font-size: var(--portal-body-font-size);
+  font-weight: 500;
+  color: var(--portal-text);
+}
+
+.portal-registration-term-select {
+  width: 100%;
+  min-height: 2.25rem;
+  box-sizing: border-box;
+}
+
+.portal-registration-term-hint {
+  margin: 0.625rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
 .portal-registration-action-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));

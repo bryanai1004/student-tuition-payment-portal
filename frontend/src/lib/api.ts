@@ -890,3 +890,221 @@ export async function fetchStudentTranscriptPreview(
   }
   return data as StudentTranscriptPreviewResponse
 }
+
+/** GET /api/academic-terms — full list (intended for registrar/admin tooling). */
+export type AcademicTermName = 'Winter' | 'Spring' | 'Summer' | 'Fall'
+
+export type AcademicTermStatus =
+  | 'planned'
+  | 'registration_open'
+  | 'in_progress'
+  | 'completed'
+
+export type AcademicTerm = {
+  id: string
+  term_label: string
+  year: number
+  term_name: AcademicTermName
+  quarter_index: number
+  sequence_no: number
+  start_date: string | null
+  end_date: string | null
+  registration_open: string | null
+  registration_close: string | null
+  status: AcademicTermStatus
+  is_visible: boolean
+}
+
+const ACADEMIC_TERM_NAMES: AcademicTermName[] = [
+  'Winter',
+  'Spring',
+  'Summer',
+  'Fall',
+]
+
+const ACADEMIC_TERM_STATUSES: AcademicTermStatus[] = [
+  'planned',
+  'registration_open',
+  'in_progress',
+  'completed',
+]
+
+function parseAcademicTermBool(v: unknown): boolean {
+  if (typeof v === 'boolean') return v
+  if (v === 0 || v === 1) return v === 1
+  if (typeof v === 'bigint') return v !== 0n
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase()
+    if (s === 'true' || s === '1') return true
+    if (s === 'false' || s === '0') return false
+  }
+  return false
+}
+
+function parseNullableIsoDate(v: unknown): string | null {
+  if (v == null) return null
+  if (typeof v !== 'string') return null
+  const s = v.trim()
+  if (s === '') return null
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+  return null
+}
+
+function parseAcademicTermRow(row: Record<string, unknown>): AcademicTerm | null {
+  if (typeof row.id !== 'string' || typeof row.term_label !== 'string') return null
+  const term_name = row.term_name
+  if (
+    typeof term_name !== 'string' ||
+    !ACADEMIC_TERM_NAMES.includes(term_name as AcademicTermName)
+  ) {
+    return null
+  }
+  const status = row.status
+  if (
+    typeof status !== 'string' ||
+    !ACADEMIC_TERM_STATUSES.includes(status as AcademicTermStatus)
+  ) {
+    return null
+  }
+  const year = typeof row.year === 'number' ? row.year : Number(row.year)
+  const quarter_index =
+    typeof row.quarter_index === 'number'
+      ? row.quarter_index
+      : Number(row.quarter_index)
+  const sequence_no =
+    typeof row.sequence_no === 'number'
+      ? row.sequence_no
+      : Number(row.sequence_no)
+  if (!Number.isFinite(year) || !Number.isFinite(quarter_index) || !Number.isFinite(sequence_no)) {
+    return null
+  }
+  return {
+    id: row.id.trim(),
+    term_label: row.term_label.trim(),
+    year: Math.trunc(year),
+    term_name: term_name as AcademicTermName,
+    quarter_index: Math.trunc(quarter_index),
+    sequence_no: Math.trunc(sequence_no),
+    start_date: parseNullableIsoDate(row.start_date),
+    end_date: parseNullableIsoDate(row.end_date),
+    registration_open: parseNullableIsoDate(row.registration_open),
+    registration_close: parseNullableIsoDate(row.registration_close),
+    status: status as AcademicTermStatus,
+    is_visible: parseAcademicTermBool(row.is_visible),
+  }
+}
+
+function parseAcademicTermList(data: unknown): AcademicTerm[] {
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected academic terms response')
+  }
+  const out: AcademicTerm[] = []
+  for (const row of data) {
+    if (row == null || typeof row !== 'object') {
+      throw new Error('Unexpected academic terms response')
+    }
+    const term = parseAcademicTermRow(row as Record<string, unknown>)
+    if (!term) {
+      throw new Error('Unexpected academic terms response')
+    }
+    out.push(term)
+  }
+  return out
+}
+
+export async function fetchAcademicTerms(options?: {
+  signal?: AbortSignal
+}): Promise<AcademicTerm[]> {
+  const data = (await fetchApiJson('/api/academic-terms', {
+    signal: options?.signal,
+  })) as unknown
+  return parseAcademicTermList(data)
+}
+
+export async function fetchRecentAcademicTerms(
+  limit = 3,
+  options?: { signal?: AbortSignal },
+): Promise<AcademicTerm[]> {
+  const n = Math.trunc(limit)
+  const qs =
+    Number.isInteger(n) && n > 0 ? `?limit=${encodeURIComponent(String(n))}` : ''
+  const data = (await fetchApiJson(`/api/academic-terms/recent${qs}`, {
+    signal: options?.signal,
+  })) as unknown
+  return parseAcademicTermList(data)
+}
+
+/** GET /api/academic-terms/current — `null` when no term has status `registration_open`. */
+export async function fetchCurrentAcademicTerm(options?: {
+  signal?: AbortSignal
+}): Promise<AcademicTerm | null> {
+  const data = (await fetchApiJson('/api/academic-terms/current', {
+    signal: options?.signal,
+  })) as unknown
+  if (data === null) return null
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected current academic term response')
+  }
+  const term = parseAcademicTermRow(data as Record<string, unknown>)
+  if (!term) {
+    throw new Error('Unexpected current academic term response')
+  }
+  return term
+}
+
+export type CreateAcademicTermBody = {
+  year: number
+  term_name: AcademicTermName
+  sequence_no: number
+  term_label?: string
+  start_date?: string | null
+  end_date?: string | null
+  registration_open?: string | null
+  registration_close?: string | null
+  status: AcademicTermStatus
+  is_visible?: boolean
+}
+
+export type UpdateAcademicTermBody = Partial<CreateAcademicTermBody>
+
+export async function createAcademicTerm(
+  body: CreateAcademicTermBody,
+  options?: { signal?: AbortSignal },
+): Promise<AcademicTerm> {
+  const data = (await fetchApiJson('/api/admin/academic-terms', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected create academic term response')
+  }
+  const term = parseAcademicTermRow(data as Record<string, unknown>)
+  if (!term) {
+    throw new Error('Unexpected create academic term response')
+  }
+  return term
+}
+
+export async function updateAcademicTerm(
+  id: string,
+  body: UpdateAcademicTermBody,
+  options?: { signal?: AbortSignal },
+): Promise<AcademicTerm> {
+  const path = `/api/admin/academic-terms/${encodeURIComponent(id)}`
+  const data = (await fetchApiJson(path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected update academic term response')
+  }
+  const term = parseAcademicTermRow(data as Record<string, unknown>)
+  if (!term) {
+    throw new Error('Unexpected update academic term response')
+  }
+  return term
+}

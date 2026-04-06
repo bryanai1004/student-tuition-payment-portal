@@ -1,0 +1,39 @@
+export type AcademicTermName = "Winter" | "Spring" | "Summer" | "Fall";
+
+export type AcademicTermStatus =
+  | "planned"
+  | "registration_open"
+  | "in_progress"
+  | "completed";
+
+/** Stable API row for one academic term. */
+export type AcademicTermDetail = {
+  id: string;
+  term_label: string;
+  year: number;
+  term_name: AcademicTermName;
+  quarter_index: number;
+  sequence_no: number;
+  start_date: string | null;
+  end_date: string | null;
+  registration_open: string | null;
+  registration_close: string | null;
+  status: AcademicTermStatus;
+  is_visible: boolean;
+};
+
+export type CreateAcademicTermInput = {
+  year: number;
+  term_name: AcademicTermName;
+  sequence_no: number;
+  /** If omitted, derived as "{term_name} {year}". */
+  term_label?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  registration_open?: string | null;
+  registration_close?: string | null;
+  status: AcademicTermStatus;
+  is_visible?: boolean;
+};
+
+export type UpdateAcademicTermInput = Partial<CreateAcademicTermInput>;
