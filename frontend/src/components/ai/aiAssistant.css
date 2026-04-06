@@ -58,10 +58,84 @@
   justify-content: center;
 }
 
-.portal-ai-assistant-panel-wrap {
+.portal-ai-assistant-panel-wrap--sheet {
   width: min(22.5rem, calc(100vw - 1.5rem));
   max-height: min(32rem, calc(100dvh - var(--portal-header-height, 9rem) - 2rem));
   animation: portal-ai-assistant-in 0.22s ease-out;
+}
+
+.portal-ai-assistant-panel-wrap--desktop {
+  position: relative;
+  display: block;
+  max-height: none;
+  animation: portal-ai-assistant-in 0.22s ease-out;
+}
+
+.portal-ai-assistant-panel-wrap--desktop .portal-ai-assistant-panel {
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+}
+
+.portal-ai-assistant-panel-wrap--desktop .portal-ai-assistant-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.portal-ai-assistant-resize {
+  position: absolute;
+  z-index: 4;
+  touch-action: none;
+  box-sizing: border-box;
+}
+
+.portal-ai-assistant-resize--e {
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: calc(100% - 14px);
+  cursor: ew-resize;
+}
+
+.portal-ai-assistant-resize--s {
+  left: 0;
+  bottom: 0;
+  width: calc(100% - 14px);
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.portal-ai-assistant-resize--se {
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+
+.portal-ai-assistant-resize--e:hover,
+.portal-ai-assistant-resize--s:hover,
+.portal-ai-assistant-resize--se:hover {
+  background: rgba(92, 101, 120, 0.08);
+}
+
+.portal-ai-assistant-panel__header--draggable {
+  cursor: move;
+  touch-action: none;
+}
+
+.portal-ai-assistant-minimized-float {
+  pointer-events: none;
+}
+
+.portal-ai-assistant-minimized-float .portal-ai-assistant-minimized {
+  pointer-events: auto;
+}
+
+.portal-ai-assistant-minimized--anchored {
+  width: 100%;
+  max-width: none;
 }
 
 @keyframes portal-ai-assistant-in {
@@ -389,7 +463,18 @@
   border-radius: 50%;
 }
 
+body.portal-ai-assistant--drag-resize {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 @media (max-width: 480px) {
+  .portal-ai-assistant-panel-wrap--sheet {
+    width: calc(100vw - max(1.5rem, env(safe-area-inset-left) + env(safe-area-inset-right)));
+    max-width: calc(100vw - 1rem);
+    max-height: min(88dvh, calc(100dvh - var(--portal-header-height, 9rem) - 1.25rem));
+  }
+
   .portal-ai-assistant-messages {
     max-height: 42vh;
   }

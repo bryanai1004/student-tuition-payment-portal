@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { Ref } from 'react'
+import type { PointerEvent as ReactPointerEvent, Ref } from 'react'
 import type { AIAssistantChatMessage } from '../../hooks/useAIAssistant'
 import { AIAssistantInput } from './AIAssistantInput'
 
@@ -15,6 +15,9 @@ type AIAssistantPanelProps = {
   onClose: () => void
   onMinimize: () => void
   onClear: () => void
+  /** Desktop: drag by header (minimize/close excluded in handler). */
+  onHeaderPointerDown?: (e: ReactPointerEvent<HTMLElement>) => void
+  desktopDraggableHeader?: boolean
 }
 
 export function AIAssistantPanel({
@@ -29,6 +32,8 @@ export function AIAssistantPanel({
   onClose,
   onMinimize,
   onClear,
+  onHeaderPointerDown,
+  desktopDraggableHeader,
 }: AIAssistantPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -46,7 +51,14 @@ export function AIAssistantPanel({
       aria-labelledby="portal-ai-assistant-title"
       aria-describedby="portal-ai-assistant-subtitle"
     >
-      <header className="portal-ai-assistant-panel__header">
+      <header
+        className={
+          desktopDraggableHeader
+            ? 'portal-ai-assistant-panel__header portal-ai-assistant-panel__header--draggable'
+            : 'portal-ai-assistant-panel__header'
+        }
+        onPointerDown={onHeaderPointerDown}
+      >
         <div className="portal-ai-assistant-panel__titles">
           <h2 id="portal-ai-assistant-title" className="portal-ai-assistant-panel__title">
             AMU AI Assistant
