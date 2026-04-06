@@ -11,10 +11,12 @@ import { getStudentTranscriptPreview } from "../controllers/studentTranscriptCon
 import { getDemoAccount, getDemoActivity, getStudentAccount, getStudentActivity, getStudentProfile, } from "../controllers/studentAccountController.js";
 import { postStudentLogin } from "../controllers/studentAuthController.js";
 import { getAcademicTerms, getAcademicTermsCurrent, getAcademicTermsRecent, patchAdminAcademicTerm, postAdminAcademicTerm, } from "../controllers/academicTermController.js";
+import { postAiAsk } from "../controllers/aiAskController.js";
 export const apiRouter = Router();
 apiRouter.get("/health", getHealth);
 apiRouter.get("/health/db", getHealthDb);
 apiRouter.post("/auth/login", postStudentLogin);
+apiRouter.post("/ai/ask", postAiAsk);
 apiRouter.get("/courses", getCourses);
 apiRouter.get("/courses/:code/sections", getCourseSections);
 apiRouter.get("/academic-terms/recent", getAcademicTermsRecent);
