@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { LoginFooter } from '../../components/LoginFooter'
 import { useAdminAuth } from '../../context/AdminAuthContext'
 
 export function AdminLoginPage() {
@@ -88,6 +89,7 @@ export function AdminLoginPage() {
           </article>
         </div>
       </div>
+      <LoginFooter />
     </div>
   )
 }

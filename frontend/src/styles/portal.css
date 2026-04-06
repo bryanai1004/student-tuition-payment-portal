@@ -4530,6 +4530,85 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   user-select: none;
 }
 
+/* —— Login footer (student + administrator sign-in) —— */
+.portal-shell--login .portal-login-body {
+  /* Extra space above the pinned footer so the card never feels cramped */
+  padding-bottom: clamp(1.5rem, 5vw, 2.75rem);
+}
+
+.portal-login-footer {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: clamp(0.35rem, 1.5vw, 0.65rem) clamp(1rem, 4vw, 1.5rem)
+    max(1.25rem, calc(0.65rem + env(safe-area-inset-bottom, 0px)));
+  text-align: center;
+}
+
+.portal-login-footer__inner {
+  max-width: 22rem;
+  margin: 0 auto;
+}
+
+.portal-login-footer__powered {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+  color: var(--amu-red);
+}
+
+.portal-login-footer__accent {
+  width: 2.75rem;
+  height: 2px;
+  margin: 0.6rem auto 0;
+  background: var(--amu-gold);
+  border-radius: 1px;
+  opacity: 0.92;
+}
+
+.portal-login-footer__copyright {
+  margin: 0.55rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.55;
+  color: var(--text-dark);
+}
+
+.portal-login-footer__detail {
+  margin: 0.4rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.55;
+  color: #4d4d4d;
+}
+
+.portal-login-footer__tel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.portal-login-footer__tel:hover {
+  color: var(--amu-red);
+  text-decoration: underline;
+}
+
+.portal-login-footer__tel:focus-visible {
+  outline: 2px solid var(--amu-red);
+  outline-offset: 2px;
+}
+
+.portal-login-footer__tel-icon {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
 /* —— Dashboard (portal homepage) —— */
 .portal-dashboard {
   width: 100%;

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PORTAL_BRANDING_TITLE, PORTAL_SHELL_SUBTITLE } from '../branding'
+import { LoginFooter } from '../components/LoginFooter'
 import { useAccount } from '../context/AccountContext'
 import { loginStudent } from '../lib/api'
 
@@ -151,6 +152,7 @@ export function LoginPage() {
           </article>
         </div>
       </div>
+      <LoginFooter />
     </div>
   )
 }
