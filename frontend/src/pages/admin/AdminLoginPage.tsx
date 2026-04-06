@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LoginFooter } from '../../components/LoginFooter'
+import { PortalLoginPasswordInput } from '../../components/PortalLoginPasswordInput'
 import { useAdminAuth } from '../../context/AdminAuthContext'
 
 export function AdminLoginPage() {
@@ -36,10 +37,7 @@ export function AdminLoginPage() {
             alt="Alhambra Medical University"
           />
           <article className="portal-login-card">
-            <h1 className="portal-login-card-title">Administrator Portal</h1>
-            <p className="portal-login-card-institution admin-login-card-subtitle">
-              Sign in to manage students, courses, and finance
-            </p>
+            <h1 className="portal-login-card-title">ADMINISTRATOR PORTAL</h1>
             <div className="portal-login-fields">
               <div className="portal-login-field">
                 <label className="portal-login-label" htmlFor="admin-login-username">
@@ -59,12 +57,8 @@ export function AdminLoginPage() {
                 <label className="portal-login-label" htmlFor="admin-login-password">
                   Password
                 </label>
-                <input
+                <PortalLoginPasswordInput
                   id="admin-login-password"
-                  className="portal-login-input"
-                  type="password"
-                  name="password"
-                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />

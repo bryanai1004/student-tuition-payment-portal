@@ -5713,11 +5713,6 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 }
 
 /* —— Administrator portal (separate from student shell) —— */
-.admin-login-card-subtitle {
-  white-space: normal;
-  max-width: 100%;
-}
-
 .admin-portal {
   --portal-bg: var(--page-gray);
   --portal-surface: var(--amu-card);
