@@ -1,3 +1,4 @@
+import type { RowDataPacket } from "mysql2";
 /** API shape for one `course_sections` row (stable for future admin CRUD). */
 export type CourseSectionDetail = {
     id: number;
@@ -12,7 +13,15 @@ export type CourseSectionDetail = {
     room: string | null;
     instructor: string | null;
     notes: string | null;
+    /** Distinct students enrolled in this course (same term/year) via `portal_enrollments`. */
+    enrolled_count: number;
+    /** Present when at least one enrollment exists for the course in this term/year. */
+    enrolled_students?: Array<{
+        student_external_id: string;
+        full_name: string | null;
+    }>;
 };
+export declare function mapCourseSectionRow(row: RowDataPacket): CourseSectionDetail;
 export type CourseSectionCreateInput = {
     course_code: string;
     term: string;
@@ -39,6 +48,12 @@ export type CourseSectionTermFilter = {
 export declare function listCourseSectionsByCourseCode(courseCode: string, termFilter?: CourseSectionTermFilter): Promise<CourseSectionDetail[]>;
 /** All sections offered in a legacy term + year (for admin timetable). */
 export declare function listCourseSectionsByTermYear(term: string, year: number): Promise<CourseSectionDetail[]>;
+/**
+ * Sections for a term/year with `portal_enrollments` rollups per course (repeated on each section row).
+ */
+export declare function listCourseSectionsWithEnrollmentAggregates(term: string, year: number, options?: {
+    courseCode?: string | null;
+}): Promise<CourseSectionDetail[]>;
 /** Course-level section counts for one legacy term + year (admin open-registration rollup). */
 export type CourseSectionCountByCourse = {
     course_code: string;

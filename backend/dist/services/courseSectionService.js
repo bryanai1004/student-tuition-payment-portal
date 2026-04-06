@@ -1,5 +1,5 @@
 import { getAcademicTermById } from "../repositories/academicTermRepository.js";
-import { createCourseSection as insertCourseSection, deleteCourseSectionById, listCourseSectionsByCourseCode, listCourseSectionsByTermYear, updateCourseSection as patchCourseSection, } from "../repositories/courseSectionRepository.js";
+import { createCourseSection as insertCourseSection, deleteCourseSectionById, listCourseSectionsByCourseCode, listCourseSectionsWithEnrollmentAggregates, updateCourseSection as patchCourseSection, } from "../repositories/courseSectionRepository.js";
 /** Thrown when `academic_term_id` does not match a row in `academic_terms`. */
 export class InvalidAcademicTermError extends Error {
     name = "InvalidAcademicTermError";
@@ -18,9 +18,8 @@ export async function listCourseSectionsByAcademicTermId(academicTermId, courseC
     const row = await getAcademicTermById(academicTermId.trim());
     if (!row)
         return null;
-    return listCourseSectionsByCourseCode(courseCode.trim(), {
-        term: row.term_name,
-        year: row.year,
+    return listCourseSectionsWithEnrollmentAggregates(row.term_name, row.year, {
+        courseCode: courseCode.trim(),
     });
 }
 /** Every section in the term (all courses). Returns `null` if term id is unknown. */
@@ -28,7 +27,7 @@ export async function listAllCourseSectionsByAcademicTermId(academicTermId) {
     const row = await getAcademicTermById(academicTermId.trim());
     if (!row)
         return null;
-    return listCourseSectionsByTermYear(row.term_name, row.year);
+    return listCourseSectionsWithEnrollmentAggregates(row.term_name, row.year);
 }
 export async function createCourseSectionWithAcademicTermId(academicTermId, input) {
     const row = await getAcademicTermById(academicTermId.trim());
