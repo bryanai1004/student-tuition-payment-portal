@@ -208,33 +208,37 @@ export function AdminSchedulingTimetablePage() {
                   className="admin-timetable-v2__day-track"
                   style={{ height: bodyHeightPx }}
                 >
-                  {placedByDay[di]!.map((b) => (
-                    <button
-                      key={`${b.section.id}-${d.full}-${b.startMin}-${b.colIndex}`}
-                      type="button"
-                      className="admin-timetable-v2__block"
-                      style={{
-                        top: b.topPx,
-                        height: b.heightPx,
-                        left: `${(100 / b.colCount) * b.colIndex}%`,
-                        width: `${100 / b.colCount}%`,
-                      }}
-                      onClick={() =>
-                        setDetail({ section: b.section, dayLabel: d.label })
-                      }
-                    >
-                      <span className="admin-timetable-v2__block-title">
-                        {b.section.course_code} {b.section.section_code}
-                      </span>
-                      <span className="admin-timetable-v2__block-meta">
-                        {formatTimeHmsForDisplay(b.section.start_time)} –{' '}
-                        {formatTimeHmsForDisplay(b.section.end_time)}
-                      </span>
-                      <span className="admin-timetable-v2__block-meta">
-                        {formatDeliveryModeForDisplay(b.section.delivery_mode)}
-                      </span>
-                    </button>
-                  ))}
+                  {placedByDay[di]!.map((b) => {
+                    const colW = 100 / b.colCount
+                    const insetPx = 3
+                    return (
+                      <button
+                        key={`${b.section.id}-${d.full}-${b.startMin}-${b.colIndex}`}
+                        type="button"
+                        className="admin-timetable-v2__block"
+                        style={{
+                          top: b.topPx,
+                          height: b.heightPx,
+                          left: `calc(${colW * b.colIndex}% + ${insetPx}px)`,
+                          width: `calc(${colW}% - ${insetPx * 2}px)`,
+                        }}
+                        onClick={() =>
+                          setDetail({ section: b.section, dayLabel: d.label })
+                        }
+                      >
+                        <span className="admin-timetable-v2__block-title">
+                          {b.section.course_code} {b.section.section_code}
+                        </span>
+                        <span className="admin-timetable-v2__block-meta">
+                          {formatTimeHmsForDisplay(b.section.start_time)} –{' '}
+                          {formatTimeHmsForDisplay(b.section.end_time)}
+                        </span>
+                        <span className="admin-timetable-v2__block-meta">
+                          {formatDeliveryModeForDisplay(b.section.delivery_mode)}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             ))}
@@ -247,6 +251,7 @@ export function AdminSchedulingTimetablePage() {
           section={detail.section}
           dayColumnLabel={detail.dayLabel}
           termCatalogLabel={termCatalogLabel}
+          academicTermId={academicTermId.trim() || null}
           onClose={() => setDetail(null)}
         />
       )}

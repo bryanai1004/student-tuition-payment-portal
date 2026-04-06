@@ -1,11 +1,21 @@
 import {
+  formatTimeHmsForDisplay,
+  inputTimeToApi,
   parseHmsTo12hParts,
   timeToInputValue,
   twelveHourPartsToHhMm,
 } from '../../lib/formatScheduleTime'
 
 const HOURS_12 = Array.from({ length: 12 }, (_, i) => i + 1)
-const MINUTES = Array.from({ length: 60 }, (_, i) => i)
+
+const MINUTE_GROUPS = Array.from({ length: 6 }, (_, g) => {
+  const start = g * 10
+  const end = start + 9
+  return {
+    label: `:${String(start).padStart(2, '0')}–:${String(end).padStart(2, '0')}`,
+    minutes: Array.from({ length: 10 }, (_, i) => start + i),
+  }
+})
 
 type Props = {
   idPrefix: string
@@ -38,6 +48,10 @@ export function AdminTime12hFields({
     onChange(twelveHourPartsToHhMm({ hour12: h12, minute: min, isPm: ap === 'PM' }))
   }
 
+  const previewApi = value.trim() === '' ? null : inputTimeToApi(value)
+  const previewText =
+    previewApi == null ? null : formatTimeHmsForDisplay(previewApi)
+
   return (
     <div className="admin-field">
       <span className="admin-field__label" id={`${idPrefix}-label`}>
@@ -50,8 +64,8 @@ export function AdminTime12hFields({
       >
         <select
           id={`${idPrefix}-hour`}
-          className="admin-input admin-time12h__select"
-          aria-label={`${label} hour`}
+          className="admin-input admin-time12h__select admin-time12h__select--hour"
+          aria-label={`${label} hour (1–12)`}
           disabled={disabled}
           value={hourVal === '' ? '' : String(hourVal)}
           onChange={(e) => {
@@ -68,7 +82,7 @@ export function AdminTime12hFields({
             emit(h12, min, ap)
           }}
         >
-          <option value="">—</option>
+          <option value="">Hour</option>
           {HOURS_12.map((h) => (
             <option key={h} value={h}>
               {h}
@@ -80,7 +94,7 @@ export function AdminTime12hFields({
         </span>
         <select
           id={`${idPrefix}-min`}
-          className="admin-input admin-time12h__select"
+          className="admin-input admin-time12h__select admin-time12h__select--minute"
           aria-label={`${label} minute`}
           disabled={disabled}
           value={minVal === '' ? '' : String(minVal).padStart(2, '0')}
@@ -98,11 +112,15 @@ export function AdminTime12hFields({
             emit(h12, min, ap)
           }}
         >
-          <option value="">—</option>
-          {MINUTES.map((m) => (
-            <option key={m} value={String(m).padStart(2, '0')}>
-              {String(m).padStart(2, '0')}
-            </option>
+          <option value="">Min</option>
+          {MINUTE_GROUPS.map((g) => (
+            <optgroup key={g.label} label={g.label}>
+              {g.minutes.map((m) => (
+                <option key={m} value={String(m).padStart(2, '0')}>
+                  {String(m).padStart(2, '0')}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
         <select
@@ -124,10 +142,15 @@ export function AdminTime12hFields({
             emit(h12, min, v)
           }}
         >
-          <option value="">—</option>
+          <option value="">AM/PM</option>
           <option value="AM">AM</option>
           <option value="PM">PM</option>
         </select>
+        {previewText != null && (
+          <span className="admin-time12h__preview" aria-live="polite">
+            → {previewText}
+          </span>
+        )}
       </div>
     </div>
   )

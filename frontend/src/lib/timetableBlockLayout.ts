@@ -1,3 +1,9 @@
+/**
+ * Timetable geometry: one absolute-positioned block per section × weekday.
+ * `topPx` / `heightPx` are linear in minutes from `TIMETABLE_START_HOUR`, so a single
+ * class (e.g. 12:00–15:30) is one vertical span, not one cell per clock hour.
+ * Overlaps on the same day get greedy column packing (`colIndex` / `colCount`).
+ */
 import type { AdminCourseSection } from './api'
 import {
   parseStoredWeekdaysToFullNames,

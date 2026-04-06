@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { AdminTime12hFields } from '../../components/admin/AdminTime12hFields'
 import {
   createAdminCourseSection,
@@ -69,6 +69,7 @@ function toggleWeekday(
 }
 
 export function AdminCourseSectionsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [terms, setTerms] = useState<AcademicTerm[] | null>(null)
   const [courses, setCourses] = useState<CourseCatalogItem[] | null>(null)
   const [academicTermId, setAcademicTermId] = useState('')
@@ -177,7 +178,7 @@ export function AdminCourseSectionsPage() {
     setFormMessage(null)
   }
 
-  const beginEdit = (row: AdminCourseSection) => {
+  const beginEdit = useCallback((row: AdminCourseSection) => {
     setEditingId(row.id)
     const parsed = parseStoredWeekdaysToFullNames(row.weekday)
     setForm({
@@ -193,7 +194,74 @@ export function AdminCourseSectionsPage() {
       notes: row.notes ?? '',
     })
     setFormMessage(null)
-  }
+  }, [])
+
+  /**
+   * Timetable deep link: ?term=&course=&edit=
+   * Applies term/course first; waits for sections when edit is present; then strips query params.
+   */
+  useEffect(() => {
+    if (terms == null || courses == null) return
+    const t = searchParams.get('term')?.trim() ?? ''
+    const c = searchParams.get('course')?.trim() ?? ''
+    const editRaw = searchParams.get('edit')?.trim() ?? ''
+    if (t === '' && c === '' && editRaw === '') return
+
+    if (t !== '' && terms.some((x) => x.id === t)) {
+      setAcademicTermId(t)
+    }
+    if (c !== '' && courses.some((x) => x.code === c)) {
+      setCourseCode(c)
+    }
+
+    const stripSchedulingQs = () => {
+      setSearchParams(
+        (p) => {
+          const n = new URLSearchParams(p)
+          n.delete('term')
+          n.delete('course')
+          n.delete('edit')
+          return n
+        },
+        { replace: true },
+      )
+    }
+
+    if (editRaw === '') {
+      if (t !== '' || c !== '') stripSchedulingQs()
+      return
+    }
+
+    const id = Number(editRaw)
+    if (!Number.isInteger(id) || id <= 0) {
+      stripSchedulingQs()
+      return
+    }
+    if (t !== '' && academicTermId.trim() !== t) return
+    if (c !== '' && courseCode.trim() !== c) return
+    if (sectionsLoading || sections == null) return
+
+    const row =
+      c !== ''
+        ? sections.find((s) => s.id === id && s.course_code === c)
+        : sections.find((s) => s.id === id)
+    if (row == null) {
+      stripSchedulingQs()
+      return
+    }
+    beginEdit(row)
+    stripSchedulingQs()
+  }, [
+    terms,
+    courses,
+    academicTermId,
+    courseCode,
+    sections,
+    sectionsLoading,
+    searchParams,
+    setSearchParams,
+    beginEdit,
+  ])
 
   const weekdayStorage = (): string | null => {
     const s = selectedWeekdaysToStorage(form.weekdays)

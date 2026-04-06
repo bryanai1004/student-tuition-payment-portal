@@ -15,8 +15,16 @@ export type DeliveryModeOption = (typeof DELIVERY_MODE_OPTIONS)[number]
 
 const LOWER_TO_CANONICAL: Record<string, DeliveryModeOption> = {
   'in person': 'In Person',
+  'in-person': 'In Person',
+  inperson: 'In Person',
+  onsite: 'In Person',
+  'on-site': 'In Person',
+  'face to face': 'In Person',
+  f2f: 'In Person',
   hybrid: 'Hybrid',
   online: 'Online',
+  remote: 'Online',
+  zoom: 'Online',
   clinical: 'Clinical',
   lab: 'Lab',
 }

@@ -6314,6 +6314,22 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   min-width: 4.25rem;
 }
 
+.admin-time12h__select--hour {
+  min-width: 4rem;
+}
+
+.admin-time12h__select--minute {
+  min-width: 4.25rem;
+}
+
+.admin-time12h__preview {
+  flex-basis: 100%;
+  margin-left: 0.1rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--portal-text-muted);
+}
+
 /* Section detail (timetable click) */
 .admin-section-detail-backdrop {
   position: fixed;

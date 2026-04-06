@@ -10,6 +10,8 @@ type Props = {
   dayColumnLabel?: string | null
   /** Resolved catalog label for selected term, if available */
   termCatalogLabel?: string | null
+  /** Current timetable term filter — enables deep link to edit on Course Sections */
+  academicTermId?: string | null
   onClose: () => void
 }
 
@@ -26,6 +28,7 @@ export function AdminCourseSectionDetailModal({
   section,
   dayColumnLabel,
   termCatalogLabel,
+  academicTermId,
   onClose,
 }: Props) {
   if (section == null) return null
@@ -58,6 +61,8 @@ export function AdminCourseSectionDetailModal({
           </p>
         )}
         <dl className="admin-section-detail-modal__dl">
+          {row('Course code', section.course_code)}
+          {row('Section code', section.section_code)}
           {row('Academic term', termLine)}
           {row('Weekdays', formatWeekdaysLongFromStored(section.weekday))}
           {row(
@@ -70,6 +75,17 @@ export function AdminCourseSectionDetailModal({
           {row('Notes', section.notes?.trim() ? section.notes : '—')}
         </dl>
         <div className="admin-section-detail-modal__actions">
+          {academicTermId != null &&
+            academicTermId !== '' &&
+            section.course_code.trim() !== '' && (
+              <Link
+                to={`/admin/course-sections?term=${encodeURIComponent(academicTermId)}&course=${encodeURIComponent(section.course_code.trim())}&edit=${section.id}`}
+                className="portal-btn portal-btn--secondary portal-btn--compact"
+                onClick={onClose}
+              >
+                Edit section
+              </Link>
+            )}
           <Link
             to="/admin/course-sections"
             className="portal-btn portal-btn--secondary portal-btn--compact"
