@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { AIAssistantLauncher } from './ai/AIAssistantLauncher'
+import { AIAssistantMobileAnchorProvider } from './ai/AIAssistantMobileAnchorContext'
 import { AIAssistantProvider } from './ai/AIAssistantProvider'
 import { deriveAIAssistantPageContext } from '../data/aiMockReplies'
 import { PortalShell } from './PortalShell'
@@ -20,15 +21,17 @@ export function PortalLayout() {
 
   return (
     <AIAssistantProvider pageContext={assistantPageContext}>
-      <PortalShell
-        showStudentBar={showStudentBar}
-        showSidebar={showSidebar}
-        showPortalBanner={showPortalBanner}
-        dashboardHome={isDashboard}
-      >
-        <Outlet />
-      </PortalShell>
-      <AIAssistantLauncher />
+      <AIAssistantMobileAnchorProvider>
+        <PortalShell
+          showStudentBar={showStudentBar}
+          showSidebar={showSidebar}
+          showPortalBanner={showPortalBanner}
+          dashboardHome={isDashboard}
+        >
+          <Outlet />
+        </PortalShell>
+        <AIAssistantLauncher />
+      </AIAssistantMobileAnchorProvider>
     </AIAssistantProvider>
   )
 }

@@ -45,15 +45,15 @@ function persistCatHidden(hidden: boolean): void {
   }
 }
 
-/** Desktop target ~120px; slightly smaller below mobile breakpoint. */
+/** Desktop/tablet floating dock: ~132px visible; mobile banner cluster stays compact. */
 export function useAIAssistantCatDisplaySize(): number {
   const [px, setPx] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia(AI_ASSISTANT_MOBILE_MEDIA).matches ? 88 : 120,
+    typeof window !== 'undefined' && window.matchMedia(AI_ASSISTANT_MOBILE_MEDIA).matches ? 70 : 132,
   )
 
   useEffect(() => {
     const mq = window.matchMedia(AI_ASSISTANT_MOBILE_MEDIA)
-    const sync = () => setPx(mq.matches ? 88 : 120)
+    const sync = () => setPx(mq.matches ? 70 : 132)
     sync()
     mq.addEventListener('change', sync)
     return () => mq.removeEventListener('change', sync)

@@ -4538,9 +4538,20 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   border-bottom: 1px solid var(--portal-border-subtle);
 }
 
+.portal-dashboard-hero__title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
 .portal-dashboard-hero-title {
   margin: 0;
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -4549,6 +4560,28 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: clamp(1.375rem, 2.35vw, 1.875rem);
   font-weight: 700;
+}
+
+/* Reserves horizontal space on small screens so the fixed AI dock can align without covering the name. */
+.portal-dashboard-hero__ai-dock-anchor {
+  flex-shrink: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+@media (max-width: 480px) {
+  .portal-dashboard-hero__title-row {
+    align-items: center;
+  }
+
+  .portal-dashboard-hero__ai-dock-anchor {
+    width: 118px;
+    min-height: 70px;
+    height: 70px;
+    align-self: center;
+  }
 }
 
 .portal-dashboard-hero-welcome {

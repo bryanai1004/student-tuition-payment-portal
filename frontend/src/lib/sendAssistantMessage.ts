@@ -26,16 +26,35 @@ export type SendAssistantMessageOptions = {
   signal?: AbortSignal
 }
 
+/** In-memory attachment for UI + future multipart / OpenAI file flows. */
+export type SendAssistantAttachmentPayload = {
+  id: string
+  name: string
+  type: 'image' | 'file'
+  mimeType: string
+  size: number
+  file: File
+  /** Object URL for image previews; revoke when removing or after send. */
+  previewUrl?: string
+}
+
+export type SendAssistantMessagePayload = {
+  text: string
+  attachments: SendAssistantAttachmentPayload[]
+  pageContext: AIAssistantPageContext
+}
+
 /**
  * Transport layer for assistant replies. Today this simulates latency and returns mock text.
  * Later: POST to your secure company proxy that calls OpenAI server-side (with auth, logging, and moderation).
  */
 export async function sendAssistantMessage(
-  message: string,
-  pageContext: AIAssistantPageContext,
+  payload: SendAssistantMessagePayload,
   options?: SendAssistantMessageOptions,
 ): Promise<string> {
+  const { text, attachments, pageContext } = payload
   const ms = 520 + Math.floor(Math.random() * 700)
   await sleep(ms, options?.signal)
-  return generateMockAssistantReply(message, pageContext)
+  void attachments
+  return generateMockAssistantReply(text, pageContext)
 }

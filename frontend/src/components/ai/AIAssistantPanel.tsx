@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent, Ref } from 'react'
-import type { AIAssistantChatMessage } from '../../hooks/useAIAssistant'
+import type { AIAssistantAttachment, AIAssistantChatMessage } from '../../hooks/useAIAssistant'
 import { AIAssistantInput } from './AIAssistantInput'
 import { AIAssistantWelcomeMessage } from './AIAssistantWelcomeMessage'
+
+const WELCOME_LOTTIE_PX = 80
 
 type AIAssistantPanelProps = {
   inputId: string
@@ -11,6 +13,9 @@ type AIAssistantPanelProps = {
   isAwaitingReply: boolean
   draft: string
   setDraft: (next: string) => void
+  attachments: AIAssistantAttachment[]
+  onAddAttachments: (files: FileList | File[]) => void
+  onRemoveAttachment: (id: string) => void
   onSend: () => void
   inputRef: Ref<HTMLTextAreaElement>
   onClose: () => void
@@ -30,6 +35,9 @@ export function AIAssistantPanel({
   isAwaitingReply,
   draft,
   setDraft,
+  attachments,
+  onAddAttachments,
+  onRemoveAttachment,
   onSend,
   inputRef,
   onClose,
@@ -128,7 +136,7 @@ export function AIAssistantPanel({
                 }
               >
                 {m.welcomeLines?.length ? (
-                  <AIAssistantWelcomeMessage lines={m.welcomeLines} lottieSize={68} />
+                  <AIAssistantWelcomeMessage lines={m.welcomeLines} lottieSize={WELCOME_LOTTIE_PX} />
                 ) : (
                   m.content
                 )}
@@ -157,6 +165,9 @@ export function AIAssistantPanel({
         onSubmit={onSend}
         disabled={isAwaitingReply}
         inputRef={inputRef}
+        attachments={attachments}
+        onAddAttachments={onAddAttachments}
+        onRemoveAttachment={onRemoveAttachment}
       />
     </section>
   )

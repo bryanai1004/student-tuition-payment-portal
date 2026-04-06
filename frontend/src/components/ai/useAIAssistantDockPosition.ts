@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { AI_ASSISTANT_MOBILE_MEDIA } from './aiAssistantGeometry'
 import { persistCatPosition, readStoredCatPosition } from './useAIAssistantPet'
@@ -28,14 +28,24 @@ type DragSession = {
   dragging: boolean
 }
 
+export type UseAIAssistantDockPositionOptions = {
+  isMobile: boolean
+  mobileAnchorEl: HTMLElement | null
+}
+
 export function useAIAssistantDockPosition(
   dockRef: RefObject<HTMLDivElement | null>,
   dragEnabled: boolean,
-  onCatActivate: () => void,
+  onActivate: () => void,
+  opts: UseAIAssistantDockPositionOptions,
 ) {
+  const { isMobile, mobileAnchorEl } = opts
+
   const [customPos, setCustomPos] = useState<{ left: number; top: number } | null>(() =>
     dragEnabled ? readStoredCatPosition() : null,
   )
+
+  const [anchoredPos, setAnchoredPos] = useState<{ left: number; top: number } | null>(null)
 
   const dragRef = useRef<DragSession | null>(null)
   const latestPosRef = useRef<{ left: number; top: number } | null>(null)
@@ -80,17 +90,59 @@ export function useAIAssistantDockPosition(
     return () => window.removeEventListener('resize', onResize)
   }, [dragEnabled, clampAndSet])
 
-  const dockStyle =
-    dragEnabled && customPos
-      ? {
-          left: customPos.left,
-          top: customPos.top,
-          right: 'auto' as const,
-          bottom: 'auto' as const,
-        }
-      : undefined
+  useLayoutEffect(() => {
+    if (!isMobile || !mobileAnchorEl) {
+      setAnchoredPos(null)
+      return
+    }
 
-  const onCatPointerDown = useCallback(
+    const update = () => {
+      const dock = dockRef.current
+      if (!dock) return
+      const dockW = dock.offsetWidth
+      const dockH = dock.offsetHeight
+      const ar = mobileAnchorEl.getBoundingClientRect()
+      const left = ar.right - dockW
+      const top = ar.top + (ar.height - dockH) / 2
+      const next = clampDock(left, top, dockW, dockH, window.innerWidth, window.innerHeight)
+      setAnchoredPos((p) => (p && p.left === next.left && p.top === next.top ? p : next))
+    }
+
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(mobileAnchorEl)
+    const dockEl = dockRef.current
+    if (dockEl) ro.observe(dockEl)
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+    }
+  }, [isMobile, mobileAnchorEl, dockRef])
+
+  const dockStyle = useMemo(() => {
+    if (isMobile && mobileAnchorEl && anchoredPos) {
+      return {
+        left: anchoredPos.left,
+        top: anchoredPos.top,
+        right: 'auto' as const,
+        bottom: 'auto' as const,
+      }
+    }
+    if (dragEnabled && customPos) {
+      return {
+        left: customPos.left,
+        top: customPos.top,
+        right: 'auto' as const,
+        bottom: 'auto' as const,
+      }
+    }
+    return undefined
+  }, [isMobile, mobileAnchorEl, anchoredPos, dragEnabled, customPos])
+
+  const onDockPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (!dragEnabled) return
       if (e.button !== 0) return
@@ -112,7 +164,7 @@ export function useAIAssistantDockPosition(
     [dragEnabled, customPos, dockRef],
   )
 
-  const onCatPointerMove = useCallback(
+  const onDockPointerMove = useCallback(
     (e: React.PointerEvent) => {
       const d = dragRef.current
       if (!d || e.pointerId !== d.pointerId || !dragEnabled) return
@@ -127,7 +179,7 @@ export function useAIAssistantDockPosition(
     [dragEnabled, clampAndSet],
   )
 
-  const onCatPointerUp = useCallback(
+  const onDockPointerUp = useCallback(
     (e: React.PointerEvent) => {
       const d = dragRef.current
       if (!d || e.pointerId !== d.pointerId || !dragEnabled) return
@@ -142,13 +194,13 @@ export function useAIAssistantDockPosition(
         const p = latestPosRef.current
         if (p) persistCatPosition(p.left, p.top)
       } else {
-        onCatActivate()
+        onActivate()
       }
     },
-    [dragEnabled, onCatActivate],
+    [dragEnabled, onActivate],
   )
 
-  const onCatPointerCancel = useCallback((e: React.PointerEvent) => {
+  const onDockPointerCancel = useCallback((e: React.PointerEvent) => {
     dragRef.current = null
     try {
       e.currentTarget.releasePointerCapture(e.pointerId)
@@ -159,10 +211,11 @@ export function useAIAssistantDockPosition(
 
   return {
     dockStyle,
-    onCatPointerDown,
-    onCatPointerMove,
-    onCatPointerUp,
-    onCatPointerCancel,
+    /** Shared drag/click handles for the cat hit-area and the red launcher button. */
+    onDockPointerDown,
+    onDockPointerMove,
+    onDockPointerUp,
+    onDockPointerCancel,
   }
 }
 

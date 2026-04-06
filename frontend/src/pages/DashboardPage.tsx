@@ -1,3 +1,4 @@
+import { AIAssistantMobileDockAnchor } from '../components/ai/AIAssistantMobileDockAnchor'
 import { useAccount } from '../context/AccountContext'
 import { DashboardCoursesWidget } from './dashboard/DashboardCoursesWidget'
 import { DashboardServiceLauncher } from './dashboard/DashboardServiceLauncher'
@@ -32,10 +33,13 @@ export function DashboardPage() {
   return (
     <main className="portal-page portal-dashboard">
       <header className="portal-dashboard-hero">
-        <h1 className="portal-dashboard-hero-title">
-          <span className="portal-dashboard-hero-welcome">WELCOME,</span>{' '}
-          <span className="portal-dashboard-hero-name">{welcome}</span>
-        </h1>
+        <div className="portal-dashboard-hero__title-row">
+          <h1 className="portal-dashboard-hero-title">
+            <span className="portal-dashboard-hero-welcome">WELCOME,</span>{' '}
+            <span className="portal-dashboard-hero-name">{welcome}</span>
+          </h1>
+          <AIAssistantMobileDockAnchor />
+        </div>
         <time className="portal-dashboard-hero-date" dateTime={dateIso}>
           {dateLabel}
         </time>

@@ -1,6 +1,8 @@
 import { useId, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { AIAssistantPanel } from './AIAssistantPanel'
 import { AIAssistantDockCat } from './AIAssistantPet'
+import { useAIAssistantMobileAnchor } from './AIAssistantMobileAnchorContext'
 import { useAIAssistantContext } from './AIAssistantProvider'
 import { useAIAssistantCatDragEnabled, useAIAssistantDockPosition } from './useAIAssistantDockPosition'
 import { useAIAssistantPanelLayout } from './useAIAssistantPanelLayout'
@@ -11,11 +13,20 @@ import {
 } from './useAIAssistantPet'
 import './aiAssistant.css'
 
+function isDashboardPath(pathname: string) {
+  const p = pathname.split('?')[0].toLowerCase()
+  return p === '/dashboard' || p === '/dashboard/'
+}
+
 export function AIAssistantLauncher() {
   const baseId = useId()
   const inputId = `${baseId}-input`
   const messagesRegionId = `${baseId}-messages`
   const dockRef = useRef<HTMLDivElement>(null)
+  const { pathname } = useLocation()
+  const dashboardRoute = isDashboardPath(pathname)
+  const { mobileDockAnchorEl } = useAIAssistantMobileAnchor()
+
   const dragEnabled = useAIAssistantCatDragEnabled()
   const contextMenuEnabled = useAIAssistantCatContextMenuEnabled()
   const catSize = useAIAssistantCatDisplaySize()
@@ -26,6 +37,9 @@ export function AIAssistantLauncher() {
     messages,
     draft,
     setDraft,
+    attachments,
+    addAttachments,
+    removeAttachment,
     isAwaitingReply,
     inputRef,
     openPanel,
@@ -38,28 +52,43 @@ export function AIAssistantLauncher() {
 
   const layout = useAIAssistantPanelLayout()
 
-  const { dockStyle, onCatPointerDown, onCatPointerMove, onCatPointerUp, onCatPointerCancel } =
-    useAIAssistantDockPosition(dockRef, dragEnabled, openPanel)
+  const mobileAnchorForDock =
+    layout.isMobile && dashboardRoute ? mobileDockAnchorEl : null
+
+  const {
+    dockStyle,
+    onDockPointerDown,
+    onDockPointerMove,
+    onDockPointerUp,
+    onDockPointerCancel,
+  } = useAIAssistantDockPosition(dockRef, dragEnabled, openPanel, {
+    isMobile: layout.isMobile,
+    mobileAnchorEl: mobileAnchorForDock,
+  })
+
+  const dockClassNames = [
+    'portal-ai-assistant-dock',
+    dragEnabled && 'portal-ai-assistant-dock--draggable',
+    catHidden && 'portal-ai-assistant-dock--cat-hidden',
+    layout.isMobile && 'portal-ai-assistant-dock--compact',
+    layout.isMobile && !dockStyle && 'portal-ai-assistant-dock--mobile-fallback',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <div className="portal-ai-assistant-root">
       {panelState === 'closed' ? (
-        <div
-          ref={dockRef}
-          className={`portal-ai-assistant-dock${dragEnabled ? ' portal-ai-assistant-dock--draggable' : ''}${
-            catHidden ? ' portal-ai-assistant-dock--cat-hidden' : ''
-          }`}
-          style={dockStyle}
-        >
+        <div ref={dockRef} className={dockClassNames} style={dockStyle}>
           {!catHidden ? (
             <AIAssistantDockCat
               size={catSize}
               dragEnabled={dragEnabled}
               contextMenuEnabled={contextMenuEnabled}
-              onCatPointerDown={onCatPointerDown}
-              onCatPointerMove={onCatPointerMove}
-              onCatPointerUp={onCatPointerUp}
-              onCatPointerCancel={onCatPointerCancel}
+              onCatPointerDown={onDockPointerDown}
+              onCatPointerMove={onDockPointerMove}
+              onCatPointerUp={onDockPointerUp}
+              onCatPointerCancel={onDockPointerCancel}
               onOpenAssistant={openPanel}
               onRequestHideCat={hideCat}
             />
@@ -67,7 +96,11 @@ export function AIAssistantLauncher() {
           <button
             type="button"
             className="portal-ai-assistant-launcher"
-            onClick={openPanel}
+            onClick={dragEnabled ? undefined : openPanel}
+            onPointerDown={dragEnabled ? onDockPointerDown : undefined}
+            onPointerMove={dragEnabled ? onDockPointerMove : undefined}
+            onPointerUp={dragEnabled ? onDockPointerUp : undefined}
+            onPointerCancel={dragEnabled ? onDockPointerCancel : undefined}
             aria-label="Open AMU AI Assistant chat"
             aria-haspopup="dialog"
           >
@@ -150,6 +183,9 @@ export function AIAssistantLauncher() {
               isAwaitingReply={isAwaitingReply}
               draft={draft}
               setDraft={setDraft}
+              attachments={attachments}
+              onAddAttachments={addAttachments}
+              onRemoveAttachment={removeAttachment}
               onSend={() => void submitDraft()}
               inputRef={inputRef}
               onClose={closePanel}
@@ -171,6 +207,9 @@ export function AIAssistantLauncher() {
               isAwaitingReply={isAwaitingReply}
               draft={draft}
               setDraft={setDraft}
+              attachments={attachments}
+              onAddAttachments={addAttachments}
+              onRemoveAttachment={removeAttachment}
               onSend={() => void submitDraft()}
               inputRef={inputRef}
               onClose={closePanel}
