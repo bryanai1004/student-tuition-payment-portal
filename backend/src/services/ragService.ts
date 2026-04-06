@@ -584,6 +584,250 @@ function languageInstructionForLlm(question: string): string {
     : "Respond in English.";
 }
 
+const ACADEMIC_CONTACT_BLOCK_EN = `For final academic advising or official confirmation, please contact:
+
+Lillian Li
+Associate Academic Dean
+909-703-9785
+lli@amu.edu`;
+
+const ACADEMIC_CONTACT_BLOCK_ZH = `如需进一步确认正式选课安排、入学资格或学术规划，建议联系学术顾问：
+
+Lillian Li
+Associate Academic Dean
+909-703-9785
+lli@amu.edu`;
+
+const TECH_CONTACT_BLOCK_EN = `If you are experiencing a portal or AI system issue, please contact technical support:
+
+AHMC AI Department
+bingchen.li@wanpanel.ai`;
+
+const TECH_CONTACT_BLOCK_ZH = `如果您遇到 portal 或 AI 系统技术问题，请联系技术支持：
+
+AHMC AI Department
+bingchen.li@wanpanel.ai`;
+
+function answerAlreadyContainsSupportContacts(answer: string): boolean {
+  return (
+    /lli@amu\.edu/i.test(answer) ||
+    /bingchen\.li@wanpanel\.ai/i.test(answer) ||
+    /909-703-9785/.test(answer)
+  );
+}
+
+/**
+ * Portal / login / upload / AI-assistant failures — not generic "registration policy" questions.
+ */
+function shouldSuggestTechnicalContact(
+  question: string,
+  intent: RagIntent,
+): boolean {
+  if (intent === "direct" || intent === "out_of_scope") return false;
+  const t = question.trim();
+  const l = t.toLowerCase();
+
+  const distress =
+    /\b(not\s+work|doesn'?t\s+work|don'?t\s+work|won'?t\s+work|unable\s+to|can'?t|cannot|error|broken|bug|glitch|fail|failed|issue|problem|stuck|no\s+response|not\s+respond|not\s+responding|slow|timeout|down)\b/i.test(
+      l,
+    );
+
+  const loginPortal =
+    /\b(log\s*in|sign\s*in|sign-in|password|locked\s+out|forgot\s+password|reset\s+password|student\s+portal|school\s+portal|payment\s+portal|pay\s+portal|online\s+portal|the\s+portal)\b/i.test(
+      l,
+    ) && distress;
+
+  const sitePage =
+    /\b(website|web\s*site|webpage|web\s+page|browser)\b/i.test(l) &&
+    distress;
+  const httpError =
+    /\b(404|500|502|503)\b/.test(l) &&
+    /\b(error|page|site|server|status|http)\b/i.test(l);
+
+  const uploadAttach =
+    /\b(upload|uploading|attachment|attached\s+file|file\s+upload)\b/i.test(
+      l,
+    ) && distress;
+
+  const aiAssistant =
+    /\b(ai\s+assistant|this\s+assistant|this\s+chat|chatbot|chat\s+bot)\b/i.test(
+      l,
+    ) && distress;
+
+  const zhTech =
+    /无法登录|登不(了|进去)|密码忘了|密码错误|上传失败|附件.{0,6}(失败|错误|传不)|系统.{0,8}(故障|崩溃|打不开)|页面.{0,6}(报错|打不开|空白)|助手.{0,8}(没反应|不回答)/.test(
+      t,
+    );
+
+  return (
+    loginPortal ||
+    sitePage ||
+    httpError ||
+    uploadAttach ||
+    aiAssistant ||
+    zhTech
+  );
+}
+
+function usesAcademicGuidanceFallback(answer: string): boolean {
+  return answer === GUIDANCE_FALLBACK_EN || answer === GUIDANCE_FALLBACK_ZH;
+}
+
+function usesSupportGuidanceFallback(answer: string): boolean {
+  return (
+    answer === GUIDANCE_SUPPORT_FALLBACK_EN ||
+    answer === GUIDANCE_SUPPORT_FALLBACK_ZH
+  );
+}
+
+/** Strong academic-advising / official-confirmation cues (question text). */
+function hasStrongAcademicAdvisingCue(trimmed: string, lower: string): boolean {
+  if (
+    /\b(exception|waiver|petition|appeal|overload|readmit|readmission|leave\s+of\s+absence|loa|dean'?s|probation\s+appeal)\b/i.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(official\s+confirmation|confirm\s+with|verify\s+with|must\s+i\s+get\s+approval|need\s+approval|written\s+approval|prerequisite\s+waiver|waive\s+a\s+prerequisite|prereq\s+waiver)\b/i.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(unclear\s+prerequisite|prerequisite\s+ambigu|prerequisite\s+unclear|which\s+prerequisite|prereq\s+conflict)\b/i.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(prerequisite|prereq)\b/i.test(lower) &&
+    /\b(unclear|ambigu|unsure|uncertain|confus|not\s+sure)\b/i.test(lower)
+  ) {
+    return true;
+  }
+  if (
+    /\b(transfer\s+credit|transcript\s+evaluat|transferring\s+in|will\s+my\s+credits)\b/i.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(am\s+i\s+on\s+track|on\s+track\s+to\s+graduate|when\s+will\s+i\s+graduate|graduation\s+timeline|time\s+to\s+graduate|graduation\s+date\s+confirmation)\b/i.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(eligib(le|ility)\s+for\s+the\s+program|program\s+eligib|admiss(?:ion|ions)\s+decision|background\s+fit|fit\s+for\s+the\s+program|will\s+i\s+be\s+accepted)\b/i.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /正式确认|官方确认|学术例外|豁免|申诉|休学|复学|转学学分|成绩评估|先修.{0,10}(不清|不明|模糊|冲突)|能否按时毕业|毕业时间.{0,6}确认|入学资格|录取.{0,6}(决定|结果)|背景.{0,8}是否符合/.test(
+      trimmed,
+    )
+  ) {
+    return true;
+  }
+
+  const wantsConfirmation =
+    /\b(officially|official\s+ok|is\s+it\s+allowed|is\s+this\s+allowed|permitted\s+to|get\s+permission)\b/i.test(
+      lower,
+    ) || /正式允许|学校批准|书面批准|能不能选|可不可以选/.test(trimmed);
+  const planning =
+    /\b(course\s+plan|plan\s+my\s+courses|which\s+courses\s+should|class\s+schedule|course\s+sequence|semester\s+plan)\b/i.test(
+      lower,
+    ) || /选课规划|课程安排|怎么选课|先修顺序/.test(trimmed);
+
+  return wantsConfirmation && planning;
+}
+
+/** Admissions / eligibility / prerequisite angle on the support-guidance path. */
+function hasAcademicEscalationInSupportQuestion(
+  trimmed: string,
+  lower: string,
+): boolean {
+  return (
+    /\b(eligib|eligible|eligibility|admiss|applicant|apply\s+to|application|background|prior\s+degree|undergraduate\s+major|non[- ]traditional|prereq|prerequisite|transfer|graduate\s+on\s+time|graduation\s+path)\b/i.test(
+      lower,
+    ) ||
+    /入学资格|申请资格|录取|背景|先修|转学|毕业路径|能否申请|是否符合/.test(trimmed)
+  );
+}
+
+/** Support-path questions that need an academic dean / advisor, not payment-only help. */
+function supportQuestionNeedsAcademicContact(
+  trimmed: string,
+  lower: string,
+): boolean {
+  if (isPurePaymentOperationalCue(trimmed, lower)) return false;
+  return hasAcademicEscalationInSupportQuestion(trimmed, lower);
+}
+
+/**
+ * Payment / installment / refund phrasing without academic-advising angle — exclude from academic contact.
+ */
+function isPurePaymentOperationalCue(trimmed: string, lower: string): boolean {
+  const paymentish =
+    /\b(pay|payment|tuition|installment|refund|due\s+date|invoice|balance|late\s+fee)\b/i.test(
+      lower,
+    ) || /学费|支付|分期|退款|缴费|滞纳/.test(trimmed);
+  if (!paymentish) return false;
+  return !hasAcademicEscalationInSupportQuestion(trimmed, lower);
+}
+
+function shouldSuggestAcademicContact(
+  question: string,
+  intent: RagIntent,
+  guidanceSubtype: GuidanceSubtype | undefined,
+  answer: string,
+): boolean {
+  if (intent !== "guidance" || guidanceSubtype === undefined) return false;
+  if (shouldSuggestTechnicalContact(question, intent)) return false;
+
+  const trimmed = question.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (guidanceSubtype === "academic") {
+    if (usesAcademicGuidanceFallback(answer)) return true;
+    return hasStrongAcademicAdvisingCue(trimmed, lower);
+  }
+
+  return supportQuestionNeedsAcademicContact(trimmed, lower);
+}
+
+function appendSupportContactBlocks(
+  answer: string,
+  question: string,
+  intent: RagIntent,
+  guidanceSubtype: GuidanceSubtype | undefined,
+): string {
+  if (answerAlreadyContainsSupportContacts(answer)) return answer;
+
+  const zh = isMostlyChinese(question);
+  const parts: string[] = [answer];
+
+  if (shouldSuggestTechnicalContact(question, intent)) {
+    parts.push(zh ? TECH_CONTACT_BLOCK_ZH : TECH_CONTACT_BLOCK_EN);
+  } else if (
+    shouldSuggestAcademicContact(question, intent, guidanceSubtype, answer)
+  ) {
+    parts.push(zh ? ACADEMIC_CONTACT_BLOCK_ZH : ACADEMIC_CONTACT_BLOCK_EN);
+  }
+
+  if (parts.length === 1) return answer;
+  return parts.join("\n\n");
+}
+
 /**
  * End-to-end AMU catalog RAG: intent routing, optional retrieval, grounded chat completion.
  * @param rawHistory - Optional recent turns; sanitized (capped, invalid entries dropped).
@@ -693,6 +937,8 @@ ${q}`;
   if (intent === "guidance" && guidanceSubtype !== undefined) {
     answer = applyGuidanceFallbackIfNeeded(answer, q, guidanceSubtype);
   }
+
+  answer = appendSupportContactBlocks(answer, q, intent, guidanceSubtype);
 
   return {
     question: q,
