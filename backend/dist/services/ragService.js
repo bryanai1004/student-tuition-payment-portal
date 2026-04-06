@@ -11,7 +11,7 @@ Do NOT use outside knowledge or guess beyond the excerpts.
 If the answer is not clearly supported by the provided excerpts, say:
 "I could not find a clear answer in the AMU catalog excerpts provided."
 When possible, mention which catalog/source the answer came from (using the source labels shown in the excerpts).`;
-const GUIDANCE_SYSTEM_PROMPT_BASE = `You are assisting with AMU catalog-based academic guidance.
+const GUIDANCE_ACADEMIC_SYSTEM_PROMPT_BASE = `You are assisting with AMU catalog-based academic guidance.
 Use ONLY the retrieved catalog excerpts as evidence.
 You may provide cautious, general planning guidance when the excerpts support it (e.g. prerequisites, program structure, sequencing themes).
 Do NOT invent official semester-by-semester schedules, deadlines, or requirements unless they are explicitly stated in the excerpts.
@@ -19,6 +19,12 @@ Clearly separate what the excerpts state as facts from general suggestions when 
 When stating facts, tie them to the source labels in the excerpts.
 If the question asks for planning or sequencing advice, give a conservative summary and include a brief reminder that the student should confirm final course selection with the AMU registrar or their academic advisor.
 If the excerpts do not clearly support a direct answer, do NOT end with only a short refusal like "I could not find a clear answer." Instead give an honest, helpful bounded reply: say the excerpts do not state enough explicitly, briefly list related catalog topics you can still discuss if they appear in the excerpts (e.g. tuition payment rules, installments, refunds, program structure), and remind the student to confirm with the AMU registrar or advisor. Stay grounded—do not invent financial aid or policies not in the excerpts.`;
+const GUIDANCE_SUPPORT_SYSTEM_PROMPT_BASE = `You are helping with AMU catalog-based support and admissions-style guidance.
+Use only the retrieved AMU catalog excerpts as evidence.
+You may give cautious, general guidance when the excerpts support it (e.g. tuition and fees, payment-related catalog language, references to financial aid or FAFSA if present, admissions or applicant requirements stated in the catalog).
+Do not invent admissions guarantees, financial aid guarantees, specific payment plans, or eligibility decisions unless clearly supported by the excerpts.
+If the catalog excerpts are insufficient, explain what is known from them, what is not clearly stated, and what the student should confirm with AMU admissions, registrar, or financial aid office.
+If the user writes in Chinese, answer in Chinese. If the user writes in English, answer in English.`;
 export class RagQuestionValidationError extends Error {
     constructor(message) {
         super(message);
@@ -94,7 +100,10 @@ function followUpOrVagueCue(trimmed, lower) {
     }
     return false;
 }
-function shouldRewriteForRetrieval(question, history) {
+function shouldRewriteForRetrieval(question, history, intent, guidanceSubtype) {
+    if (intent === "guidance" && guidanceSubtype === "support") {
+        return true;
+    }
     if (history.length === 0)
         return false;
     const trimmed = question.trim();
@@ -114,24 +123,36 @@ function shouldRewriteForRetrieval(question, history) {
     }
     return false;
 }
-async function rewriteQuestionForRetrieval(client, question, history) {
+const REWRITE_SYSTEM_ACADEMIC_STRICT = `You rewrite the user's latest message into ONE concise standalone search query for a university catalog (AMU).
+Use the recent conversation only to resolve pronouns and implicit topics.
+Output ONLY the query text, no quotes or labels, no explanation.
+Do not invent facts, policies, dates, or program details not implied by the conversation.
+Maximum ${MAX_REWRITE_OUTPUT_CHARS} characters.`;
+const REWRITE_SYSTEM_SUPPORT = `You rewrite the user's latest message into ONE short standalone English search query for an AMU university catalog knowledge base.
+Aim at catalog topics that are likely retrievable: tuition and fees, payment methods and deadlines, refunds, FAFSA or financial aid if referenced in catalog text, admissions requirements, applicant prerequisites, prior degree or educational background expectations, eligibility-related catalog language.
+Do NOT answer the user's question. Do NOT invent facts, dollar amounts, guarantees, or policies not implied by the message.
+Output ONLY the query text, no quotes or labels, no explanation. Use English keywords even if the user wrote in another language.
+Maximum ${MAX_REWRITE_OUTPUT_CHARS} characters.`;
+async function rewriteQuestionForRetrieval(client, question, history, intent, guidanceSubtype) {
     const h = history ?? [];
-    if (!shouldRewriteForRetrieval(question, h))
+    if (!shouldRewriteForRetrieval(question, h, intent, guidanceSubtype)) {
         return question;
-    const histText = h
-        .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
-        .join("\n");
+    }
+    const histText = h.length > 0
+        ? h
+            .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+            .join("\n")
+        : "(none)";
+    const rewriteSystem = intent === "guidance" && guidanceSubtype === "support"
+        ? REWRITE_SYSTEM_SUPPORT
+        : REWRITE_SYSTEM_ACADEMIC_STRICT;
     try {
         const completion = await client.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
                 {
                     role: "system",
-                    content: `You rewrite the user's latest message into ONE concise standalone search query for a university catalog (AMU).
-Use the recent conversation only to resolve pronouns and implicit topics.
-Output ONLY the query text, no quotes or labels, no explanation.
-Do not invent facts, policies, dates, or program details not implied by the conversation.
-Maximum ${MAX_REWRITE_OUTPUT_CHARS} characters.`,
+                    content: rewriteSystem,
                 },
                 {
                     role: "user",
@@ -155,6 +176,8 @@ Maximum ${MAX_REWRITE_OUTPUT_CHARS} characters.`,
 }
 const GUIDANCE_FALLBACK_EN = "I couldn't find a clear, direct answer in the AMU catalog excerpts I have right now. Based on the available catalog material, I can still help explain related topics such as tuition payment rules, refund policy, graduation requirements, course planning, or registration procedures. For final academic or payment decisions, you should confirm with AMU registrar/advisor.";
 const GUIDANCE_FALLBACK_ZH = "我目前无法在现有 AMU 目录摘录中找到明确、直接的答案。根据现有目录内容，我仍可以继续帮助你解释相关主题，例如学费支付规则、退费政策、毕业要求、课程规划或注册流程；但涉及最终的选课、缴费或学术决定时，仍建议你向 AMU registrar/advisor 确认。";
+const GUIDANCE_SUPPORT_FALLBACK_EN = "I could not directly confirm this from the AMU catalog excerpts I have right now. Based on the available catalog material, I can still help with related topics such as tuition and fees, FAFSA / financial aid references, admissions requirements, and general academic planning. For a final decision about eligibility, payment arrangements, or financial support, you should confirm with AMU admissions / registrar / financial aid office.";
+const GUIDANCE_SUPPORT_FALLBACK_ZH = "我目前无法仅根据现有 AMU 目录摘录直接确认这一点。不过根据现有目录内容，我仍可以帮助你查看相关主题，例如学费与费用、FAFSA / 财务援助、入学要求以及一般性的课程规划。若涉及最终的申请资格、缴费安排或财务援助，仍建议你向 AMU admissions / registrar / financial aid office 确认。";
 function looksLikeStrictCatalogRefusal(answer) {
     if (/could not find a clear answer in the amu catalog excerpts/i.test(answer)) {
         return true;
@@ -165,9 +188,14 @@ function looksLikeStrictCatalogRefusal(answer) {
         return true;
     return false;
 }
-function applyGuidanceFallbackIfNeeded(answer, question) {
+function applyGuidanceFallbackIfNeeded(answer, question, subtype) {
     if (!looksLikeStrictCatalogRefusal(answer))
         return answer;
+    if (subtype === "support") {
+        return isMostlyChinese(question)
+            ? GUIDANCE_SUPPORT_FALLBACK_ZH
+            : GUIDANCE_SUPPORT_FALLBACK_EN;
+    }
     return isMostlyChinese(question) ? GUIDANCE_FALLBACK_ZH : GUIDANCE_FALLBACK_EN;
 }
 /** Heuristic: treat as Chinese when CJK clearly dominates the visible text. */
@@ -208,12 +236,43 @@ function hasSubstantiveCatalogCue(trimmed, lower) {
     }
     return /退费|学费|退款|滞纳|出勤|旷课|毕业要求|学位|加退选|退选|成绩单|学分|注册|截止日期|校历|政策|纪律|必修|选修|先修/.test(trimmed);
 }
+/** Affordability, payment stress, admissions fit, eligibility — school-related support guidance. */
+function isSupportGuidanceCue(trimmed, lower) {
+    const guidanceSupportZh = /怎么支付|如何支付|怎么付学费|如何付学费|付学费|交学费|家里穷|家里.{0,6}困难|经济困难|付不起学费|分期.{0,4}付|读得起|负担.{0,8}学费|学费.{0,12}怎么办|能读.{0,8}AMU|可以读.{0,16}AMU|AMU.{0,14}(能读|能上)|本科.{0,28}专业.{0,16}(可以|能|能否)|可不可以读|能否申请|申请.{0,12}资格|有没有资格|是否符合|录取.{0,12}要求|背景.{0,12}(可以|能|符合)|背景.{0,16}(不同|不一样)|非传统|跨专业.{0,12}(申请|读)/.test(trimmed);
+    const guidanceSupportEn = /\bhow\s+(do|can)\s+i\s+pay\b|\bcan'?t\s+afford\b|\bafford\s+to\s+(pay|study)\b|\bfinancial\s+difficult/i.test(lower) ||
+        /\bhelp\s+(paying|with\s+tuition|with\s+paying)\b|\bneed\s+(some\s+)?help\s+(paying|with)\b/i.test(lower) ||
+        (/\bwhat\s+if\s+i\s+(have|need)\b/i.test(lower) &&
+            /\b(financial|money|pay|tuition|afford)/i.test(lower)) ||
+        (/\b(am\s+i\s+eligible|eligible\s+to\s+apply|eligible\s+for)\b/i.test(lower) &&
+            /\b(amu|alhambra|program|admission)/i.test(lower)) ||
+        (/\bcan\s+i\s+(still\s+)?(study|apply|enroll)\b/i.test(lower) &&
+            /\b(amu|alhambra)\b/i.test(lower)) ||
+        (/\b(my\s+)?undergraduate\s+major\b|\bmy\s+major\s+is\b|\bnon[- ]traditional\s+background\b/i.test(lower) &&
+            /\b(amu|alhambra|apply|eligible|admission)/i.test(lower)) ||
+        (/\bcan\s+i\s+apply\b/i.test(lower) &&
+            /\b(background|major|degree|undergraduate)\b/i.test(lower));
+    return guidanceSupportZh || guidanceSupportEn;
+}
+function detectGuidanceSubtype(question, history) {
+    const trimmed = question.trim();
+    const lower = trimmed.toLowerCase();
+    if (isSupportGuidanceCue(trimmed, lower))
+        return "support";
+    const recentUser = [...(history ?? [])]
+        .filter((m) => m.role === "user")
+        .slice(-2);
+    for (const m of recentUser) {
+        const t = m.content.trim();
+        const l = t.toLowerCase();
+        if (isSupportGuidanceCue(t, l))
+            return "support";
+    }
+    return "academic";
+}
 function isGuidanceQuestion(trimmed, lower) {
     if (isDefinitionalPolicyQuestion(lower))
         return false;
-    const guidanceSupportZh = /怎么支付|如何支付|怎么付学费|如何付学费|付学费|交学费|家里穷|家里.{0,6}困难|经济困难|付不起学费|分期.{0,4}付/.test(trimmed);
-    const guidanceSupportEn = /\bhow\s+(do|can)\s+i\s+pay\b|\bcan'?t\s+afford\b|\bafford\s+to\s+pay\b/i.test(lower);
-    if (guidanceSupportZh || guidanceSupportEn)
+    if (isSupportGuidanceCue(trimmed, lower))
         return true;
     const guidanceEn = /\b(how\s+should\s+i\s+plan|how\s+do\s+i\s+arrange|what\s+should\s+i\s+take\s+first|first\s+semester|course\s+planning|curriculum\s+planning|how\s+should\s+i\s+schedule\s+my\s+classes)\b/i.test(lower) ||
         /\b(plan|planning|arrange|schedul(e|ing)|pick\s+(my\s+)?courses|choose\s+(my\s+)?courses|what\s+should\s+i\s+take|which\s+(class|classes|course|courses)\b|second\s+semester|order\s+of\s+courses|course\s+sequence|recommended\s+sequence|curriculum|pathway|roadmap|how\s+to\s+plan|help\s+me\s+plan)\b/i.test(lower);
@@ -373,7 +432,8 @@ export async function answerAmuQuestion(question, rawHistory) {
     }
     const client = new OpenAI({ apiKey });
     const chunks = await getKnowledgeChunks();
-    const retrievalQuery = await rewriteQuestionForRetrieval(client, q, history);
+    const guidanceSubtype = intent === "guidance" ? detectGuidanceSubtype(q, history) : undefined;
+    const retrievalQuery = await rewriteQuestionForRetrieval(client, q, history, intent, guidanceSubtype);
     const embedRes = await client.embeddings.create({
         model: "text-embedding-3-small",
         input: retrievalQuery,
@@ -391,7 +451,9 @@ export async function answerAmuQuestion(question, rawHistory) {
     const contextBlock = buildContextBlock(top);
     const langLine = languageInstructionForLlm(q);
     const systemPrompt = intent === "guidance"
-        ? `${GUIDANCE_SYSTEM_PROMPT_BASE}\n\n${langLine}`
+        ? guidanceSubtype === "support"
+            ? `${GUIDANCE_SUPPORT_SYSTEM_PROMPT_BASE}\n\n${langLine}`
+            : `${GUIDANCE_ACADEMIC_SYSTEM_PROMPT_BASE}\n\n${langLine}`
         : `${STRICT_SYSTEM_PROMPT_BASE}\n\n${langLine}`;
     const historyPrefix = intent === "guidance" && history && history.length > 0
         ? `${formatRecentConversationBlock(history)}\n\n`
@@ -418,8 +480,8 @@ ${q}`;
         temperature: intent === "guidance" ? 0.35 : 0.2,
     });
     let answer = completion.choices[0]?.message?.content?.trim() ?? "(no response)";
-    if (intent === "guidance") {
-        answer = applyGuidanceFallbackIfNeeded(answer, q);
+    if (intent === "guidance" && guidanceSubtype !== undefined) {
+        answer = applyGuidanceFallbackIfNeeded(answer, q, guidanceSubtype);
     }
     return {
         question: q,
