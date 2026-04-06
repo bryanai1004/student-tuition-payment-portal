@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import {
+  adminSchedulingQueryString,
+  applyAdminSchedulingToSearchParams,
+} from '../../lib/adminSchedulingSearchParams'
 import { AdminTime12hFields } from '../../components/admin/AdminTime12hFields'
 import {
   createAdminCourseSection,
@@ -85,6 +89,12 @@ export function AdminCourseSectionsPage() {
   /** Bumped after create/update/delete so the sections query re-runs without changing term/course. */
   const [listVersion, setListVersion] = useState(0)
 
+  const resetForm = useCallback(() => {
+    setForm(emptyForm())
+    setEditingId(null)
+    setFormMessage(null)
+  }, [])
+
   useEffect(() => {
     const ac = new AbortController()
     ;(async () => {
@@ -96,11 +106,37 @@ export function AdminCourseSectionsPage() {
         if (ac.signal.aborted) return
         setTerms(t)
         setCourses(c)
-        setAcademicTermId((prev) =>
-          prev === '' && t.length > 0 ? t[0].id : prev,
-        )
-        setCourseCode((prev) =>
-          prev === '' && c.length > 0 ? c[0].code : prev,
+
+        const sp = new URLSearchParams(window.location.search)
+        const urlTerm = sp.get('term')?.trim() ?? ''
+        const urlCourse = sp.get('course')?.trim() ?? ''
+        const urlQ = sp.get('q') ?? ''
+
+        const nextTerm =
+          urlTerm && t.some((x) => x.id === urlTerm)
+            ? urlTerm
+            : t.length > 0
+              ? t[0].id
+              : ''
+        const nextCourse =
+          urlCourse && c.some((x) => x.code === urlCourse)
+            ? urlCourse
+            : c.length > 0
+              ? c[0].code
+              : ''
+
+        setAcademicTermId(nextTerm)
+        setCourseCode(nextCourse)
+        setCourseSearch(urlQ)
+
+        setSearchParams(
+          (prev) =>
+            applyAdminSchedulingToSearchParams(prev, {
+              term: nextTerm,
+              course: nextCourse,
+              q: urlQ,
+            }),
+          { replace: true },
         )
       } catch (e) {
         if (ac.signal.aborted) return
@@ -112,7 +148,7 @@ export function AdminCourseSectionsPage() {
       }
     })()
     return () => ac.abort()
-  }, [])
+  }, [setSearchParams])
 
   useEffect(() => {
     const tid = academicTermId.trim()
@@ -172,12 +208,6 @@ export function AdminCourseSectionsPage() {
     return [selected, ...filteredCoursesForSelect]
   }, [sortedCourses, filteredCoursesForSelect, courseCode])
 
-  function resetForm() {
-    setForm(emptyForm())
-    setEditingId(null)
-    setFormMessage(null)
-  }
-
   const beginEdit = useCallback((row: AdminCourseSection) => {
     setEditingId(row.id)
     const parsed = parseStoredWeekdaysToFullNames(row.weekday)
@@ -196,30 +226,50 @@ export function AdminCourseSectionsPage() {
     setFormMessage(null)
   }, [])
 
-  /**
-   * Timetable deep link: ?term=&course=&edit=
-   * Applies term/course first; waits for sections when edit is present; then strips query params.
-   */
+  /** Browser back/forward and in-app links: keep selects aligned with URL (term/course/q are source of truth). */
   useEffect(() => {
     if (terms == null || courses == null) return
     const t = searchParams.get('term')?.trim() ?? ''
     const c = searchParams.get('course')?.trim() ?? ''
+    const q = searchParams.get('q') ?? ''
+    const termOk = t && terms.some((x) => x.id === t) ? t : null
+    const courseOk = c && courses.some((x) => x.code === c) ? c : null
+
+    let shouldResetForm = false
+    if (termOk != null && termOk !== academicTermId.trim()) {
+      setAcademicTermId(termOk)
+      shouldResetForm = true
+    }
+    if (courseOk != null && courseOk !== courseCode.trim()) {
+      setCourseCode(courseOk)
+      shouldResetForm = true
+    }
+    if (q !== courseSearch) {
+      setCourseSearch(q)
+    }
+    if (shouldResetForm) resetForm()
+  }, [
+    searchParams,
+    terms,
+    courses,
+    academicTermId,
+    courseCode,
+    courseSearch,
+    resetForm,
+  ])
+
+  /**
+   * Deep link: ?edit= — open editor once sections are loaded. Only removes `edit`; keeps term/course in the URL.
+   */
+  useEffect(() => {
+    if (terms == null || courses == null) return
     const editRaw = searchParams.get('edit')?.trim() ?? ''
-    if (t === '' && c === '' && editRaw === '') return
+    if (editRaw === '') return
 
-    if (t !== '' && terms.some((x) => x.id === t)) {
-      setAcademicTermId(t)
-    }
-    if (c !== '' && courses.some((x) => x.code === c)) {
-      setCourseCode(c)
-    }
-
-    const stripSchedulingQs = () => {
+    const stripEditOnly = () => {
       setSearchParams(
         (p) => {
           const n = new URLSearchParams(p)
-          n.delete('term')
-          n.delete('course')
           n.delete('edit')
           return n
         },
@@ -227,16 +277,13 @@ export function AdminCourseSectionsPage() {
       )
     }
 
-    if (editRaw === '') {
-      if (t !== '' || c !== '') stripSchedulingQs()
-      return
-    }
-
     const id = Number(editRaw)
     if (!Number.isInteger(id) || id <= 0) {
-      stripSchedulingQs()
+      stripEditOnly()
       return
     }
+    const t = searchParams.get('term')?.trim() ?? ''
+    const c = searchParams.get('course')?.trim() ?? ''
     if (t !== '' && academicTermId.trim() !== t) return
     if (c !== '' && courseCode.trim() !== c) return
     if (sectionsLoading || sections == null) return
@@ -246,11 +293,11 @@ export function AdminCourseSectionsPage() {
         ? sections.find((s) => s.id === id && s.course_code === c)
         : sections.find((s) => s.id === id)
     if (row == null) {
-      stripSchedulingQs()
+      stripEditOnly()
       return
     }
     beginEdit(row)
-    stripSchedulingQs()
+    stripEditOnly()
   }, [
     terms,
     courses,
@@ -262,6 +309,19 @@ export function AdminCourseSectionsPage() {
     setSearchParams,
     beginEdit,
   ])
+
+  function pushSchedulingContext(
+    next: { term: string; course: string; q: string },
+    options?: { clearEdit?: boolean },
+  ) {
+    setSearchParams(
+      (prev) =>
+        applyAdminSchedulingToSearchParams(prev, next, {
+          clearEdit: options?.clearEdit ?? true,
+        }),
+      { replace: true },
+    )
+  }
 
   const weekdayStorage = (): string | null => {
     const s = selectedWeekdaysToStorage(form.weekdays)
@@ -395,7 +455,17 @@ export function AdminCourseSectionsPage() {
         </h1>
         <div className="admin-page__toolbar-actions admin-page__toolbar-actions--wrap">
           <Link
-            to="/admin/course-sections/timetable"
+            to={{
+              pathname: '/admin/course-sections/timetable',
+              search: (() => {
+                const qs = adminSchedulingQueryString({
+                  term: academicTermId,
+                  course: courseCode,
+                  q: courseSearch,
+                })
+                return qs ? `?${qs}` : ''
+              })(),
+            }}
             className="portal-btn portal-btn--secondary portal-btn--compact"
           >
             View Timetable
@@ -406,7 +476,13 @@ export function AdminCourseSectionsPage() {
               className="admin-input"
               value={academicTermId}
               onChange={(e) => {
-                setAcademicTermId(e.target.value)
+                const v = e.target.value
+                setAcademicTermId(v)
+                pushSchedulingContext({
+                  term: v,
+                  course: courseCode,
+                  q: courseSearch,
+                })
                 resetForm()
               }}
               disabled={terms == null || terms.length === 0}
@@ -430,7 +506,18 @@ export function AdminCourseSectionsPage() {
                 type="search"
                 className="admin-input admin-input--search"
                 value={courseSearch}
-                onChange={(e) => setCourseSearch(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setCourseSearch(v)
+                  pushSchedulingContext(
+                    {
+                      term: academicTermId,
+                      course: courseCode,
+                      q: v,
+                    },
+                    { clearEdit: false },
+                  )
+                }}
                 placeholder="Code or English title…"
                 aria-label="Filter courses by code or title"
                 disabled={sortedCourses.length === 0}
@@ -442,7 +529,13 @@ export function AdminCourseSectionsPage() {
                 className="admin-input admin-input--wide"
                 value={courseCode}
                 onChange={(e) => {
-                  setCourseCode(e.target.value)
+                  const v = e.target.value
+                  setCourseCode(v)
+                  pushSchedulingContext({
+                    term: academicTermId,
+                    course: v,
+                    q: courseSearch,
+                  })
                   resetForm()
                 }}
                 disabled={sortedCourses.length === 0}

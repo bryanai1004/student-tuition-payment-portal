@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import { applyAdminSchedulingToSearchParams } from '../../lib/adminSchedulingSearchParams'
 import { AdminCourseSectionDetailModal } from '../../components/admin/AdminCourseSectionDetailModal'
 import {
   fetchAcademicTerms,
@@ -33,6 +34,7 @@ const DAY_HEADERS: { full: WeekdayFull; label: string }[] = [
 ]
 
 export function AdminSchedulingTimetablePage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [terms, setTerms] = useState<AcademicTerm[] | null>(null)
   const [academicTermId, setAcademicTermId] = useState('')
   const [sections, setSections] = useState<AdminCourseSection[] | null>(null)
@@ -50,8 +52,35 @@ export function AdminSchedulingTimetablePage() {
         const t = await fetchAcademicTerms({ signal: ac.signal })
         if (ac.signal.aborted) return
         setTerms(t)
-        setAcademicTermId((prev) =>
-          prev === '' && t.length > 0 ? t[0].id : prev,
+
+        const sp = new URLSearchParams(window.location.search)
+        const urlTerm = sp.get('term')?.trim() ?? ''
+        const urlCourse = sp.get('course')?.trim() ?? ''
+        const urlQ = sp.get('q') ?? ''
+
+        const nextTerm =
+          urlTerm && t.some((x) => x.id === urlTerm)
+            ? urlTerm
+            : t.length > 0
+              ? t[0].id
+              : ''
+
+        setAcademicTermId(nextTerm)
+
+        setSearchParams(
+          (prev) => {
+            const merged = applyAdminSchedulingToSearchParams(
+              prev,
+              {
+                term: nextTerm,
+                course: urlCourse,
+                q: urlQ,
+              },
+              { clearEdit: false },
+            )
+            return merged
+          },
+          { replace: true },
         )
       } catch (e) {
         if (ac.signal.aborted) return
@@ -62,7 +91,15 @@ export function AdminSchedulingTimetablePage() {
       }
     })()
     return () => ac.abort()
-  }, [])
+  }, [setSearchParams])
+
+  useEffect(() => {
+    if (terms == null || terms.length === 0) return
+    const t = searchParams.get('term')?.trim() ?? ''
+    const termOk = t && terms.some((x) => x.id === t) ? t : null
+    if (termOk == null) return
+    setAcademicTermId((prev) => (termOk !== prev.trim() ? termOk : prev))
+  }, [searchParams, terms])
 
   useEffect(() => {
     const tid = academicTermId.trim()
@@ -123,6 +160,8 @@ export function AdminSchedulingTimetablePage() {
   const termCatalogLabel =
     terms?.find((t) => t.id === academicTermId)?.term_label ?? null
 
+  const timetableReturnSearch = searchParams.toString()
+
   return (
     <main className="admin-page">
       <div className="admin-page__toolbar">
@@ -131,7 +170,10 @@ export function AdminSchedulingTimetablePage() {
         </h1>
         <div className="admin-page__toolbar-actions admin-page__toolbar-actions--wrap">
           <Link
-            to="/admin/course-sections"
+            to={{
+              pathname: '/admin/course-sections',
+              search: timetableReturnSearch ? `?${timetableReturnSearch}` : '',
+            }}
             className="portal-btn portal-btn--secondary portal-btn--compact"
           >
             Back to Course Sections
@@ -141,7 +183,23 @@ export function AdminSchedulingTimetablePage() {
             <select
               className="admin-input"
               value={academicTermId}
-              onChange={(e) => setAcademicTermId(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value
+                setAcademicTermId(v)
+                setSearchParams(
+                  (prev) =>
+                    applyAdminSchedulingToSearchParams(
+                      prev,
+                      {
+                        term: v,
+                        course: prev.get('course')?.trim() ?? '',
+                        q: prev.get('q') ?? '',
+                      },
+                      { clearEdit: false },
+                    ),
+                  { replace: true },
+                )
+              }}
               disabled={terms == null || terms.length === 0}
               aria-label="Academic term"
             >
@@ -252,6 +310,7 @@ export function AdminSchedulingTimetablePage() {
           dayColumnLabel={detail.dayLabel}
           termCatalogLabel={termCatalogLabel}
           academicTermId={academicTermId.trim() || null}
+          returnSearch={timetableReturnSearch}
           onClose={() => setDetail(null)}
         />
       )}

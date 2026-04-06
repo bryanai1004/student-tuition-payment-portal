@@ -12,6 +12,8 @@ type Props = {
   termCatalogLabel?: string | null
   /** Current timetable term filter — enables deep link to edit on Course Sections */
   academicTermId?: string | null
+  /** Current page query string (no `?`) — preserved on links back to Course Sections */
+  returnSearch?: string
   onClose: () => void
 }
 
@@ -29,6 +31,7 @@ export function AdminCourseSectionDetailModal({
   dayColumnLabel,
   termCatalogLabel,
   academicTermId,
+  returnSearch = '',
   onClose,
 }: Props) {
   if (section == null) return null
@@ -79,7 +82,17 @@ export function AdminCourseSectionDetailModal({
             academicTermId !== '' &&
             section.course_code.trim() !== '' && (
               <Link
-                to={`/admin/course-sections?term=${encodeURIComponent(academicTermId)}&course=${encodeURIComponent(section.course_code.trim())}&edit=${section.id}`}
+                to={{
+                  pathname: '/admin/course-sections',
+                  search: (() => {
+                    const n = new URLSearchParams(returnSearch)
+                    n.set('term', academicTermId)
+                    n.set('course', section.course_code.trim())
+                    n.set('edit', String(section.id))
+                    const s = n.toString()
+                    return s ? `?${s}` : ''
+                  })(),
+                }}
                 className="portal-btn portal-btn--secondary portal-btn--compact"
                 onClick={onClose}
               >
@@ -87,7 +100,10 @@ export function AdminCourseSectionDetailModal({
               </Link>
             )}
           <Link
-            to="/admin/course-sections"
+            to={{
+              pathname: '/admin/course-sections',
+              search: returnSearch.trim() ? `?${returnSearch.trim()}` : '',
+            }}
             className="portal-btn portal-btn--secondary portal-btn--compact"
             onClick={onClose}
           >
