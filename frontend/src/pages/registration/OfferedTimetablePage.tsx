@@ -37,6 +37,11 @@ const DAY_HEADERS: { full: WeekdayFull; label: string }[] = [
   { full: 'Friday', label: 'Friday' },
 ]
 
+function cellText(value: string | number | null | undefined): string {
+  if (value == null) return ''
+  return String(value).trim()
+}
+
 function isSectionInBin(items: CourseBinItem[], sec: AdminCourseSection): boolean {
   const k = courseBinSectionKey(sec.course_code, sec.section_code)
   return items.some((x) => courseBinSectionKey(x.course_code, x.section) === k)
