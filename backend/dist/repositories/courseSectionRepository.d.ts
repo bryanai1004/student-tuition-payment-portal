@@ -21,6 +21,8 @@ export type CourseSectionDetail = {
         full_name: string | null;
     }>;
 };
+/** Shared by section rows and course-level open-registration rollups. */
+export declare function parseEnrolledStudentsJson(raw: unknown): CourseSectionDetail["enrolled_students"];
 export declare function mapCourseSectionRow(row: RowDataPacket): CourseSectionDetail;
 export type CourseSectionCreateInput = {
     course_code: string;
@@ -59,6 +61,13 @@ export type CourseSectionCountByCourse = {
     course_code: string;
     section_count: number;
 };
+/** Course-level `portal_enrollments` counts (not tied to `section_code`). */
+export type PortalEnrollmentRollupByCourse = {
+    course_code: string;
+    enrolled_count: number;
+    enrolled_students?: CourseSectionDetail["enrolled_students"];
+};
+export declare function listPortalEnrollmentRollupsByCourseForTermYear(term: string, year: number): Promise<PortalEnrollmentRollupByCourse[]>;
 export declare function countCourseSectionsByCourseForTermYear(term: string, year: number): Promise<CourseSectionCountByCourse[]>;
 export declare function createCourseSection(input: CourseSectionCreateInput): Promise<CourseSectionDetail>;
 /**

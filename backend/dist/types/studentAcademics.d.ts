@@ -18,7 +18,8 @@ export type StudentAcademicCourseRecord = {
     grade: string | null;
     numericGrade: number | null;
     status: StudentAcademicCourseStatus;
-    source: "marks" | "clinic";
+    /** `portal` = course-level `portal_enrollments` (no fabricated grades). */
+    source: "marks" | "clinic" | "portal";
 };
 export type StudentAcademicsCurrentTerm = {
     term: string;

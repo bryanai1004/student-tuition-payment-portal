@@ -1,1 +1,1 @@
-{"version":3,"file":"studentAcademicsService.d.ts","sourceRoot":"","sources":["../../src/services/studentAcademicsService.ts"],"names":[],"mappings":"AAWA,OAAO,KAAK,EAAE,wBAAwB,EAAE,MAAM,8BAA8B,CAAC;AA0F7E,wBAAsB,0BAA0B,CAC9C,SAAS,EAAE,MAAM,GAChB,OAAO,CAAC,wBAAwB,CAAC,CAkDnC"}
+{"version":3,"file":"studentAcademicsService.d.ts","sourceRoot":"","sources":["../../src/services/studentAcademicsService.ts"],"names":[],"mappings":"AAcA,OAAO,KAAK,EAAE,wBAAwB,EAAE,MAAM,8BAA8B,CAAC;AA2E7E,wBAAsB,0BAA0B,CAC9C,SAAS,EAAE,MAAM,GAChB,OAAO,CAAC,wBAAwB,CAAC,CAsInC"}

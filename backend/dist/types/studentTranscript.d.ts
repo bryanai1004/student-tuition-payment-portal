@@ -13,7 +13,7 @@ export type StudentTranscriptRow = {
     grade: string | null;
     numericGrade: number | null;
     credits: number | null;
-    source: "marks" | "clinic";
+    source: "marks" | "clinic" | "portal";
     /** Present when rows are built via unified academic course records (same semantics as academics API). */
     status?: StudentAcademicCourseStatus;
     /** True only when `status === "completed"`; feedback UI not implemented yet. */

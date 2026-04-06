@@ -8,7 +8,8 @@ function nullableString(v) {
         return v.toISOString();
     return String(v);
 }
-function parseEnrolledStudentsJson(raw) {
+/** Shared by section rows and course-level open-registration rollups. */
+export function parseEnrolledStudentsJson(raw) {
     if (raw == null || raw === "")
         return undefined;
     let arr;
@@ -177,6 +178,39 @@ export async function listCourseSectionsWithEnrollmentAggregates(term, year, opt
     const params = cc !== "" ? [t, year, cc] : [t, year];
     const [rows] = await pool.query(sql, params);
     return rows.map((r) => mapCourseSectionRow(r));
+}
+export async function listPortalEnrollmentRollupsByCourseForTermYear(term, year) {
+    const sql = `
+    SELECT
+      pc.course_code AS rollup_course_code,
+      COUNT(DISTINCT e.student_external_id) AS enrolled_count,
+      JSON_ARRAYAGG(
+        JSON_OBJECT(
+          'student_external_id', e.student_external_id,
+          'full_name', ps.full_name
+        )
+      ) AS enrolled_students_json
+    FROM portal_enrollments e
+    INNER JOIN portal_courses pc ON pc.course_id = e.course_id
+    LEFT JOIN portal_students ps ON ps.student_external_id = e.student_external_id
+    WHERE e.term COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.year = ?
+    GROUP BY pc.course_code
+    ORDER BY pc.course_code ASC
+  `;
+    const [rows] = await pool.query(sql, [term.trim(), year]);
+    return rows.map((r) => {
+        const code = String(r.rollup_course_code ?? "").trim();
+        const enrolled_students = parseEnrolledStudentsJson(r.enrolled_students_json);
+        return {
+            course_code: code,
+            enrolled_count: Number(r.enrolled_count ?? 0),
+            ...(enrolled_students != null && enrolled_students.length > 0
+                ? { enrolled_students }
+                : {}),
+        };
+    });
 }
 export async function countCourseSectionsByCourseForTermYear(term, year) {
     const sql = `

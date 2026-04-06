@@ -86,6 +86,33 @@ export declare function courseRecordToEnrollmentItem(r: StudentAcademicCourseRec
 }): StudentAcademicsEnrollmentItem;
 export declare function academicCourseRecordToTranscriptPreviewRow(r: StudentAcademicCourseRecord): StudentTranscriptRow;
 export declare function sortTranscriptPreviewRecords(rows: StudentAcademicCourseRecord[]): void;
+/** Prefer the newer of legacy registration vs latest portal enrollment (by year, then term). */
+export declare function pickNewerRegistrationAnchor(legacy: {
+    term: string;
+    year: number;
+} | null, portal: {
+    term: string;
+    year: number;
+} | null): {
+    term: string;
+    year: number;
+} | null;
+export declare function portalEnrollmentRowToAcademicCourseRecord(studentId: string, row: {
+    course_code: string;
+    course_title_raw: string;
+    term: string;
+    year: number;
+    units: number | null;
+    weekday: string | null;
+    start_time: unknown;
+    end_time: unknown;
+    instructor: string | null;
+}, courseTitle: string, activeTerm: {
+    term: string;
+    year: number;
+} | null): StudentAcademicCourseRecord;
+/** Skip a portal row when legacy marks already show a completed grade for the same course/term. */
+export declare function legacyCompletedBlocksPortalRow(legacyRecords: StudentAcademicCourseRecord[], courseCode: string, term: string, year: number): boolean;
 /** Legacy account `scheduleRows` from normalized academic records (marks-sourced rows). */
 export declare function scheduleRowFromAcademicCourseRecord(r: StudentAcademicCourseRecord): ScheduleRow;
 export declare function scheduleRowsFromAcademicCourseRecords(records: StudentAcademicCourseRecord[]): ScheduleRow[];

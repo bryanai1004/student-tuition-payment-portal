@@ -29,4 +29,6 @@ export declare function listMarksForStudent(pool: Pool, studentId: string): Prom
  * `marks` rows for one student and quarter (legacy schedule / enrollment-of-record).
  */
 export declare function listMarksForStudentTerm(pool: Pool, studentId: string, term: string, year: number): Promise<MarksRow[]>;
+/** Display name from legacy `students` when the student has no `marks` rows yet. */
+export declare function getLegacyStudentDisplayName(pool: Pool, studentId: string): Promise<string | null>;
 //# sourceMappingURL=studentAcademicsRepository.d.ts.map

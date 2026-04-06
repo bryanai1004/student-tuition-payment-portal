@@ -6,6 +6,12 @@ export type AdminOpenRegistrationCourseRow = {
     termId: string;
     termLabel: string;
     openSections: number;
+    /** Distinct students in `portal_enrollments` for this course + term (course-level, not per section). */
+    enrolledCount: number;
+    enrolledStudents?: Array<{
+        student_external_id: string;
+        full_name: string | null;
+    }>;
     registrationStatus: "Open" | "Closed";
 };
 /**

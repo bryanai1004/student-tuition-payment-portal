@@ -318,6 +318,7 @@ export function academicCourseRecordToTranscriptPreviewRow(r) {
         feedbackEligible: r.status === "completed",
     };
 }
+const SOURCE_SORT_RANK = { marks: 0, portal: 1, clinic: 2 };
 export function sortTranscriptPreviewRecords(rows) {
     rows.sort((a, b) => {
         if (b.year !== a.year)
@@ -330,10 +331,54 @@ export function sortTranscriptPreviewRecords(rows) {
         });
         if (c !== 0)
             return c;
-        if (a.source === b.source)
-            return 0;
-        return a.source === "marks" ? -1 : 1;
+        return SOURCE_SORT_RANK[a.source] - SOURCE_SORT_RANK[b.source];
     });
+}
+/** Prefer the newer of legacy registration vs latest portal enrollment (by year, then term). */
+export function pickNewerRegistrationAnchor(legacy, portal) {
+    if (legacy == null)
+        return portal;
+    if (portal == null)
+        return legacy;
+    if (legacy.year !== portal.year) {
+        return legacy.year > portal.year ? legacy : portal;
+    }
+    return termSortOrder(legacy.term) >= termSortOrder(portal.term)
+        ? legacy
+        : portal;
+}
+export function portalEnrollmentRowToAcademicCourseRecord(studentId, row, courseTitle, activeTerm) {
+    const status = inferAcademicCourseStatus({
+        term: row.term,
+        year: row.year,
+        activeTerm,
+        gradeDisplay: null,
+        numericGrade: null,
+    });
+    return {
+        studentId,
+        courseCode: row.course_code,
+        courseTitle,
+        term: row.term,
+        year: row.year,
+        credits: row.units,
+        instructor: nullableStr(row.instructor ?? ""),
+        days: row.weekday,
+        timeFrom: formatMysqlTime(row.start_time),
+        timeTo: formatMysqlTime(row.end_time),
+        grade: null,
+        numericGrade: null,
+        status,
+        source: "portal",
+    };
+}
+/** Skip a portal row when legacy marks already show a completed grade for the same course/term. */
+export function legacyCompletedBlocksPortalRow(legacyRecords, courseCode, term, year) {
+    const c = courseCode.trim().toLowerCase();
+    return legacyRecords.some((r) => r.year === year &&
+        termsMatch(r.term, term) &&
+        r.courseCode.trim().toLowerCase() === c &&
+        r.status === "completed");
 }
 /** Legacy account `scheduleRows` from normalized academic records (marks-sourced rows). */
 export function scheduleRowFromAcademicCourseRecord(r) {
