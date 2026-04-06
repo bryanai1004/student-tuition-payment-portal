@@ -1,5 +1,5 @@
 -- Optional seed examples for `academic_terms` (Spring / Summer / Fall 2026).
--- Pick `sequence_no` values that do not collide with existing rows.
+-- Idempotent upsert by `id` (safe to re-run). Adjust `sequence_no` / `status` if you already have rows.
 
 INSERT INTO academic_terms (
   id,
@@ -26,7 +26,7 @@ INSERT INTO academic_terms (
     NULL,
     NULL,
     NULL,
-    'planned',
+    'registration_open',
     1
   ),
   (
@@ -56,4 +56,16 @@ INSERT INTO academic_terms (
     NULL,
     'planned',
     1
-  );
+  )
+ON DUPLICATE KEY UPDATE
+  term_label = VALUES(term_label),
+  year = VALUES(year),
+  term_name = VALUES(term_name),
+  quarter_index = VALUES(quarter_index),
+  sequence_no = VALUES(sequence_no),
+  start_date = VALUES(start_date),
+  end_date = VALUES(end_date),
+  registration_open = VALUES(registration_open),
+  registration_close = VALUES(registration_close),
+  status = VALUES(status),
+  is_visible = VALUES(is_visible);

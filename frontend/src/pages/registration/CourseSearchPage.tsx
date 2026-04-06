@@ -317,6 +317,15 @@ export function CourseSearchPage() {
   sectionsByCodeRef.current = sectionsByCode
 
   useEffect(() => {
+    setSectionsByCode({})
+    setSectionsError({})
+    setSectionsLoading({})
+    setExpandedCourseCodes(new Set())
+    sectionsByCodeRef.current = {}
+    sectionsInflightRef.current.clear()
+  }, [registrationTermId])
+
+  useEffect(() => {
     let cancelled = false
 
     async function load() {
@@ -429,8 +438,13 @@ export function CourseSearchPage() {
     })
     try {
       const encoded = encodeURIComponent(code)
+      const tid = registrationTermId?.trim() ?? ''
+      const qs =
+        tid !== ''
+          ? `?academic_term_id=${encodeURIComponent(tid)}`
+          : ''
       const data: unknown = await fetchApiJson(
-        `/api/courses/${encoded}/sections`,
+        `/api/courses/${encoded}/sections${qs}`,
       )
       if (!Array.isArray(data)) {
         throw new Error('Unexpected sections response.')
@@ -448,7 +462,7 @@ export function CourseSearchPage() {
         return next
       })
     }
-  }, [])
+  }, [registrationTermId])
 
   function toggleCourseRow(courseCode: string) {
     const code = courseCode.trim()

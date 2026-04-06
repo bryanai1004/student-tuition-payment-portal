@@ -5,6 +5,11 @@ import {
   fetchRecentAcademicTerms,
   type AcademicTerm,
 } from '../../lib/api'
+import {
+  mergeTermOptions,
+  pickDefaultRegistrationTermId,
+  REGISTRATION_TERMS_LOAD_ERROR,
+} from './registrationTermSearch'
 
 const ACTIONS = [
   {
@@ -34,20 +39,6 @@ const ACTIONS = [
   },
 ] as const
 
-function mergeTermOptions(
-  recent: AcademicTerm[],
-  current: AcademicTerm | null,
-): AcademicTerm[] {
-  const byId = new Map<string, AcademicTerm>()
-  for (const t of recent) {
-    byId.set(t.id, t)
-  }
-  if (current && !byId.has(current.id)) {
-    byId.set(current.id, current)
-  }
-  return Array.from(byId.values()).sort((a, b) => b.sequence_no - a.sequence_no)
-}
-
 export function RegistrationHomePage() {
   const [recentTerms, setRecentTerms] = useState<AcademicTerm[]>([])
   const [currentTerm, setCurrentTerm] = useState<AcademicTerm | null>(null)
@@ -64,23 +55,40 @@ export function RegistrationHomePage() {
     const ac = new AbortController()
     setLoadState('loading')
     setLoadError(null)
-    ;(async () => {
-      try {
-        const [recent, current] = await Promise.all([
-          fetchRecentAcademicTerms(3, { signal: ac.signal }),
-          fetchCurrentAcademicTerm({ signal: ac.signal }),
-        ])
-        if (ac.signal.aborted) return
-        setRecentTerms(recent)
-        setCurrentTerm(current)
-        const defaultId =
-          current?.id ?? (recent.length > 0 ? recent[0]!.id : '')
-        setSelectedId(defaultId)
-        setLoadState('ready')
-      } catch (e) {
-        if (ac.signal.aborted) return
+    void (async () => {
+      const recentP = fetchRecentAcademicTerms(3, { signal: ac.signal })
+      const currentP = fetchCurrentAcademicTerm({ signal: ac.signal })
+      const [recentR, currentR] = await Promise.allSettled([recentP, currentP])
+      if (ac.signal.aborted) return
+
+      let recent: AcademicTerm[] = []
+      let current: AcademicTerm | null = null
+      let anyRejected = false
+
+      if (recentR.status === 'fulfilled') {
+        recent = recentR.value
+      } else {
+        anyRejected = true
+        console.error('[registration/home] recent terms failed', recentR.reason)
+      }
+      if (currentR.status === 'fulfilled') {
+        current = currentR.value
+      } else {
+        anyRejected = true
+        console.error('[registration/home] current term failed', currentR.reason)
+      }
+
+      setRecentTerms(recent)
+      setCurrentTerm(current)
+      const merged = mergeTermOptions(recent, current)
+      setSelectedId(pickDefaultRegistrationTermId(merged, current))
+
+      const haveAnyTerm = merged.length > 0
+      if (!haveAnyTerm && anyRejected) {
         setLoadState('error')
-        setLoadError(e instanceof Error ? e.message : 'Could not load terms.')
+        setLoadError(REGISTRATION_TERMS_LOAD_ERROR)
+      } else {
+        setLoadState('ready')
       }
     })()
     return () => ac.abort()
@@ -110,7 +118,7 @@ export function RegistrationHomePage() {
         ) : null}
         {loadState === 'ready' && options.length === 0 ? (
           <p className="portal-text-muted portal-registration-term-status" role="status">
-            No registration terms are currently available.
+            No academic terms available.
           </p>
         ) : null}
         {loadState === 'ready' && options.length > 0 ? (

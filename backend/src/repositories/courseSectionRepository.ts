@@ -97,15 +97,31 @@ export async function getCourseSectionById(
   return row ? normalizeRow(row) : null;
 }
 
+export type CourseSectionTermFilter = {
+  term: string;
+  year: number;
+};
+
 /**
  * Sections for a catalog course, from `course_sections` keyed by `course_code`.
+ * When `termFilter` is set, restricts rows to that legacy `term` + `year` (matches `academic_terms.term_name` / `year`).
  */
 export async function listCourseSectionsByCourseCode(
   courseCode: string,
+  termFilter?: CourseSectionTermFilter,
 ): Promise<CourseSectionDetail[]> {
+  const code = courseCode.trim();
+  if (termFilter) {
+    const sql = `${SECTION_SELECT} WHERE course_code = ? AND term = ? AND year = ? ORDER BY weekday ASC, start_time ASC`;
+    const [rows] = await pool.query<RowDataPacket[]>(sql, [
+      code,
+      termFilter.term.trim(),
+      termFilter.year,
+    ]);
+    return rows.map((r) => normalizeRow(r));
+  }
   const sql = `${SECTION_SELECT} WHERE course_code = ? ORDER BY year ASC, term ASC, weekday ASC, start_time ASC`;
-
-  const [rows] = await pool.query<RowDataPacket[]>(sql, [courseCode]);
+  const [rows] = await pool.query<RowDataPacket[]>(sql, [code]);
   return rows.map((r) => normalizeRow(r));
 }
 

@@ -4,40 +4,16 @@ import { BackToDashboardLink } from '../../components/BackToDashboardLink'
 import {
   fetchCurrentAcademicTerm,
   fetchRecentAcademicTerms,
-  readRegistrationTermIdFromSearch,
   type AcademicTerm,
 } from '../../lib/api'
 import { CourseBinProvider } from './CourseBinContext'
 import { RegistrationNav } from './RegistrationNav'
-
-function mergeTermOptions(
-  recent: AcademicTerm[],
-  current: AcademicTerm | null,
-): AcademicTerm[] {
-  const byId = new Map<string, AcademicTerm>()
-  for (const t of recent) {
-    byId.set(t.id, t)
-  }
-  if (current && !byId.has(current.id)) {
-    byId.set(current.id, current)
-  }
-  return Array.from(byId.values()).sort((a, b) => b.sequence_no - a.sequence_no)
-}
-
-function resolveSelectedTermId(
-  urlTerm: string | null,
-  options: AcademicTerm[],
-  current: AcademicTerm | null,
-): string {
-  const url = urlTerm?.trim() ?? ''
-  if (url !== '' && options.some((t) => t.id === url)) {
-    return url
-  }
-  if (current != null && options.some((t) => t.id === current.id)) {
-    return current.id
-  }
-  return options[0]?.id ?? ''
-}
+import {
+  mergeTermOptions,
+  readRegistrationTermIdFromSearch,
+  REGISTRATION_TERMS_LOAD_ERROR,
+  resolveSelectedRegistrationTermId,
+} from './registrationTermSearch'
 
 export function RegistrationLayout() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -55,20 +31,39 @@ export function RegistrationLayout() {
     const ac = new AbortController()
     setLoadState('loading')
     setLoadError(null)
-    ;(async () => {
-      try {
-        const [recent, current] = await Promise.all([
-          fetchRecentAcademicTerms(3, { signal: ac.signal }),
-          fetchCurrentAcademicTerm({ signal: ac.signal }),
-        ])
-        if (ac.signal.aborted) return
-        setRecentTerms(recent)
-        setCurrentTerm(current)
-        setLoadState('ready')
-      } catch (e) {
-        if (ac.signal.aborted) return
+    void (async () => {
+      const recentP = fetchRecentAcademicTerms(3, { signal: ac.signal })
+      const currentP = fetchCurrentAcademicTerm({ signal: ac.signal })
+      const [recentR, currentR] = await Promise.allSettled([recentP, currentP])
+      if (ac.signal.aborted) return
+
+      let recent: AcademicTerm[] = []
+      let current: AcademicTerm | null = null
+      let anyRejected = false
+
+      if (recentR.status === 'fulfilled') {
+        recent = recentR.value
+      } else {
+        anyRejected = true
+        console.error('[registration/layout] recent terms failed', recentR.reason)
+      }
+      if (currentR.status === 'fulfilled') {
+        current = currentR.value
+      } else {
+        anyRejected = true
+        console.error('[registration/layout] current term failed', currentR.reason)
+      }
+
+      setRecentTerms(recent)
+      setCurrentTerm(current)
+
+      const merged = mergeTermOptions(recent, current)
+      const haveAnyTerm = merged.length > 0
+      if (!haveAnyTerm && anyRejected) {
         setLoadState('error')
-        setLoadError(e instanceof Error ? e.message : 'Could not load terms.')
+        setLoadError(REGISTRATION_TERMS_LOAD_ERROR)
+      } else {
+        setLoadState('ready')
       }
     })()
     return () => ac.abort()
@@ -77,7 +72,11 @@ export function RegistrationLayout() {
   useEffect(() => {
     if (loadState !== 'ready') return
     const urlTerm = readRegistrationTermIdFromSearch(searchParams)
-    const resolvedId = resolveSelectedTermId(urlTerm, options, currentTerm)
+    const resolvedId = resolveSelectedRegistrationTermId(
+      urlTerm,
+      options,
+      currentTerm,
+    )
 
     if (options.length === 0) {
       if (searchParams.has('term')) {
@@ -110,13 +109,19 @@ export function RegistrationLayout() {
   }, [loadState, options, currentTerm, searchParams, setSearchParams])
 
   const urlTerm = readRegistrationTermIdFromSearch(searchParams)
-  const selectedTermId = resolveSelectedTermId(urlTerm, options, currentTerm)
+  const selectedTermId = resolveSelectedRegistrationTermId(
+    urlTerm,
+    options,
+    currentTerm,
+  )
 
   const termLinkSearch =
     selectedTermId.trim() !== '' ? `?term=${encodeURIComponent(selectedTermId.trim())}` : ''
 
+  const courseBinKey = selectedTermId.trim() !== '' ? selectedTermId.trim() : 'none'
+
   return (
-    <CourseBinProvider>
+    <CourseBinProvider key={courseBinKey}>
       <div className="portal-registration-module">
         <header className="portal-module-header">
           <BackToDashboardLink />
@@ -143,7 +148,7 @@ export function RegistrationLayout() {
             ) : null}
             {loadState === 'ready' && options.length === 0 ? (
               <p className="portal-text-muted portal-registration-layout-term__status" role="status">
-                No registration terms are currently available.
+                No academic terms available.
               </p>
             ) : null}
             {loadState === 'ready' && options.length > 0 ? (
