@@ -5,6 +5,7 @@ import { AIAssistantDockCat } from './AIAssistantPet'
 import { useAIAssistantMobileAnchor } from './AIAssistantMobileAnchorContext'
 import { useAIAssistantContext } from './AIAssistantProvider'
 import { useAIAssistantCatDragEnabled, useAIAssistantDockPosition } from './useAIAssistantDockPosition'
+import { useAIAssistantMinimizedBarDrag } from './useAIAssistantMinimizedBarDrag'
 import { useAIAssistantPanelLayout } from './useAIAssistantPanelLayout'
 import {
   useAIAssistantCatContextMenuEnabled,
@@ -18,6 +19,7 @@ export function AIAssistantLauncher() {
   const inputId = `${baseId}-input`
   const messagesRegionId = `${baseId}-messages`
   const dockRef = useRef<HTMLDivElement>(null)
+  const minimizedFloatRef = useRef<HTMLDivElement>(null)
   const { mobileDockAnchorEl } = useAIAssistantMobileAnchor()
 
   const dragEnabled = useAIAssistantCatDragEnabled()
@@ -44,6 +46,19 @@ export function AIAssistantLauncher() {
   } = useAIAssistantContext()
 
   const layout = useAIAssistantPanelLayout()
+
+  const minimizedDragEnabled = dragEnabled && !layout.isMobile
+  const {
+    mergedMinimizedWrapStyle,
+    onMinimizedBarPointerDown,
+    onMinimizedBarPointerMove,
+    onMinimizedBarPointerUp,
+    onMinimizedBarPointerCancel,
+    expandUsesPointerGesture,
+  } = useAIAssistantMinimizedBarDrag(minimizedFloatRef, expandPanel, {
+    dragEnabled: minimizedDragEnabled,
+    fallbackStyle: layout.desktopMinimizedWrapStyle,
+  })
 
   const mobileAnchorForDock = layout.isMobile ? mobileDockAnchorEl : null
 
@@ -141,14 +156,42 @@ export function AIAssistantLauncher() {
           </div>
         ) : (
           <div
+            ref={minimizedFloatRef}
             className="portal-ai-assistant-minimized-float"
-            style={layout.desktopMinimizedWrapStyle}
+            style={mergedMinimizedWrapStyle}
           >
-            <div className="portal-ai-assistant-minimized portal-ai-assistant-minimized--anchored">
+            <div
+              className={[
+                'portal-ai-assistant-minimized',
+                'portal-ai-assistant-minimized--anchored',
+                minimizedDragEnabled ? 'portal-ai-assistant-minimized--draggable' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onPointerDown={(e) => {
+                if (
+                  minimizedDragEnabled &&
+                  (e.target as HTMLElement).closest('.portal-ai-assistant-minimized__close')
+                ) {
+                  return
+                }
+                if (minimizedDragEnabled) onMinimizedBarPointerDown(e)
+              }}
+              onPointerMove={minimizedDragEnabled ? onMinimizedBarPointerMove : undefined}
+              onPointerUp={minimizedDragEnabled ? onMinimizedBarPointerUp : undefined}
+              onPointerCancel={minimizedDragEnabled ? onMinimizedBarPointerCancel : undefined}
+            >
               <button
                 type="button"
                 className="portal-ai-assistant-minimized__expand"
-                onClick={expandPanel}
+                onClick={
+                  expandUsesPointerGesture
+                    ? (ev) => {
+                        /* Pointer path expands in pointerup; keyboard activation uses detail 0 */
+                        if (ev.detail === 0) expandPanel()
+                      }
+                    : expandPanel
+                }
                 aria-label="Expand AMU AI Assist"
               >
                 <span className="portal-ai-assistant-minimized__title">
@@ -159,6 +202,9 @@ export function AIAssistantLauncher() {
               <button
                 type="button"
                 className="portal-ai-assistant-icon-btn portal-ai-assistant-minimized__close"
+                onPointerDown={(e) => {
+                  if (minimizedDragEnabled) e.stopPropagation()
+                }}
                 onClick={closePanel}
                 aria-label="Close chat panel"
               >

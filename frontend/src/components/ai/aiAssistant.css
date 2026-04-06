@@ -359,6 +359,11 @@
   line-height: 1.25;
 }
 
+.portal-ai-assistant-brand-title--minimized .portal-ai-assistant-brand-title__mark {
+  /* Match panel header optical balance with bold “AI Assist” */
+  margin-top: 1px;
+}
+
 .portal-ai-assistant-brand-title__mark {
   font-family: 'Cinzel', ui-serif, Georgia, 'Times New Roman', serif;
   font-weight: 500;
@@ -380,11 +385,12 @@
   color: var(--portal-ai-red);
 }
 
+/* Minimized bar: same emphasis as panel — portal red, bold */
 .portal-ai-assistant-brand-title--minimized .portal-ai-assistant-brand-title__rest {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-weight: 500;
-  color: #1f2937;
-  letter-spacing: 0.01em;
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: inherit;
+  color: var(--portal-ai-red);
 }
 
 .portal-ai-assistant-panel__header-actions {
@@ -831,6 +837,17 @@
 
 .portal-ai-assistant-minimized__close {
   border-radius: 50%;
+}
+
+.portal-ai-assistant-minimized--draggable {
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.portal-ai-assistant-minimized--draggable:active {
+  cursor: grabbing;
 }
 
 body.portal-ai-assistant--drag-resize {
