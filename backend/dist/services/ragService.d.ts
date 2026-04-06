@@ -14,7 +14,7 @@ export declare class RagQuestionValidationError extends Error {
     constructor(message: string);
 }
 /**
- * End-to-end AMU catalog RAG: embed question, retrieve top chunks, grounded chat completion.
+ * End-to-end AMU catalog RAG: intent routing, optional retrieval, grounded chat completion.
  */
 export declare function answerAmuQuestion(question: string): Promise<RagAnswerResult>;
 //# sourceMappingURL=ragService.d.ts.map
