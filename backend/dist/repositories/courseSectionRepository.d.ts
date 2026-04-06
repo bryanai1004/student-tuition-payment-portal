@@ -28,10 +28,15 @@ export type CourseSectionCreateInput = {
 };
 export type CourseSectionUpdateInput = Partial<CourseSectionCreateInput>;
 export declare function getCourseSectionById(id: number): Promise<CourseSectionDetail | null>;
+export type CourseSectionTermFilter = {
+    term: string;
+    year: number;
+};
 /**
  * Sections for a catalog course, from `course_sections` keyed by `course_code`.
+ * When `termFilter` is set, restricts rows to that legacy `term` + `year` (matches `academic_terms.term_name` / `year`).
  */
-export declare function listCourseSectionsByCourseCode(courseCode: string): Promise<CourseSectionDetail[]>;
+export declare function listCourseSectionsByCourseCode(courseCode: string, termFilter?: CourseSectionTermFilter): Promise<CourseSectionDetail[]>;
 export declare function createCourseSection(input: CourseSectionCreateInput): Promise<CourseSectionDetail>;
 /**
  * Applies a partial update. Returns `null` if the row does not exist.

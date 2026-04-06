@@ -164,12 +164,9 @@ export async function getAcademicTerms(_req, res) {
     }
     catch (e) {
         console.error("[academic-terms] list failed:", e);
-        const body = {
-            error: "Failed to list academic terms",
-        };
-        if (env.nodeEnv === "development")
-            body.message = devMessage(e);
-        res.status(500).json(body);
+        res.status(500).json({
+            error: "Unable to load academic terms.",
+        });
     }
 }
 export async function getAcademicTermsRecent(req, res) {
@@ -190,12 +187,9 @@ export async function getAcademicTermsRecent(req, res) {
     }
     catch (e) {
         console.error("[academic-terms/recent] failed:", e);
-        const body = {
-            error: "Failed to list recent academic terms",
-        };
-        if (env.nodeEnv === "development")
-            body.message = devMessage(e);
-        res.status(500).json(body);
+        res.status(500).json({
+            error: "Unable to load academic terms.",
+        });
     }
 }
 export async function getAcademicTermsCurrent(_req, res) {
@@ -205,12 +199,9 @@ export async function getAcademicTermsCurrent(_req, res) {
     }
     catch (e) {
         console.error("[academic-terms/current] failed:", e);
-        const body = {
-            error: "Failed to resolve current academic term",
-        };
-        if (env.nodeEnv === "development")
-            body.message = devMessage(e);
-        res.status(500).json(body);
+        res.status(500).json({
+            error: "Unable to load academic terms.",
+        });
     }
 }
 export async function postAdminAcademicTerm(req, res) {

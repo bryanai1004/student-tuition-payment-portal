@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import { getAcademicTermById } from "../repositories/academicTermRepository.js";
 import { listCoursesFromMysql } from "../repositories/courseRepository.js";
 import { getSectionsForCourseCode } from "../services/courseSectionService.js";
 function pathCourseCode(req) {
@@ -23,6 +24,14 @@ export async function getCourses(_req, res) {
         res.status(500).json(body);
     }
 }
+function parseAcademicTermIdQuery(req) {
+    const raw = req.query.academic_term_id;
+    const v = Array.isArray(raw) ? raw[0] : raw;
+    if (typeof v !== "string")
+        return null;
+    const t = v.trim();
+    return t === "" ? null : t;
+}
 export async function getCourseSections(req, res) {
     try {
         const code = pathCourseCode(req);
@@ -30,7 +39,17 @@ export async function getCourseSections(req, res) {
             res.status(400).json({ error: "Course code is required" });
             return;
         }
-        const sections = await getSectionsForCourseCode(code);
+        const termId = parseAcademicTermIdQuery(req);
+        let termFilter;
+        if (termId) {
+            const row = await getAcademicTermById(termId);
+            if (!row) {
+                res.status(400).json({ error: "Unknown academic term." });
+                return;
+            }
+            termFilter = { term: row.term_name, year: row.year };
+        }
+        const sections = await getSectionsForCourseCode(code, termFilter);
         res.json(sections);
     }
     catch (e) {

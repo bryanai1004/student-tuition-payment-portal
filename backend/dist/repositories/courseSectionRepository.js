@@ -61,10 +61,21 @@ export async function getCourseSectionById(id) {
 }
 /**
  * Sections for a catalog course, from `course_sections` keyed by `course_code`.
+ * When `termFilter` is set, restricts rows to that legacy `term` + `year` (matches `academic_terms.term_name` / `year`).
  */
-export async function listCourseSectionsByCourseCode(courseCode) {
+export async function listCourseSectionsByCourseCode(courseCode, termFilter) {
+    const code = courseCode.trim();
+    if (termFilter) {
+        const sql = `${SECTION_SELECT} WHERE course_code = ? AND term = ? AND year = ? ORDER BY weekday ASC, start_time ASC`;
+        const [rows] = await pool.query(sql, [
+            code,
+            termFilter.term.trim(),
+            termFilter.year,
+        ]);
+        return rows.map((r) => normalizeRow(r));
+    }
     const sql = `${SECTION_SELECT} WHERE course_code = ? ORDER BY year ASC, term ASC, weekday ASC, start_time ASC`;
-    const [rows] = await pool.query(sql, [courseCode]);
+    const [rows] = await pool.query(sql, [code]);
     return rows.map((r) => normalizeRow(r));
 }
 export async function createCourseSection(input) {

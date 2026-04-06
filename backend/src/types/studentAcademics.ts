@@ -90,3 +90,8 @@ export type StudentAcademicsResponse = {
   /** Full normalized rows (marks-only for this endpoint); derived lists above are views of this array. */
   courseRecords: StudentAcademicCourseRecord[];
 };
+
+
+
+
+

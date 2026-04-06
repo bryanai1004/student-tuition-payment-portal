@@ -1,6 +1,6 @@
 import { createCourseSection as insertCourseSection, deleteCourseSectionById, listCourseSectionsByCourseCode, updateCourseSection as patchCourseSection, } from "../repositories/courseSectionRepository.js";
-export async function getSectionsForCourseCode(courseCode) {
-    return listCourseSectionsByCourseCode(courseCode);
+export async function getSectionsForCourseCode(courseCode, termFilter) {
+    return listCourseSectionsByCourseCode(courseCode, termFilter);
 }
 export async function createCourseSection(input) {
     return insertCourseSection(input);
