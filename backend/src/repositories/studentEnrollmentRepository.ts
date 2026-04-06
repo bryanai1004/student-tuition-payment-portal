@@ -1,4 +1,4 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2";
+import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { pool } from "../lib/db.js";
 import {
   type CourseSectionDetail,
@@ -9,6 +9,104 @@ export type EnrollSectionInput = {
   course_code: string;
   section_code: string;
 };
+
+function isMysqlDupEntry(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    (e as { code: string }).code === "ER_DUP_ENTRY"
+  );
+}
+
+function inferPortalTypeFromLegacy(engName: string): "didactic" | "lab" | "clinical" | "other" {
+  const n = engName.toLowerCase();
+  if (/\blab(oratory)?\b/i.test(engName) || /\blab\b/.test(n)) return "lab";
+  if (n.includes("clinic") || n.includes("internship")) return "clinical";
+  return "didactic";
+}
+
+/**
+ * Resolves `portal_courses.course_id` for enrollment: exact `course_code` first, else one row
+ * from legacy `courses` plus a deterministic `LEGACY{sequenceNumber}` insert (idempotent on PK).
+ */
+async function resolvePortalCourseIdForEnrollment(
+  conn: PoolConnection,
+  courseCode: string,
+): Promise<{ ok: true; courseId: string } | { ok: false; error: string }> {
+  const code = courseCode.trim();
+
+  const [existing] = await conn.query<RowDataPacket[]>(
+    `SELECT course_id FROM portal_courses WHERE course_code = ? LIMIT 2`,
+    [code],
+  );
+  if (existing.length === 1) {
+    return { ok: true, courseId: String(existing[0]!.course_id) };
+  }
+  if (existing.length > 1) {
+    return {
+      ok: false,
+      error: `Course code ${code} matches multiple portal courses.`,
+    };
+  }
+
+  const [legacyRows] = await conn.query<RowDataPacket[]>(
+    `SELECT \`sequenceNumber\`, TRIM(code) AS legacy_code, eng_name, units
+     FROM courses
+     WHERE CONVERT(TRIM(code) USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?
+     LIMIT 2`,
+    [code],
+  );
+  if (legacyRows.length === 0) {
+    return {
+      ok: false,
+      error: `Course ${code} is not in the portal catalog (portal_courses).`,
+    };
+  }
+  if (legacyRows.length > 1) {
+    return {
+      ok: false,
+      error: `Course code ${code} matches multiple legacy catalog entries.`,
+    };
+  }
+
+  const leg = legacyRows[0]!;
+  const seq = Number(leg.sequenceNumber);
+  const courseId = `LEGACY${seq}`;
+  const titleRaw = leg.eng_name != null ? String(leg.eng_name).trim() : "";
+  const title = titleRaw !== "" ? titleRaw : code;
+  const units = leg.units != null ? leg.units : null;
+  const type = inferPortalTypeFromLegacy(titleRaw);
+
+  try {
+    await conn.query<ResultSetHeader>(
+      `INSERT INTO portal_courses (course_id, course_code, title, type, units, hours)
+       VALUES (?, ?, ?, ?, ?, NULL)`,
+      [courseId, code, title, type, units],
+    );
+  } catch (e: unknown) {
+    if (!isMysqlDupEntry(e)) throw e;
+  }
+
+  const [again] = await conn.query<RowDataPacket[]>(
+    `SELECT course_id FROM portal_courses WHERE course_code = ? LIMIT 2`,
+    [code],
+  );
+  if (again.length === 1) {
+    return { ok: true, courseId: String(again[0]!.course_id) };
+  }
+  if (again.length > 1) {
+    return {
+      ok: false,
+      error: `Course code ${code} matches multiple portal courses.`,
+    };
+  }
+
+  return {
+    ok: false,
+    error: `Could not resolve portal catalog row for ${code}.`,
+  };
+}
 
 /**
  * Validates each section against `course_sections` and `portal_courses`, then inserts
@@ -58,30 +156,21 @@ export async function enrollStudentInSections(
         };
       }
 
-      const [courseRows] = await conn.query<RowDataPacket[]>(
-        `SELECT course_id FROM portal_courses WHERE course_code = ? LIMIT 2`,
-        [courseCode],
-      );
-      if (courseRows.length === 0) {
+      const resolved = await resolvePortalCourseIdForEnrollment(conn, courseCode);
+      if (!resolved.ok) {
         await conn.rollback();
-        return {
-          ok: false,
-          error: `Course ${courseCode} is not in the portal catalog (portal_courses).`,
-        };
+        return resolved;
       }
-      if (courseRows.length > 1) {
-        await conn.rollback();
-        return {
-          ok: false,
-          error: `Course code ${courseCode} matches multiple portal courses.`,
-        };
-      }
-
-      const courseId = String(courseRows[0]!.course_id);
+      const courseId = resolved.courseId;
 
       const [[exists]] = await conn.query<RowDataPacket[]>(
         `SELECT 1 AS ok FROM portal_enrollments
-         WHERE student_external_id = ? AND course_id = ? AND term = ? AND year = ?
+         WHERE student_external_id COLLATE utf8mb4_unicode_ci =
+               CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+           AND course_id = ?
+           AND term COLLATE utf8mb4_unicode_ci =
+               CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+           AND year = ?
          LIMIT 1`,
         [sid, courseId, trimmedTerm, year],
       );
@@ -146,11 +235,15 @@ export async function listStudentEnrolledSectionRows(
         cs_inner.notes,
         ROW_NUMBER() OVER (PARTITION BY cs_inner.course_code ORDER BY cs_inner.id) AS rn
       FROM course_sections cs_inner
-      INNER JOIN portal_courses pc ON pc.course_code = cs_inner.course_code
+      INNER JOIN portal_courses pc
+        ON pc.course_code COLLATE utf8mb4_unicode_ci =
+           cs_inner.course_code COLLATE utf8mb4_unicode_ci
       INNER JOIN portal_enrollments e
         ON e.course_id = pc.course_id
-        AND e.student_external_id = ?
-        AND e.term = cs_inner.term
+        AND e.student_external_id COLLATE utf8mb4_unicode_ci =
+            CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+        AND e.term COLLATE utf8mb4_unicode_ci =
+            cs_inner.term COLLATE utf8mb4_unicode_ci
         AND e.year = cs_inner.year
       WHERE cs_inner.term = ? AND cs_inner.year = ?
     ) cs

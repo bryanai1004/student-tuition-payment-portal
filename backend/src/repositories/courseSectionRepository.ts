@@ -58,7 +58,13 @@ function parseEnrolledStudentsJson(
         fn == null || String(fn).trim() === "" ? null : String(fn).trim(),
     });
   }
-  return out.length > 0 ? out : undefined;
+  if (out.length === 0) return undefined;
+  out.sort((a, b) =>
+    a.student_external_id.localeCompare(b.student_external_id, undefined, {
+      sensitivity: "base",
+    }),
+  );
+  return out;
 }
 
 export function mapCourseSectionRow(row: RowDataPacket): CourseSectionDetail {
@@ -215,15 +221,16 @@ export async function listCourseSectionsWithEnrollmentAggregates(
             'student_external_id', e.student_external_id,
             'full_name', ps.full_name
           )
-          ORDER BY e.student_external_id
         ) AS enrolled_students_json
       FROM portal_enrollments e
       INNER JOIN portal_courses pc ON pc.course_id = e.course_id
       LEFT JOIN portal_students ps ON ps.student_external_id = e.student_external_id
       GROUP BY pc.course_code, e.term, e.year
     ) agg
-      ON agg.agg_course_code = cs.course_code
-      AND agg.agg_term = cs.term
+      ON agg.agg_course_code COLLATE utf8mb4_unicode_ci =
+         cs.course_code COLLATE utf8mb4_unicode_ci
+      AND agg.agg_term COLLATE utf8mb4_unicode_ci =
+          cs.term COLLATE utf8mb4_unicode_ci
       AND agg.agg_year = cs.year
     WHERE cs.term = ? AND cs.year = ?
     ${courseClause}
