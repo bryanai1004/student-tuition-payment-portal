@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent, Ref } from 'react'
 import type { AIAssistantAttachment, AIAssistantChatMessage } from '../../hooks/useAIAssistant'
+import { AIAssistantBrandTitle } from './AIAssistantBrandTitle'
 import { AIAssistantInput } from './AIAssistantInput'
 import { AIAssistantWelcomeMessage } from './AIAssistantWelcomeMessage'
 
@@ -73,10 +74,13 @@ export function AIAssistantPanel({
       >
         <div className="portal-ai-assistant-panel__titles">
           <h2 id="portal-ai-assistant-title" className="portal-ai-assistant-panel__title">
-            AMU AI Assistant
+            <AIAssistantBrandTitle variant="panel" />
           </h2>
         </div>
         <div className="portal-ai-assistant-panel__header-actions">
+          <button type="button" className="portal-ai-assistant-panel__header-text-btn" onClick={onClear}>
+            Clear chat
+          </button>
           <button
             type="button"
             className="portal-ai-assistant-icon-btn"
@@ -96,18 +100,15 @@ export function AIAssistantPanel({
         </div>
       </header>
 
-      <div className="portal-ai-assistant-panel__toolbar">
-        <div className="portal-ai-assistant-panel__toolbar-actions">
-          {catHidden && onShowCat ? (
+      {catHidden && onShowCat ? (
+        <div className="portal-ai-assistant-panel__toolbar">
+          <div className="portal-ai-assistant-panel__toolbar-actions">
             <button type="button" className="portal-ai-assistant-link-btn" onClick={onShowCat}>
               Show AMU AI Cat
             </button>
-          ) : null}
-          <button type="button" className="portal-ai-assistant-link-btn" onClick={onClear}>
-            Clear chat
-          </button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div
         ref={scrollRef}

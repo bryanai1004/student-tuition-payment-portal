@@ -304,15 +304,28 @@
 }
 
 .portal-portal-banner-inner {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
   box-sizing: border-box;
   min-height: var(--portal-portal-banner-height);
-  padding: 0 1.25rem;
+  padding: 0 max(1rem, env(safe-area-inset-left)) 0 max(1rem, env(safe-area-inset-right));
+}
+
+/* Mobile AI dock: right column of the banner grid (fixed dock aligns to this rect). */
+.portal-portal-banner__ai-dock-anchor {
+  grid-column: 3;
+  justify-self: end;
+  align-self: center;
+  width: 7rem;
+  min-height: 3.25rem;
+  height: 3.25rem;
+  pointer-events: none;
 }
 
 .portal-myamu-mark {
+  grid-column: 2;
+  justify-self: center;
   margin: 0;
   line-height: 1;
   font-size: clamp(1.45rem, 2.9vw, 1.75rem);
@@ -700,7 +713,8 @@
   }
 
   .portal-portal-banner-inner {
-    padding: 0 1rem;
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
     min-height: var(--portal-portal-banner-height);
   }
 
@@ -4562,25 +4576,9 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   font-weight: 700;
 }
 
-/* Reserves horizontal space on small screens so the fixed AI dock can align without covering the name. */
-.portal-dashboard-hero__ai-dock-anchor {
-  flex-shrink: 0;
-  width: 0;
-  height: 0;
-  overflow: visible;
-  pointer-events: none;
-}
-
 @media (max-width: 480px) {
   .portal-dashboard-hero__title-row {
     align-items: center;
-  }
-
-  .portal-dashboard-hero__ai-dock-anchor {
-    width: 118px;
-    min-height: 70px;
-    height: 70px;
-    align-self: center;
   }
 }
 

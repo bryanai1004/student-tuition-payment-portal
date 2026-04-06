@@ -1,5 +1,5 @@
 import { useId, useRef } from 'react'
-import { useLocation } from 'react-router-dom'
+import { AIAssistantBrandTitle } from './AIAssistantBrandTitle'
 import { AIAssistantPanel } from './AIAssistantPanel'
 import { AIAssistantDockCat } from './AIAssistantPet'
 import { useAIAssistantMobileAnchor } from './AIAssistantMobileAnchorContext'
@@ -13,18 +13,11 @@ import {
 } from './useAIAssistantPet'
 import './aiAssistant.css'
 
-function isDashboardPath(pathname: string) {
-  const p = pathname.split('?')[0].toLowerCase()
-  return p === '/dashboard' || p === '/dashboard/'
-}
-
 export function AIAssistantLauncher() {
   const baseId = useId()
   const inputId = `${baseId}-input`
   const messagesRegionId = `${baseId}-messages`
   const dockRef = useRef<HTMLDivElement>(null)
-  const { pathname } = useLocation()
-  const dashboardRoute = isDashboardPath(pathname)
   const { mobileDockAnchorEl } = useAIAssistantMobileAnchor()
 
   const dragEnabled = useAIAssistantCatDragEnabled()
@@ -52,8 +45,7 @@ export function AIAssistantLauncher() {
 
   const layout = useAIAssistantPanelLayout()
 
-  const mobileAnchorForDock =
-    layout.isMobile && dashboardRoute ? mobileDockAnchorEl : null
+  const mobileAnchorForDock = layout.isMobile ? mobileDockAnchorEl : null
 
   const {
     dockStyle,
@@ -101,7 +93,7 @@ export function AIAssistantLauncher() {
             onPointerMove={dragEnabled ? onDockPointerMove : undefined}
             onPointerUp={dragEnabled ? onDockPointerUp : undefined}
             onPointerCancel={dragEnabled ? onDockPointerCancel : undefined}
-            aria-label="Open AMU AI Assistant chat"
+            aria-label="Open AMU AI Assist"
             aria-haspopup="dialog"
           >
             <span className="portal-ai-assistant-launcher__icon" aria-hidden="true">
@@ -131,9 +123,11 @@ export function AIAssistantLauncher() {
               type="button"
               className="portal-ai-assistant-minimized__expand"
               onClick={expandPanel}
-              aria-label="Expand AMU AI Assistant chat"
+              aria-label="Expand AMU AI Assist"
             >
-              <span className="portal-ai-assistant-minimized__title">AMU AI Assistant</span>
+              <span className="portal-ai-assistant-minimized__title">
+                <AIAssistantBrandTitle variant="minimized" />
+              </span>
               <span className="portal-ai-assistant-minimized__hint">Tap to expand</span>
             </button>
             <button
@@ -155,9 +149,11 @@ export function AIAssistantLauncher() {
                 type="button"
                 className="portal-ai-assistant-minimized__expand"
                 onClick={expandPanel}
-                aria-label="Expand AMU AI Assistant chat"
+                aria-label="Expand AMU AI Assist"
               >
-                <span className="portal-ai-assistant-minimized__title">AMU AI Assistant</span>
+                <span className="portal-ai-assistant-minimized__title">
+                  <AIAssistantBrandTitle variant="minimized" />
+                </span>
                 <span className="portal-ai-assistant-minimized__hint">Tap to expand</span>
               </button>
               <button

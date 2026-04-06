@@ -143,7 +143,7 @@ export function AIAssistantDockCat({
         className="portal-ai-assistant-dock__cat-hit"
         role="button"
         tabIndex={0}
-        aria-label="Open AMU AI Assistant"
+        aria-label="Open AMU AI Assist"
         aria-haspopup={contextMenuEnabled ? 'menu' : undefined}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {

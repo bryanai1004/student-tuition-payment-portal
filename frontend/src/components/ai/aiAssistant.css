@@ -86,7 +86,7 @@
   right: max(0.75rem, env(safe-area-inset-right));
   bottom: auto;
   left: auto;
-  top: max(5.25rem, calc(env(safe-area-inset-top) + 4.25rem));
+  top: max(0.75rem, calc(env(safe-area-inset-top) + var(--portal-header-height, 9rem) + 0.25rem));
 }
 
 .portal-ai-assistant-dock__cat-hit:focus-visible {
@@ -326,12 +326,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.65rem 1rem;
-  background: linear-gradient(
-    180deg,
-    rgba(242, 195, 0, 0.14) 0%,
-    rgba(255, 255, 255, 0) 100%
-  );
+  padding: 0.55rem 0.85rem;
+  background: #fafafa;
   border-bottom: 1px solid var(--portal-ai-border);
 }
 
@@ -341,16 +337,72 @@
 
 .portal-ai-assistant-panel__title {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--portal-ai-red);
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1.2;
+  letter-spacing: normal;
+}
+
+.portal-ai-assistant-brand-title {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.portal-ai-assistant-brand-title--panel {
+  font-size: 1.0625rem;
+  line-height: 1.2;
+}
+
+.portal-ai-assistant-brand-title--minimized {
+  font-size: 0.8125rem;
+  line-height: 1.25;
+}
+
+.portal-ai-assistant-brand-title__mark {
+  font-family: 'Cinzel', ui-serif, Georgia, 'Times New Roman', serif;
+  font-weight: 600;
+  color: #0a0a0a;
+  letter-spacing: 0.06em;
+}
+
+.portal-ai-assistant-brand-title__rest {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 500;
+  color: #1f2937;
   letter-spacing: 0.01em;
 }
 
 .portal-ai-assistant-panel__header-actions {
   display: flex;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.35rem;
   flex-shrink: 0;
+}
+
+.portal-ai-assistant-panel__header-text-btn {
+  margin: 0;
+  padding: 0.25rem 0.4rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #4b5563;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.portal-ai-assistant-panel__header-text-btn:hover {
+  color: #111827;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.portal-ai-assistant-panel__header-text-btn:focus-visible {
+  outline: 2px solid var(--portal-ai-red);
+  outline-offset: 2px;
 }
 
 .portal-ai-assistant-icon-btn {
@@ -384,7 +436,8 @@
 .portal-ai-assistant-panel__toolbar {
   display: flex;
   justify-content: flex-end;
-  padding: 0.35rem 0.75rem 0;
+  padding: 0.3rem 0.75rem;
+  background: #fff;
 }
 
 .portal-ai-assistant-panel__toolbar-actions {
@@ -742,9 +795,8 @@
 }
 
 .portal-ai-assistant-minimized__title {
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--portal-ai-red);
+  display: block;
+  min-width: 0;
 }
 
 .portal-ai-assistant-minimized__hint {

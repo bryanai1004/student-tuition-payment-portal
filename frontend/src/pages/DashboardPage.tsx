@@ -1,4 +1,3 @@
-import { AIAssistantMobileDockAnchor } from '../components/ai/AIAssistantMobileDockAnchor'
 import { useAccount } from '../context/AccountContext'
 import { DashboardCoursesWidget } from './dashboard/DashboardCoursesWidget'
 import { DashboardServiceLauncher } from './dashboard/DashboardServiceLauncher'
@@ -38,7 +37,6 @@ export function DashboardPage() {
             <span className="portal-dashboard-hero-welcome">WELCOME,</span>{' '}
             <span className="portal-dashboard-hero-name">{welcome}</span>
           </h1>
-          <AIAssistantMobileDockAnchor />
         </div>
         <time className="portal-dashboard-hero-date" dateTime={dateIso}>
           {dateLabel}

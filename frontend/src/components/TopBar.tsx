@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAccount } from '../context/AccountContext'
 import { PORTAL_BRANDING_TITLE } from '../branding'
 import { PORTAL_MOBILE_NAV_DRAWER_ID } from './PortalSidebar'
+import { AIAssistantMobileDockAnchor } from './ai/AIAssistantMobileDockAnchor'
+import { useAIAssistantMobileBreakpoint } from './ai/useAIAssistantMobileBreakpoint'
 
 export const PORTAL_MOBILE_MENU_BUTTON_ID = 'portal-main-menu-button'
 
@@ -31,6 +33,8 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
     logout()
     navigate('/login', { replace: true })
   }, [logout, navigate])
+
+  const assistantMobile = useAIAssistantMobileBreakpoint()
 
   return (
     <header className="portal-app-header">
@@ -103,6 +107,7 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
               <span className="portal-myamu-my">my</span>
               <span className="portal-myamu-amu">AMU</span>
             </p>
+            {assistantMobile ? <AIAssistantMobileDockAnchor /> : null}
           </div>
         </div>
       ) : null}

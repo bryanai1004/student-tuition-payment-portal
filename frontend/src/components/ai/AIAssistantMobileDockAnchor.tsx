@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { useAIAssistantMobileAnchor } from './AIAssistantMobileAnchorContext'
 
 /**
- * Mount inside the dashboard welcome banner row on mobile so the launcher cluster can align to it.
+ * Mount in the global myAMU banner (TopBar) on mobile so the cat + launcher align to that strip.
  */
 export function AIAssistantMobileDockAnchor() {
   const ref = useRef<HTMLDivElement>(null)
@@ -17,7 +17,7 @@ export function AIAssistantMobileDockAnchor() {
   return (
     <div
       ref={ref}
-      className="portal-dashboard-hero__ai-dock-anchor"
+      className="portal-portal-banner__ai-dock-anchor"
       aria-hidden
     />
   )

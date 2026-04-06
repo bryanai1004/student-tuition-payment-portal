@@ -15,7 +15,8 @@ export function PortalLayout() {
   const isDashboard = isDashboardRoute(pathname)
   const showStudentBar = pathname.startsWith('/finances')
   const showSidebar = !isDashboard
-  const showPortalBanner = isDashboard
+  /** White myAMU strip under the gold bar on all portal routes (AI dock anchors here on mobile). */
+  const showPortalBanner = true
 
   const assistantPageContext = deriveAIAssistantPageContext(pathname)
 
