@@ -16,8 +16,8 @@ export const MAX_INSTALLMENT_SERVICE_FEE_PER_QUARTER =
   INSTALLMENT_SERVICE_FEE_PER_INSTALLMENT * MAX_INSTALLMENTS_PER_QUARTER;
 
 export const STANDARD_TERM_FEES: BillingLineItem[] = [
-  { description: "Student Services Fee", amount: 150, category: "fees" },
-  { description: "Technology Fee", amount: 75, category: "fees" },
+  { description: "Technology / Facility Fee", amount: 50, category: "fees" },
+  { description: "Malpractice Insurance", amount: 50, category: "fees" },
 ];
 
 const sum = (items: Pick<BillingLineItem, "amount">[]) =>
@@ -49,12 +49,25 @@ export function lineItemCategoryForCourse(
 
 export function formatCourseLineDescription(course: CourseRecord): string {
   if (course.type === "didactic" || course.type === "lab") {
-    return `${course.title} (${course.units} unit${course.units === 1 ? "" : "s"})`;
+    const u =
+      course.units != null && Number.isFinite(Number(course.units))
+        ? Number(course.units).toFixed(1)
+        : "0.0";
+    return `${course.courseCode} ${course.title} (${u} units)`;
   }
   if (course.type === "clinical") {
-    return `${course.title} (${course.hours} hrs)`;
+    const h =
+      course.hours != null && Number.isFinite(Number(course.hours))
+        ? Number(course.hours).toFixed(1)
+        : "0.0";
+    return `${course.courseCode} ${course.title} (${h} hrs)`;
   }
-  return String(course.title);
+  return `${course.courseCode} ${course.title}`.trim();
+}
+
+/** Ledger / finance display: course code + title + units or clock hours. */
+export function formatPortalLedgerCourseMemo(course: CourseRecord): string {
+  return formatCourseLineDescription(course);
 }
 
 export function buildStudentAccountSummary(
@@ -94,7 +107,7 @@ export function calculateInstallmentServiceFee(pref: StudentTermPreference): {
   );
   const raw = n * INSTALLMENT_SERVICE_FEE_PER_INSTALLMENT;
   const amount = Math.min(raw, MAX_INSTALLMENT_SERVICE_FEE_PER_QUARTER);
-  const description = `Tuition installment plan service fee (${n} installment${n === 1 ? "" : "s"} × $${INSTALLMENT_SERVICE_FEE_PER_INSTALLMENT}; non-refundable)`;
+  const description = `Tuition Installment Service Fee (${n} installment${n === 1 ? "" : "s"} × $${INSTALLMENT_SERVICE_FEE_PER_INSTALLMENT}; non-refundable)`;
   return { amount, description };
 }
 
@@ -185,7 +198,6 @@ export function buildInstallmentSchedule(
 export function getInstallmentPlanPolicyText(): string[] {
   return [
     "If tuition is paid in full by the end of the registration period, no installment service fee applies.",
-    "If you elect a quarterly installment plan, a non-refundable $15 service fee applies per installment (up to three installments per quarter, maximum $45).",
-    "Missed or late payments may affect enrollment standing per bursar policy.",
+    "If you elect a quarterly installment plan, a non-refundable $15 installment service fee applies per installment (up to three installments per quarter; maximum $45 per quarter).",
   ];
 }

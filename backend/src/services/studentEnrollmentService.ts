@@ -7,6 +7,12 @@ import { InvalidAcademicTermError } from "./courseSectionService.js";
 
 export type { EnrollSectionInput };
 
+/**
+ * Registers sections under the academic term’s `term_name` and `year`. Those values are the same
+ * quarter key used by `portal_enrollments` and by finance (`getAccountingQuartersPayload` /
+ * `getAccountingLedgerPayload` portal fallback), so a completed registration appears on the ledger
+ * for that term without hardcoded quarter data.
+ */
 export async function enrollStudentForAcademicTerm(
   studentId: string,
   academicTermId: string,

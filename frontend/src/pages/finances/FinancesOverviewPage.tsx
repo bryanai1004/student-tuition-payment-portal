@@ -1,10 +1,9 @@
 import { AccountingLedgerSection } from './AccountingLedgerSection'
-import { AccountSummaryContent } from './AccountSummaryContent'
 
 export function FinancesOverviewPage() {
   return (
-    <main className="portal-page portal-stack">
-      <AccountSummaryContent />
+    <main className="portal-page portal-stack portal-finances-overview">
+      <h2 className="portal-page-title portal-finances-overview__title">Overview</h2>
       <AccountingLedgerSection />
     </main>
   )

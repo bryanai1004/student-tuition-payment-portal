@@ -106,59 +106,62 @@ export const mahmAccountMock: MahmAccountMock = {
   summary: {
     tuitionTotal: 2200,
     clinicalTotal: 1530,
-    feesTotal: 270,
-    totalCharges: 4000,
+    feesTotal: 145,
+    totalCharges: 3875,
     payments: 1250,
-    outstandingBalance: 2750,
+    outstandingBalance: 2625,
   },
 
   lineItems: [
     {
-      description: 'TCM101 Foundations of Traditional Chinese Medicine (3 units)',
+      description: 'TCM101 Foundations of Traditional Chinese Medicine (3.0 units)',
       amount: 600,
       category: 'tuition',
     },
     {
-      description: 'ACU201 Acupuncture Techniques I (4 units)',
+      description: 'ACU201 Acupuncture Techniques I (4.0 units)',
       amount: 800,
       category: 'tuition',
     },
     {
-      description: 'HERB201 Chinese Herbal Medicine I (3 units)',
+      description: 'HERB201 Chinese Herbal Medicine I (3.0 units)',
       amount: 600,
       category: 'tuition',
     },
     {
-      description: 'ACULAB1 Acupuncture Lab I (1 unit)',
+      description: 'ACULAB1 Acupuncture Lab I (1.0 units)',
       amount: 200,
       category: 'tuition',
     },
     {
-      description: 'CLN301 Clinical Internship Level 1 (90 hours)',
+      description: 'CLN301 Clinical Internship Level 1 (90.0 hrs)',
       amount: 1530,
       category: 'clinical',
     },
-    { description: 'Student Services Fee', amount: 150, category: 'fees' },
-    { description: 'Facilities Fee', amount: 75, category: 'fees' },
-    { description: 'Installment Plan Fee', amount: 45, category: 'fees' },
+    { description: 'Technology / Facility Fee', amount: 50, category: 'fees' },
+    { description: 'Malpractice Insurance', amount: 50, category: 'fees' },
+    {
+      description:
+        'Tuition Installment Service Fee (3 installments × $15; non-refundable)',
+      amount: 45,
+      category: 'fees',
+    },
   ],
 
   installmentPlan: {
     enabled: true,
     installmentCount: 3,
-    installmentAmount: 916.66,
+    installmentAmount: 875,
     schedule: [
-      { dueDate: '2026-09-05', amount: 916.66, status: 'Upcoming' },
-      { dueDate: '2026-10-05', amount: 916.66, status: 'Upcoming' },
-      { dueDate: '2026-11-05', amount: 916.68, status: 'Upcoming' },
+      { dueDate: '2026-09-05', amount: 875, status: 'Upcoming' },
+      { dueDate: '2026-10-05', amount: 875, status: 'Upcoming' },
+      { dueDate: '2026-11-05', amount: 875, status: 'Upcoming' },
     ],
   },
 
   installmentPolicy: [
-    'Up to three installments per term, due on the 5th of each month.',
-    'A non-refundable installment plan fee is included in term charges.',
-    'Late payments may incur additional fees per bursar policy.',
-    'Confirm amounts and dates on official bursar communications.',
+    'If tuition is paid in full by the end of the registration period, no installment service fee applies.',
+    'If you elect a quarterly installment plan, a non-refundable $15 installment service fee applies per installment (up to three installments per quarter; maximum $45 per quarter).',
   ],
 
   billingStatus: 'Current — installment plan active',

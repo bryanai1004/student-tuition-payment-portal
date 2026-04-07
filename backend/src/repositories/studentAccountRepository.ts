@@ -124,27 +124,13 @@ export async function listPortalScheduleTermsForStudent(
   }));
 }
 
-export async function loadAccountContext(
+async function loadPortalTermBillingContextCore(
   pool: Pool,
   studentId: string,
   term: string,
   year: number,
-): Promise<AccountContext | null> {
-  const [enrollmentRows] = await pool.query<RowDataPacket[]>(
-    `SELECT student_external_id AS studentId, course_id AS courseId, term, year
-     FROM portal_enrollments
-     WHERE student_external_id = ? AND term = ? AND year = ?`,
-    [studentId, term, year],
-  );
-
-  if (enrollmentRows.length === 0) {
-    console.debug(
-      "[account-debug] loadAccountContext: no enrollments",
-      JSON.stringify({ studentId, term, year }),
-    );
-    return null;
-  }
-
+  enrollmentRows: RowDataPacket[],
+): Promise<AccountContext> {
   const [[nameRow]] = await pool.query<RowDataPacket[]>(
     `SELECT full_name AS fullName
      FROM portal_students
@@ -165,15 +151,24 @@ export async function loadAccountContext(
   }));
 
   const courseIds = [...new Set(enrollments.map((e) => e.courseId))];
-  const placeholders = courseIds.map(() => "?").join(",");
+  const placeholders =
+    courseIds.length > 0 ? courseIds.map(() => "?").join(",") : "";
+
+  const coursesSql =
+    courseIds.length > 0
+      ? `SELECT course_id AS courseId, course_code AS courseCode, title, type,
+                units, hours
+         FROM portal_courses
+         WHERE course_id IN (${placeholders})`
+      : `SELECT course_id AS courseId, course_code AS courseCode, title, type,
+                units, hours
+         FROM portal_courses
+         WHERE 1 = 0`;
 
   const [coursesQ, prefsQ, paymentsQ, adjQ] = await Promise.all([
     pool.query<RowDataPacket[]>(
-      `SELECT course_id AS courseId, course_code AS courseCode, title, type,
-              units, hours
-       FROM portal_courses
-       WHERE course_id IN (${placeholders})`,
-      courseIds,
+      coursesSql,
+      courseIds.length > 0 ? courseIds : [],
     ),
     pool.query<RowDataPacket[]>(
       `SELECT use_installment_plan AS useInstallmentPlan,
@@ -244,7 +239,7 @@ export async function loadAccountContext(
     }),
   );
 
-  const ctx: AccountContext = {
+  return {
     studentId,
     studentDisplayName,
     term,
@@ -255,6 +250,36 @@ export async function loadAccountContext(
     adjustments,
     courses,
   };
+}
+
+export async function loadAccountContext(
+  pool: Pool,
+  studentId: string,
+  term: string,
+  year: number,
+): Promise<AccountContext | null> {
+  const [enrollmentRows] = await pool.query<RowDataPacket[]>(
+    `SELECT student_external_id AS studentId, course_id AS courseId, term, year
+     FROM portal_enrollments
+     WHERE student_external_id = ? AND term = ? AND year = ?`,
+    [studentId, term, year],
+  );
+
+  if (enrollmentRows.length === 0) {
+    console.debug(
+      "[account-debug] loadAccountContext: no enrollments",
+      JSON.stringify({ studentId, term, year }),
+    );
+    return null;
+  }
+
+  const ctx = await loadPortalTermBillingContextCore(
+    pool,
+    studentId,
+    term,
+    year,
+    enrollmentRows,
+  );
 
   console.debug(
     "[account-debug] loadAccountContext: ok",
@@ -262,11 +287,36 @@ export async function loadAccountContext(
       studentId,
       term,
       year,
-      enrollmentCount: enrollments.length,
-      courseCount: courses.length,
-      hasDisplayName: Boolean(studentDisplayName),
+      enrollmentCount: ctx.enrollments.length,
+      courseCount: ctx.courses.length,
+      hasDisplayName: Boolean(ctx.studentDisplayName),
     }),
   );
 
   return ctx;
+}
+
+/**
+ * Portal billing context for a term/year, including empty enrollments (payments/adjustments only).
+ * Used to synthesize a ledger when legacy `accounting` has no rows for that quarter.
+ */
+export async function loadPortalTermBillingContext(
+  pool: Pool,
+  studentId: string,
+  term: string,
+  year: number,
+): Promise<AccountContext> {
+  const [enrollmentRows] = await pool.query<RowDataPacket[]>(
+    `SELECT student_external_id AS studentId, course_id AS courseId, term, year
+     FROM portal_enrollments
+     WHERE student_external_id = ? AND term = ? AND year = ?`,
+    [studentId, term, year],
+  );
+  return loadPortalTermBillingContextCore(
+    pool,
+    studentId,
+    term,
+    year,
+    enrollmentRows,
+  );
 }

@@ -1847,12 +1847,28 @@ button.portal-tab {
 .portal-account-ledger__toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--portal-space-3, 0.75rem);
 }
 
 .portal-account-ledger__toolbar .portal-section-heading {
+  margin-bottom: 0;
+}
+
+.portal-account-ledger__toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--portal-space-3, 0.75rem);
+}
+
+.portal-account-ledger__pay-btn {
+  white-space: nowrap;
+}
+
+.portal-finances-overview__title {
   margin-bottom: 0;
 }
 

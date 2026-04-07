@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAccount } from '../../context/AccountContext'
 import {
   fetchAccountingLedger,
@@ -153,6 +154,10 @@ export function AccountingLedgerSection() {
     return null
   }
 
+  const makePaymentEnabled =
+    ledger != null && !loadingLedger && ledger.summary.balance > 0
+  const showMakePaymentControl = selectedQuarter != null && quarters.length > 0
+
   return (
     <section
       className="portal-stack"
@@ -162,25 +167,45 @@ export function AccountingLedgerSection() {
         <h2 id="accounting-ledger-heading" className="portal-section-heading">
           Accounting ledger by quarter
         </h2>
-        <label className="portal-account-ledger__quarter-label" htmlFor="accounting-quarter-select">
-          <span className="visually-hidden">Quarter</span>
-          <select
-            id="accounting-quarter-select"
-            className="portal-account-ledger__select"
-            value={selectedKey ?? ''}
-            onChange={(e) => {
-              const v = e.target.value
-              setSelectedKey(v === '' ? null : v)
-            }}
-            disabled={loadingQuarters}
-          >
-            {quarters.map((q) => (
-              <option key={quarterKey(q)} value={quarterKey(q)}>
-                {q.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="portal-account-ledger__toolbar-actions">
+          {showMakePaymentControl ? (
+            makePaymentEnabled ? (
+              <Link
+                to="/plan"
+                className="portal-btn portal-btn--primary portal-account-ledger__pay-btn"
+              >
+                Make Payment
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="portal-btn portal-btn--primary portal-account-ledger__pay-btn"
+                disabled={loadingLedger || ledger === null}
+              >
+                Make Payment
+              </button>
+            )
+          ) : null}
+          <label className="portal-account-ledger__quarter-label" htmlFor="accounting-quarter-select">
+            <span className="visually-hidden">Quarter</span>
+            <select
+              id="accounting-quarter-select"
+              className="portal-account-ledger__select"
+              value={selectedKey ?? ''}
+              onChange={(e) => {
+                const v = e.target.value
+                setSelectedKey(v === '' ? null : v)
+              }}
+              disabled={loadingQuarters}
+            >
+              {quarters.map((q) => (
+                <option key={quarterKey(q)} value={quarterKey(q)}>
+                  {q.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       {error ? (
