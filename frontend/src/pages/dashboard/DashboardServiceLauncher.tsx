@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import type { DashboardService } from './dashboardMockData'
 import { DASHBOARD_SERVICES } from './dashboardMockData'
 import { DashboardServiceIcon } from './DashboardServiceIcon'
@@ -6,7 +6,7 @@ import { DashboardServiceIcon } from './DashboardServiceIcon'
 function ServiceTile({ service }: { service: DashboardService }) {
   return (
     <li>
-      <Link to={service.to} className="portal-dashboard-service-tile">
+      <NavLink to={service.to} className="portal-dashboard-service-tile">
         <span className="portal-dashboard-service-tile-leading">
           <span className="portal-dashboard-service-tile-icon" aria-hidden>
             <DashboardServiceIcon name={service.icon} />
@@ -18,7 +18,7 @@ function ServiceTile({ service }: { service: DashboardService }) {
         <span className="portal-dashboard-service-tile-arrow" aria-hidden>
           &#8250;
         </span>
-      </Link>
+      </NavLink>
     </li>
   )
 }
