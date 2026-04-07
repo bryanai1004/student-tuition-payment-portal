@@ -2,10 +2,31 @@ import { type PortalBillingCategory } from "../repositories/adminFinanceReposito
 export type AdminFinanceStudentRow = {
     studentId: string;
     name: string;
-    /** Omitted on list until ledger is opened (avoids N× quarters+ledger on roster load). */
     balance: number | null;
 };
-export declare function listAdminFinanceStudents(): Promise<AdminFinanceStudentRow[]>;
+export declare function listGlobalQuartersPayload(): Promise<{
+    quarters: {
+        term: string;
+        year: number;
+        label: string;
+    }[];
+}>;
+export declare function getQuarterSettingsPayload(term: string, year: number): Promise<{
+    term: string;
+    year: number;
+    paymentDueDate: string | null;
+    lateFeeEnabled: boolean;
+    lateFeeAmount: number;
+}>;
+export declare function putQuarterSettings(input: {
+    term: string;
+    year: number;
+    paymentDueDate: string | null;
+    lateFeeEnabled?: boolean;
+    lateFeeAmount?: number;
+    updatedBy?: string | null;
+}): Promise<void>;
+export declare function listAdminFinanceStudentsForQuarter(term: string, year: number): Promise<AdminFinanceStudentRow[]>;
 export declare function getAdminFinanceQuarters(studentId: string): Promise<{
     studentId: string;
     quarters: import("./studentLedgerService.js").LedgerQuarterOption[];
@@ -50,4 +71,48 @@ export declare function validatePostPaymentBody(raw: unknown): {
 };
 export declare function postAdminFinanceCharge(input: PostAdminChargeInput): Promise<void>;
 export declare function postAdminFinancePayment(input: PostAdminPaymentInput): Promise<void>;
+export declare function validatePutChargeBody(raw: unknown): {
+    ok: true;
+    data: {
+        description: string;
+        amount: number;
+        category: PortalBillingCategory;
+    };
+} | {
+    ok: false;
+    error: string;
+};
+export declare function validatePutPaymentBody(raw: unknown): {
+    ok: true;
+    data: {
+        amount: number;
+        paidAt: string;
+        method: string;
+        description: string | null;
+    };
+} | {
+    ok: false;
+    error: string;
+};
+export declare function putAdminFinanceCharge(id: number, body: {
+    description: string;
+    amount: number;
+    category: PortalBillingCategory;
+}): Promise<void>;
+export declare function deleteAdminFinanceCharge(id: number): Promise<void>;
+export declare function putAdminFinancePayment(id: number, body: {
+    amount: number;
+    paidAt: string;
+    method: string;
+    description: string | null;
+}): Promise<void>;
+export declare function deleteAdminFinancePayment(id: number): Promise<void>;
+export declare function verifyManualChargeForStudentTerm(id: number, studentId: string, term: string, year: number): Promise<boolean>;
+export declare function verifyPaymentForStudentTerm(id: number, studentId: string, term: string, year: number): Promise<boolean>;
+export declare function runLateFeeCheckForQuarter(term: string, year: number): Promise<{
+    ok: true;
+    insertedCount: number;
+    skippedCount: number;
+    message?: string;
+}>;
 //# sourceMappingURL=adminFinanceService.d.ts.map

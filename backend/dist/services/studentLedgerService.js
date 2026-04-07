@@ -76,6 +76,14 @@ function summarizeLedgerRows(rows) {
         balance: roundMoney(totalCharges - totalPayments),
     };
 }
+function systemRowMeta() {
+    return {
+        sourceType: "system",
+        sourceId: null,
+        isEditable: false,
+        isDeletable: false,
+    };
+}
 /**
  * Portal-synthesized ledger when legacy `accounting` has no rows for the quarter.
  * Charges follow AMU catalog rules; payments come from `portal_payments`.
@@ -103,6 +111,7 @@ function buildPortalLedgerRowsFromContext(ctx) {
             memo: formatPortalLedgerCourseMemo(course),
             debit: amt,
             credit: 0,
+            ...systemRowMeta(),
         });
     }
     if (ctx.enrollments.length > 0) {
@@ -114,6 +123,7 @@ function buildPortalLedgerRowsFromContext(ctx) {
                 memo: fee.description,
                 debit: roundMoney(fee.amount),
                 credit: 0,
+                ...systemRowMeta(),
             });
         }
         const pref = ctx.preference ?? DEFAULT_TERM_PREF;
@@ -126,6 +136,7 @@ function buildPortalLedgerRowsFromContext(ctx) {
                 memo: "Tuition Installment Service Fee",
                 debit: roundMoney(installmentFee.amount),
                 credit: 0,
+                ...systemRowMeta(),
             });
         }
     }
@@ -133,6 +144,21 @@ function buildPortalLedgerRowsFromContext(ctx) {
         const raw = roundMoney(adj.amount);
         if (raw === 0)
             continue;
+        const isLateFee = adj.adjustmentSource === "system_late_fee";
+        const sid = adj.id != null && Number.isFinite(adj.id) ? adj.id : null;
+        const baseMeta = isLateFee
+            ? {
+                sourceType: "auto_late_fee",
+                sourceId: sid,
+                isEditable: false,
+                isDeletable: false,
+            }
+            : {
+                sourceType: "manual_charge",
+                sourceId: sid,
+                isEditable: sid != null,
+                isDeletable: sid != null,
+            };
         if (raw > 0) {
             rows.push({
                 date: chargeDate,
@@ -141,6 +167,7 @@ function buildPortalLedgerRowsFromContext(ctx) {
                 memo: adj.description.trim() || "Adjustment",
                 debit: raw,
                 credit: 0,
+                ...baseMeta,
             });
         }
         else {
@@ -151,6 +178,7 @@ function buildPortalLedgerRowsFromContext(ctx) {
                 memo: adj.description.trim() || "Adjustment",
                 debit: 0,
                 credit: roundMoney(Math.abs(raw)),
+                ...baseMeta,
             });
         }
     }
@@ -159,6 +187,7 @@ function buildPortalLedgerRowsFromContext(ctx) {
         if (credit <= 0)
             continue;
         const paid = String(p.paidAt ?? "").trim().slice(0, 10);
+        const pid = p.id != null && Number.isFinite(p.id) ? p.id : null;
         rows.push({
             date: paid.length >= 10 ? paid : chargeDate,
             type: "Payment",
@@ -168,6 +197,10 @@ function buildPortalLedgerRowsFromContext(ctx) {
                 : "Payment",
             debit: 0,
             credit,
+            sourceType: "manual_payment",
+            sourceId: pid,
+            isEditable: pid != null,
+            isDeletable: pid != null,
         });
     }
     return rows;
@@ -216,6 +249,10 @@ export async function getAccountingLedgerPayload(studentId, term, year) {
                 memo: r.memo,
                 debit: r.debit,
                 credit: r.credit,
+                sourceType: "system",
+                sourceId: r.seqNumber,
+                isEditable: false,
+                isDeletable: false,
             };
         });
         const resolvedTerm = legacy[0]?.term ?? termTrim;
@@ -242,5 +279,10 @@ export async function getAccountingLedgerPayload(studentId, term, year) {
         rows,
         summary,
     };
+}
+/** Quarter balance using the same ledger rules as `getAccountingLedgerPayload`. */
+export async function getStudentQuarterBalance(studentId, term, year) {
+    const payload = await getAccountingLedgerPayload(studentId, term.trim(), year);
+    return payload?.summary.balance ?? 0;
 }
 //# sourceMappingURL=studentLedgerService.js.map

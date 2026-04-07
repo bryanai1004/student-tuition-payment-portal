@@ -20,13 +20,10 @@ export async function findLatestLegacyTermYear(pool, studentId) {
        END DESC
      LIMIT 1`, [studentId]);
     if (rows.length === 0) {
-        console.debug("[account-debug] findLatestLegacyTermYear: none", JSON.stringify({ studentId }));
         return null;
     }
     const r = rows[0];
-    const out = { term: normalizeTerm(r.term), year: Number(r.year) };
-    console.debug("[account-debug] findLatestLegacyTermYear: ok", JSON.stringify({ studentId, ...out }));
-    return out;
+    return { term: normalizeTerm(r.term), year: Number(r.year) };
 }
 /**
  * Distinct term/year pairs from legacy `registration` for this student.
@@ -62,7 +59,6 @@ export async function loadLegacyAccountSnapshot(pool, studentId, term, year) {
      ORDER BY date DESC
      LIMIT 1`, [studentId, term, year]);
     if (regRows.length === 0) {
-        console.debug("[account-debug] loadLegacyAccountSnapshot: no registration row", JSON.stringify({ studentId, term, year }));
         return null;
     }
     const reg = regRows[0];
@@ -74,12 +70,6 @@ export async function loadLegacyAccountSnapshot(pool, studentId, term, year) {
     const displayName = rawName || studentId;
     const totalFees = Number(reg.totalFees);
     const fees = Number.isFinite(totalFees) ? totalFees : 0;
-    console.debug("[account-debug] loadLegacyAccountSnapshot: ok", JSON.stringify({
-        studentId,
-        term: regTerm,
-        year: regYear,
-        hasStudentRow: Boolean(rawName),
-    }));
     return {
         studentId,
         displayName,
@@ -156,7 +146,7 @@ export async function loadLegacyAccountingRows(pool, studentId, term, year) {
        AND LOWER(TRIM(term)) = LOWER(TRIM(?))
        AND year = ?
      ORDER BY date ASC, seqNumber ASC`, [studentId, term, year]);
-    const out = rows.map((r) => ({
+    return rows.map((r) => ({
         seqNumber: num(r.seqNumber),
         year: num(r.year),
         term: normalizeTerm(r.term),
@@ -167,13 +157,6 @@ export async function loadLegacyAccountingRows(pool, studentId, term, year) {
         credit: num(r.credit),
         memo: String(r.memo ?? "").trim(),
     }));
-    console.debug("[account-debug] loadLegacyAccountingRows", JSON.stringify({
-        studentId,
-        term,
-        year,
-        rowCount: out.length,
-    }));
-    return out;
 }
 /**
  * All legacy `students` rows with latest registration term/year (same ordering as

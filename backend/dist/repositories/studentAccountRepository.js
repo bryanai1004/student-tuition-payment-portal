@@ -10,7 +10,7 @@
  * portal_student_term_prefs (student_external_id, term, year, use_installment_plan,
  *   tuition_paid_in_full_at_reg, installment_count, registration_period_ends)
  * portal_payments (student_external_id, term, year, amount, paid_at, method, description)
- * portal_billing_adjustments (student_external_id, term, year, description, amount, category)
+ * portal_billing_adjustments (..., adjustment_source manual|system_late_fee)
  */
 function formatSqlDate(value) {
     if (value instanceof Date) {
@@ -40,6 +40,12 @@ function asBillingCategory(raw) {
     }
     return "other";
 }
+function asAdjustmentSource(raw) {
+    const s = String(raw ?? "").trim().toLowerCase();
+    if (s === "system_late_fee")
+        return "system_late_fee";
+    return "manual";
+}
 /**
  * Latest term/year for which the student has at least one enrollment row.
  * Ordering: highest calendar year first, then Fall > Summer > Spring > Winter within the year.
@@ -58,13 +64,10 @@ export async function findLatestTermYearForStudent(pool, studentExternalId) {
        END DESC
      LIMIT 1`, [studentExternalId]);
     if (rows.length === 0) {
-        console.debug("[account-debug] findLatestTermYearForStudent: none", JSON.stringify({ studentExternalId }));
         return null;
     }
     const r = rows[0];
-    const out = { term: String(r.term), year: Number(r.year) };
-    console.debug("[account-debug] findLatestTermYearForStudent: ok", JSON.stringify({ studentExternalId, ...out }));
-    return out;
+    return { term: String(r.term), year: Number(r.year) };
 }
 /**
  * Distinct term/year pairs from `portal_enrollments` for this student.
@@ -121,11 +124,11 @@ async function loadPortalTermBillingContextCore(pool, studentId, term, year, enr
        FROM portal_student_term_prefs
        WHERE student_external_id = ? AND term = ? AND year = ?
        LIMIT 1`, [studentId, term, year]),
-        pool.query(`SELECT amount, paid_at AS paidAt, method, description
+        pool.query(`SELECT id, amount, paid_at AS paidAt, method, description
        FROM portal_payments
        WHERE student_external_id = ? AND term = ? AND year = ?
        ORDER BY paid_at ASC, id ASC`, [studentId, term, year]),
-        pool.query(`SELECT description, amount, category
+        pool.query(`SELECT id, description, amount, category, adjustment_source AS adjustmentSource
        FROM portal_billing_adjustments
        WHERE student_external_id = ? AND term = ? AND year = ?`, [studentId, term, year]),
     ]);
@@ -154,15 +157,18 @@ async function loadPortalTermBillingContextCore(pool, studentId, term, year, enr
         };
     }
     const payments = paymentRowList.map((r) => ({
+        id: r.id != null ? Number(r.id) : undefined,
         amount: Number(r.amount),
         paidAt: formatSqlDate(r.paidAt),
         method: String(r.method),
         description: r.description != null ? String(r.description) : undefined,
     }));
     const adjustments = adjustmentRowList.map((r) => ({
+        id: r.id != null ? Number(r.id) : undefined,
         description: String(r.description),
         amount: Number(r.amount),
         category: asBillingCategory(r.category),
+        adjustmentSource: asAdjustmentSource(r.adjustmentSource),
     }));
     return {
         studentId,
@@ -181,19 +187,9 @@ export async function loadAccountContext(pool, studentId, term, year) {
      FROM portal_enrollments
      WHERE student_external_id = ? AND term = ? AND year = ?`, [studentId, term, year]);
     if (enrollmentRows.length === 0) {
-        console.debug("[account-debug] loadAccountContext: no enrollments", JSON.stringify({ studentId, term, year }));
         return null;
     }
-    const ctx = await loadPortalTermBillingContextCore(pool, studentId, term, year, enrollmentRows);
-    console.debug("[account-debug] loadAccountContext: ok", JSON.stringify({
-        studentId,
-        term,
-        year,
-        enrollmentCount: ctx.enrollments.length,
-        courseCount: ctx.courses.length,
-        hasDisplayName: Boolean(ctx.studentDisplayName),
-    }));
-    return ctx;
+    return loadPortalTermBillingContextCore(pool, studentId, term, year, enrollmentRows);
 }
 /**
  * Portal billing context for a term/year, including empty enrollments (payments/adjustments only).
