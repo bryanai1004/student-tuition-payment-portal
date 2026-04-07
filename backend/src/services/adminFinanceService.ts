@@ -18,16 +18,21 @@ import {
   updateManualBillingAdjustment,
   updatePortalPayment,
 } from "../repositories/adminFinanceRepository.js";
-import { loadLegacyAccountingRows } from "../repositories/studentLegacyAccountRepository.js";
+import {
+  loadLegacyAccountingRows,
+  sumLegacyAccountingBalanceByStudentForQuarter,
+} from "../repositories/studentLegacyAccountRepository.js";
 import {
   getAccountingLedgerPayload,
   getAccountingQuartersPayload,
+  getStudentQuarterBalance,
 } from "./studentLedgerService.js";
 
 export type AdminFinanceStudentRow = {
   studentId: string;
   name: string;
-  balance: number | null;
+  /** Net balance for the selected quarter (legacy `accounting` and/or portal rules). */
+  balance: number;
 };
 
 const CHARGE_CATEGORIES: PortalBillingCategory[] = [
@@ -138,15 +143,33 @@ export async function putQuarterSettings(input: {
 }
 
 export async function listAdminFinanceStudentsForQuarter(
-  _term: string,
-  _year: number,
+  term: string,
+  year: number,
 ): Promise<AdminFinanceStudentRow[]> {
   const roster = await listFinanceRosterRows(pool);
-  return roster.map((r) => ({
-    studentId: r.studentId,
-    name: r.name,
-    balance: null,
-  }));
+  const t = term.trim();
+  const y = Math.trunc(year);
+  const legacyByStudent = await sumLegacyAccountingBalanceByStudentForQuarter(
+    pool,
+    t,
+    y,
+  );
+
+  const out: AdminFinanceStudentRow[] = [];
+  for (const r of roster) {
+    let balance: number;
+    if (legacyByStudent.has(r.studentId)) {
+      balance = roundMoney(legacyByStudent.get(r.studentId) ?? 0);
+    } else {
+      balance = roundMoney(await getStudentQuarterBalance(r.studentId, t, y));
+    }
+    out.push({
+      studentId: r.studentId,
+      name: r.name,
+      balance,
+    });
+  }
+  return out;
 }
 
 export async function getAdminFinanceQuarters(studentId: string) {

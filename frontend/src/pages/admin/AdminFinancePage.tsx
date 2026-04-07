@@ -209,7 +209,9 @@ export function AdminFinancePage() {
                       </td>
                       <td>{r.name}</td>
                       <td className="admin-table-numeric">
-                        {r.balance == null ? '—' : formatMoney(r.balance)}
+                        {Number.isFinite(r.balance)
+                          ? formatMoney(r.balance)
+                          : '—'}
                       </td>
                       <td>
                         <button

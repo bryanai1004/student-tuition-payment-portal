@@ -682,7 +682,7 @@ export async function fetchAccountingLedger(
 export type AdminFinanceStudentRow = {
   studentId: string
   name: string
-  balance: number | null
+  balance: number
 }
 
 function parseAdminFinanceStudentRow(
@@ -692,21 +692,15 @@ function parseAdminFinanceStudentRow(
     throw new Error('Unexpected admin finance students response')
   }
   const bal = o.balance
-  let balance: number | null
-  if (bal === null || bal === undefined) {
-    balance = null
-  } else if (typeof bal === 'number') {
-    balance = Number.isFinite(bal) ? bal : null
+  let balance = 0
+  if (typeof bal === 'number' && Number.isFinite(bal)) {
+    balance = bal
   } else if (typeof bal === 'string') {
     const t = bal.trim()
-    if (t === '') {
-      balance = null
-    } else {
+    if (t !== '') {
       const n = Number(t)
-      balance = Number.isFinite(n) ? n : null
+      if (Number.isFinite(n)) balance = n
     }
-  } else {
-    balance = null
   }
   return { studentId: o.studentId, name: o.name, balance }
 }
