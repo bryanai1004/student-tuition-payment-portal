@@ -6,7 +6,8 @@ export type AcademicTermSchemaCaps = {
 };
 /**
  * Detects once per process whether `payment_due_date` and `lock_registration_if_overdue`
- * exist on `academic_terms`. Drives SELECT/INSERT/UPDATE shape and API hints.
+ * exist on `academic_terms`. Uses the same table resolution as app queries (not
+ * information_schema), so capability matches actual SELECT/INSERT/UPDATE behavior.
  */
 export declare function academicTermSchemaCaps(): Promise<AcademicTermSchemaCaps>;
 export declare function listAcademicTerms(): Promise<AcademicTermDetail[]>;
