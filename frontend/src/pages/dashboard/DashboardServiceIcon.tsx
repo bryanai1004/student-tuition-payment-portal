@@ -1,12 +1,21 @@
+import type { ComponentType, SVGProps } from 'react'
 import type { DashboardService } from './dashboardMockData'
+import {
+  IconAcademics,
+  IconClinical,
+  IconDocument,
+  IconFinance,
+  IconMyAccount,
+  IconRegistration,
+} from '../../components/icons/PortalModuleIcons'
 
-const SERVICE_ICON_SRC: Record<DashboardService['icon'], string> = {
-  registration: '/registration.svg',
-  finances: '/finance.svg',
-  academics: '/academics.svg',
-  clinical: '/clinical.svg',
-  documents: '/document.svg',
-  account: '/myaccount.svg',
+const SERVICE_ICON: Record<DashboardService['icon'], ComponentType<SVGProps<SVGSVGElement>>> = {
+  registration: IconRegistration,
+  finances: IconFinance,
+  academics: IconAcademics,
+  clinical: IconClinical,
+  documents: IconDocument,
+  account: IconMyAccount,
 }
 
 type Props = {
@@ -14,18 +23,16 @@ type Props = {
   className?: string
 }
 
-/** Official AMU service icons from `/public` — decorative only. */
+/** Module icons — `currentColor` inherits from the service tile row. */
 export function DashboardServiceIcon({ name, className }: Props) {
-  const src = SERVICE_ICON_SRC[name]
-  if (!src) return null
+  const Cmp = SERVICE_ICON[name]
+  if (!Cmp) return null
   return (
-    <img
-      src={src}
-      alt=""
-      width={24}
-      height={24}
-      decoding="async"
-      className={['portal-dashboard-service-icon-img', className].filter(Boolean).join(' ')}
-    />
+    <span
+      className={['portal-dashboard-service-icon-root', className].filter(Boolean).join(' ')}
+      aria-hidden
+    >
+      <Cmp width={24} height={24} />
+    </span>
   )
 }

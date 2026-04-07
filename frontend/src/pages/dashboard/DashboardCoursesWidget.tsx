@@ -296,44 +296,10 @@ export function DashboardCoursesWidget() {
 
   return (
     <section className="portal-dashboard-courses" aria-labelledby="portal-dashboard-courses-heading">
-      <header className="portal-dashboard-courses-head">
-        <div className="portal-dashboard-courses-head-text">
-          <h2 id="portal-dashboard-courses-heading" className="portal-dashboard-card-panel-title">
-            My Calendar
-          </h2>
-          {showTermPicker ? (
-            <div className="portal-dashboard-courses-term-select-wrap">
-              <label htmlFor="portal-dashboard-courses-term-select" className="visually-hidden">
-                Term
-              </label>
-              <select
-                id="portal-dashboard-courses-term-select"
-                className="portal-account-ledger__select portal-dashboard-courses-term-select"
-                value={selectValue}
-                aria-label="Academic term for calendar and schedule"
-                onChange={(e) => {
-                  const raw = e.target.value
-                  const pipe = raw.indexOf('|')
-                  if (pipe < 0) return
-                  const term = raw.slice(0, pipe).trim()
-                  const year = Number(raw.slice(pipe + 1))
-                  if (!term || !Number.isFinite(year)) return
-                  setScheduleBrowseTerm({ term, year })
-                }}
-              >
-                {availableTerms.map((opt) => (
-                  <option
-                    key={scheduleTermOptionValue(opt.term, opt.year)}
-                    value={scheduleTermOptionValue(opt.term, opt.year)}
-                  >
-                    {opt.label?.trim() ||
-                      currentTermLabel({ term: opt.term, year: opt.year })}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-        </div>
+      <header className="portal-dashboard-courses-head portal-dashboard-card-panel-head">
+        <h2 id="portal-dashboard-courses-heading" className="portal-dashboard-card-panel-title">
+          My Calendar
+        </h2>
         <div
           className="portal-dashboard-courses-view-tabs"
           role="tablist"
@@ -363,6 +329,41 @@ export function DashboardCoursesWidget() {
           </button>
         </div>
       </header>
+      <div className="portal-dashboard-card-panel-divider" aria-hidden />
+      {showTermPicker ? (
+        <div className="portal-dashboard-courses-term-bar">
+          <div className="portal-dashboard-courses-term-select-wrap">
+            <label htmlFor="portal-dashboard-courses-term-select" className="visually-hidden">
+              Term
+            </label>
+            <select
+              id="portal-dashboard-courses-term-select"
+              className="portal-account-ledger__select portal-dashboard-courses-term-select"
+              value={selectValue}
+              aria-label="Academic term for calendar and schedule"
+              onChange={(e) => {
+                const raw = e.target.value
+                const pipe = raw.indexOf('|')
+                if (pipe < 0) return
+                const term = raw.slice(0, pipe).trim()
+                const year = Number(raw.slice(pipe + 1))
+                if (!term || !Number.isFinite(year)) return
+                setScheduleBrowseTerm({ term, year })
+              }}
+            >
+              {availableTerms.map((opt) => (
+                <option
+                  key={scheduleTermOptionValue(opt.term, opt.year)}
+                  value={scheduleTermOptionValue(opt.term, opt.year)}
+                >
+                  {opt.label?.trim() ||
+                    currentTermLabel({ term: opt.term, year: opt.year })}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      ) : null}
 
       {isLoadingAccount ? (
         <div className="portal-dashboard-courses-loading" role="status">

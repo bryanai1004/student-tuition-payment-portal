@@ -20,7 +20,7 @@
   --portal-bg: var(--page-gray);
   --portal-surface: var(--amu-card);
   --portal-border: var(--border-gray);
-  --portal-border-subtle: #e8eaee;
+  --portal-border-subtle: #e8e8e8;
   --portal-text: var(--text-dark);
   --portal-text-muted: #5c6578;
   --portal-text-faint: #7a8499;
@@ -275,11 +275,18 @@
 
 .portal-user-icon {
   flex-shrink: 0;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 1.0625rem;
   height: 1.0625rem;
-  object-fit: contain;
-  object-position: center;
+  color: currentColor;
+}
+
+.portal-user-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .portal-user-button:hover,
@@ -395,6 +402,7 @@
 .portal-nav-link {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
   min-height: 2.3125rem;
   padding: 0.4rem 0.625rem;
   font-size: 0.8125rem;
@@ -407,9 +415,37 @@
   transition: background 0.12s ease, color 0.12s ease;
 }
 
+/* Icons use currentColor; tones follow link state (red-gradient sidebar keeps light text). */
+.portal-sidebar .sidebar-item {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.portal-sidebar .sidebar-item:hover {
+  color: #fff;
+}
+
+.portal-sidebar .sidebar-item.portal-nav-link--active {
+  color: #fff;
+}
+
+.portal-nav-link-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: currentColor;
+}
+
+.portal-nav-link-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .portal-nav-link:hover {
   background: var(--portal-sidebar-hover);
-  color: var(--portal-sidebar-text);
 }
 
 .portal-nav-link:focus-visible {
@@ -4908,32 +4944,50 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   box-shadow: var(--portal-shadow);
 }
 
-/* Shared card title band: Services + My Calendar (divider matches) */
-.portal-dashboard-services-head,
-.portal-dashboard-courses-head {
+/* Shared card title row: fixed height + divider below (Services / My Calendar align) */
+.portal-dashboard-card-panel-head {
   flex-shrink: 0;
-  margin-bottom: 0;
-  padding: 1.25rem 1.5rem 1.125rem;
-  border-bottom: 1px solid var(--portal-border-subtle);
+  box-sizing: border-box;
+  min-height: 3.5rem;
+  height: 3.5rem;
+  padding: 0 1rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  border-bottom: none;
   background: linear-gradient(180deg, #fbfbfc 0%, var(--portal-surface) 100%);
   text-align: left;
 }
 
-.portal-dashboard-courses-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-  flex-wrap: wrap;
+.portal-dashboard-services-head {
+  justify-content: flex-start;
 }
 
-.portal-dashboard-courses-head-text {
+.portal-dashboard-courses-head {
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: nowrap;
   min-width: 0;
-  flex: 1 1 12rem;
+}
+
+.portal-dashboard-card-panel-divider {
+  flex-shrink: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--portal-border-subtle);
+}
+
+.portal-dashboard-courses-term-bar {
+  flex-shrink: 0;
+  padding: 0.625rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--portal-border-subtle);
+  background: var(--portal-surface);
 }
 
 .portal-dashboard-courses-term-select-wrap {
-  margin: 0.5rem 0 0;
+  margin: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -4983,7 +5037,6 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   justify-content: center;
   text-align: center;
   padding: clamp(1.25rem, 3vh, 2rem) 1.5rem;
-  border-top: 1px solid var(--portal-border-subtle);
   box-sizing: border-box;
 }
 
@@ -5189,14 +5242,22 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   box-shadow: none;
 }
 
-.portal-dashboard-service-icon-img {
+.portal-dashboard-service-icon-root {
   width: 1.5rem;
   height: 1.5rem;
-  display: block;
-  object-fit: contain;
-  object-position: left center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: currentColor;
   /* Optical alignment: icons read slightly high vs. cap height / baseline */
   transform: translateY(0.0625rem);
+}
+
+.portal-dashboard-service-icon-root svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .portal-dashboard-service-tile-body {
@@ -5236,16 +5297,6 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 .portal-dashboard-service-tile:hover .portal-dashboard-service-tile-arrow {
   color: #666;
   transform: translateX(1px);
-}
-
-/* Neutral gray icons; active row uses brand red (see active rules below) */
-.portal-dashboard-service-tile .portal-dashboard-service-icon-img {
-  filter: brightness(0) saturate(100%) invert(42%);
-}
-
-.portal-dashboard-service-tile[aria-current='page'] .portal-dashboard-service-icon-img {
-  filter: brightness(0) saturate(100%) invert(14%) sepia(85%) saturate(3400%) hue-rotate(325deg) brightness(0.92)
-    contrast(0.95);
 }
 
 .portal-dashboard-courses {
@@ -5870,7 +5921,7 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   --portal-bg: var(--page-gray);
   --portal-surface: var(--amu-card);
   --portal-border: var(--border-gray);
-  --portal-border-subtle: #e8eaee;
+  --portal-border-subtle: #e8e8e8;
   --portal-text: var(--text-dark);
   --portal-text-muted: #5c6578;
   --portal-text-faint: #7a8499;

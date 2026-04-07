@@ -26,11 +26,12 @@ function ServiceTile({ service }: { service: DashboardService }) {
 export function DashboardServiceLauncher() {
   return (
     <section className="portal-dashboard-services" aria-labelledby="portal-dashboard-services-heading">
-      <div className="portal-dashboard-services-head">
+      <header className="portal-dashboard-services-head portal-dashboard-card-panel-head">
         <h2 id="portal-dashboard-services-heading" className="portal-dashboard-card-panel-title">
           Services
         </h2>
-      </div>
+      </header>
+      <div className="portal-dashboard-card-panel-divider" aria-hidden />
       <ul className="portal-dashboard-service-list">
         {DASHBOARD_SERVICES.map((service) => (
           <ServiceTile key={service.to} service={service} />

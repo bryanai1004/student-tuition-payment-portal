@@ -5,10 +5,9 @@ import { PORTAL_BRANDING_TITLE } from '../branding'
 import { PORTAL_MOBILE_NAV_DRAWER_ID } from './PortalSidebar'
 import { AIAssistantMobileDockAnchor } from './ai/AIAssistantMobileDockAnchor'
 import { useAIAssistantMobileBreakpoint } from './ai/useAIAssistantMobileBreakpoint'
+import { IconLogout, IconUserCircle } from './icons/PortalModuleIcons'
 
 export const PORTAL_MOBILE_MENU_BUTTON_ID = 'portal-main-menu-button'
-
-const LOGOUT_ICON_SRC = '/logout%20(1).svg'
 
 type TopBarProps = {
   mobileMenuOpen?: boolean
@@ -72,14 +71,9 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
               className="portal-user-button"
               title="My account"
             >
-              <img
-                src="/user-circle.svg"
-                alt=""
-                className="portal-user-icon"
-                width={17}
-                height={17}
-                decoding="async"
-              />
+              <span className="portal-user-icon" aria-hidden>
+                <IconUserCircle width={17} height={17} />
+              </span>
               <span className="portal-user-button__label">{displayName}</span>
             </Link>
             <button
@@ -87,14 +81,9 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
               className="portal-logout-button"
               onClick={handleLogout}
             >
-              <img
-                src={LOGOUT_ICON_SRC}
-                alt=""
-                className="portal-user-icon"
-                width={17}
-                height={17}
-                decoding="async"
-              />
+              <span className="portal-user-icon" aria-hidden>
+                <IconLogout width={17} height={17} />
+              </span>
               <span>Logout</span>
             </button>
           </div>
