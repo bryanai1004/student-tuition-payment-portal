@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
+  fetchAdminClinicalTimetable,
   fetchAdminStudentDetail,
   fetchStudentClinicalSchedule,
   postAdminClinicalAssign,
+  type AdminClinicalTimetableSlot,
   type AdminStudentDetail,
   type ClinicalProgress,
   type ClinicalScheduleSession,
@@ -63,11 +65,14 @@ export function AdminClinicalStudentDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
 
-  const [courseCode, setCourseCode] = useState('')
-  const [sessionDate, setSessionDate] = useState('')
-  const [sessionName, setSessionName] = useState('')
-  const [site, setSite] = useState('')
-  const [faculty, setFaculty] = useState('')
+  const [timetableSlots, setTimetableSlots] = useState<AdminClinicalTimetableSlot[]>(
+    [],
+  )
+  const [timetableLoading, setTimetableLoading] = useState(false)
+  const [timetableError, setTimetableError] = useState<string | null>(null)
+  const [filterYear, setFilterYear] = useState<string>('')
+  const [filterTerm, setFilterTerm] = useState<string>('')
+  const [selectedSlotId, setSelectedSlotId] = useState<string>('')
   const [assignSubmitting, setAssignSubmitting] = useState(false)
   const [assignError, setAssignError] = useState<string | null>(null)
   const [assignSuccess, setAssignSuccess] = useState<string | null>(null)
@@ -115,6 +120,68 @@ export function AdminClinicalStudentDetailPage() {
 
     return () => ac.abort()
   }, [studentId, reloadKey])
+
+  useEffect(() => {
+    const ac = new AbortController()
+    setTimetableLoading(true)
+    setTimetableError(null)
+    ;(async () => {
+      try {
+        const slots = await fetchAdminClinicalTimetable({
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        setTimetableSlots(slots)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setTimetableSlots([])
+        setTimetableError(
+          e instanceof Error
+            ? e.message
+            : 'Could not load clinic timetable slots.',
+        )
+      } finally {
+        if (!ac.signal.aborted) {
+          setTimetableLoading(false)
+        }
+      }
+    })()
+    return () => ac.abort()
+  }, [])
+
+  const filteredTimetableSlots = useMemo(() => {
+    return timetableSlots.filter((s) => {
+      if (filterYear.trim() !== '' && String(s.year) !== filterYear.trim()) {
+        return false
+      }
+      if (filterTerm.trim() !== '' && s.term !== filterTerm.trim()) {
+        return false
+      }
+      return true
+    })
+  }, [timetableSlots, filterYear, filterTerm])
+
+  useEffect(() => {
+    if (selectedSlotId.trim() === '') return
+    const id = Number(selectedSlotId)
+    if (!filteredTimetableSlots.some((s) => s.id === id)) {
+      setSelectedSlotId('')
+    }
+  }, [filteredTimetableSlots, selectedSlotId])
+
+  const termYearOptions = useMemo(() => {
+    const map = new Map<string, { year: number; term: string }>()
+    for (const s of timetableSlots) {
+      const k = `${s.year}\t${s.term}`
+      if (!map.has(k)) {
+        map.set(k, { year: s.year, term: s.term })
+      }
+    }
+    return [...map.values()].sort((a, b) => {
+      if (b.year !== a.year) return b.year - a.year
+      return a.term.localeCompare(b.term)
+    })
+  }, [timetableSlots])
 
   useEffect(() => {
     if (!studentId.trim()) {
@@ -165,21 +232,18 @@ export function AdminClinicalStudentDetailPage() {
       setAssignError('Missing student id.')
       return
     }
+    const tid = Number(selectedSlotId)
+    if (!Number.isFinite(tid) || tid <= 0) {
+      setAssignError('Select a clinic timetable slot.')
+      return
+    }
     setAssignSubmitting(true)
     try {
       await postAdminClinicalAssign({
         studentId: sid,
-        courseCode: courseCode.trim(),
-        sessionDate: sessionDate.trim(),
-        sessionName: sessionName.trim() === '' ? null : sessionName.trim(),
-        site: site.trim() === '' ? null : site.trim(),
-        faculty: faculty.trim() === '' ? null : faculty.trim(),
+        timetableId: tid,
       })
-      setCourseCode('')
-      setSessionDate('')
-      setSessionName('')
-      setSite('')
-      setFaculty('')
+      setSelectedSlotId('')
       setAssignSuccess('Session assigned.')
       setScheduleReloadKey((k) => k + 1)
     } catch (e) {
@@ -379,6 +443,10 @@ export function AdminClinicalStudentDetailPage() {
             >
               Assign clinical session
             </h2>
+            <p className="portal-inline-note portal-inline-note--flush" style={{ margin: 0 }}>
+              Choose a published slot from the legacy clinic timetable. Course, site, and
+              faculty details come from that record (site may be blank when not on file).
+            </p>
             <form className="portal-stack" style={{ gap: '1rem' }} onSubmit={onAssignSubmit}>
               {assignError ? (
                 <p
@@ -398,6 +466,15 @@ export function AdminClinicalStudentDetailPage() {
                   {assignSuccess}
                 </p>
               ) : null}
+              {timetableError ? (
+                <p
+                  className="portal-profile-state__detail portal-profile-state--error"
+                  role="alert"
+                  style={{ margin: 0 }}
+                >
+                  {timetableError}
+                </p>
+              ) : null}
               <fieldset
                 disabled={assignSubmitting}
                 className="portal-stack"
@@ -410,94 +487,107 @@ export function AdminClinicalStudentDetailPage() {
               >
                 <div className="admin-detail-field-row">
                   <label
-                    htmlFor="admin-clinical-assign-course"
+                    htmlFor="admin-clinical-filter-year"
                     className="admin-detail-field-label"
                   >
-                    Course code
+                    Filter by year
                   </label>
-                  <input
-                    id="admin-clinical-assign-course"
+                  <select
+                    id="admin-clinical-filter-year"
                     className="admin-input"
-                    type="text"
-                    autoComplete="off"
-                    value={courseCode}
-                    onChange={(e) => setCourseCode(e.target.value)}
+                    value={filterYear}
+                    onChange={(e) => {
+                      setFilterYear(e.target.value)
+                      setSelectedSlotId('')
+                    }}
+                    aria-label="Filter timetable by year"
+                  >
+                    <option value="">All years</option>
+                    {[...new Set(timetableSlots.map((s) => s.year))]
+                      .sort((a, b) => b - a)
+                      .map((y) => (
+                        <option key={y} value={String(y)}>
+                          {y}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="admin-detail-field-row">
+                  <label
+                    htmlFor="admin-clinical-filter-term"
+                    className="admin-detail-field-label"
+                  >
+                    Filter by term
+                  </label>
+                  <select
+                    id="admin-clinical-filter-term"
+                    className="admin-input"
+                    value={filterTerm}
+                    onChange={(e) => {
+                      setFilterTerm(e.target.value)
+                      setSelectedSlotId('')
+                    }}
+                    aria-label="Filter timetable by term"
+                  >
+                    <option value="">All terms</option>
+                    {[...new Set(timetableSlots.map((s) => s.term))].map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="portal-inline-note portal-inline-note--flush" style={{ margin: 0 }}>
+                  Quick presets from loaded slots:
+                </p>
+                <div className="portal-actions" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {termYearOptions.slice(0, 12).map((o) => (
+                    <button
+                      key={`${o.year}-${o.term}`}
+                      type="button"
+                      className="portal-btn portal-btn--secondary"
+                      onClick={() => {
+                        setFilterYear(String(o.year))
+                        setFilterTerm(o.term)
+                        setSelectedSlotId('')
+                      }}
+                    >
+                      {o.term} {o.year}
+                    </button>
+                  ))}
+                </div>
+                <div className="admin-detail-field-row">
+                  <label
+                    htmlFor="admin-clinical-slot-select"
+                    className="admin-detail-field-label"
+                  >
+                    Clinic slot
+                  </label>
+                  <select
+                    id="admin-clinical-slot-select"
+                    className="admin-input"
+                    value={selectedSlotId}
+                    onChange={(e) => setSelectedSlotId(e.target.value)}
                     required
                     aria-required="true"
-                  />
-                </div>
-                <div className="admin-detail-field-row">
-                  <label
-                    htmlFor="admin-clinical-assign-date"
-                    className="admin-detail-field-label"
                   >
-                    Session date
-                  </label>
-                  <input
-                    id="admin-clinical-assign-date"
-                    className="admin-input"
-                    type="date"
-                    value={sessionDate}
-                    onChange={(e) => setSessionDate(e.target.value)}
-                    required
-                    aria-required="true"
-                  />
-                </div>
-                <div className="admin-detail-field-row">
-                  <label
-                    htmlFor="admin-clinical-assign-session-name"
-                    className="admin-detail-field-label"
-                  >
-                    Session name
-                  </label>
-                  <input
-                    id="admin-clinical-assign-session-name"
-                    className="admin-input"
-                    type="text"
-                    autoComplete="off"
-                    value={sessionName}
-                    onChange={(e) => setSessionName(e.target.value)}
-                  />
-                </div>
-                <div className="admin-detail-field-row">
-                  <label
-                    htmlFor="admin-clinical-assign-site"
-                    className="admin-detail-field-label"
-                  >
-                    Site
-                  </label>
-                  <input
-                    id="admin-clinical-assign-site"
-                    className="admin-input"
-                    type="text"
-                    autoComplete="off"
-                    value={site}
-                    onChange={(e) => setSite(e.target.value)}
-                  />
-                </div>
-                <div className="admin-detail-field-row">
-                  <label
-                    htmlFor="admin-clinical-assign-faculty"
-                    className="admin-detail-field-label"
-                  >
-                    Faculty
-                  </label>
-                  <input
-                    id="admin-clinical-assign-faculty"
-                    className="admin-input"
-                    type="text"
-                    autoComplete="off"
-                    value={faculty}
-                    onChange={(e) => setFaculty(e.target.value)}
-                  />
+                    <option value="">
+                      {timetableLoading ? 'Loading slots…' : 'Select a slot'}
+                    </option>
+                    {filteredTimetableSlots.map((s) => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.slotLabel} ({s.term} {s.year})
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="portal-actions" style={{ marginTop: '0.25rem' }}>
                   <button
                     type="submit"
                     className="portal-btn portal-btn--primary"
-                    disabled={assignSubmitting}
+                    disabled={assignSubmitting || timetableLoading}
                   >
-                    {assignSubmitting ? 'Assigning…' : 'Assign session'}
+                    {assignSubmitting ? 'Assigning…' : 'Assign selected slot'}
                   </button>
                 </div>
               </fieldset>

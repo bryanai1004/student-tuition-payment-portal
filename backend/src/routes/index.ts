@@ -68,6 +68,7 @@ import {
 } from "../controllers/academicTermController.js";
 import { postAiAsk } from "../controllers/aiAskController.js";
 import {
+  getAdminClinicalTimetableHandler,
   getStudentClinicalScheduleHandler,
   postAdminClinicalAssignHandler,
 } from "../controllers/clinicalScheduleController.js";
@@ -134,6 +135,7 @@ adminRouter.get("/finance/:studentId/quarters", getAdminFinanceQuartersHandler);
 adminRouter.get("/finance/:studentId/ledger", getAdminFinanceLedgerHandler);
 adminRouter.post("/academic-terms", postAdminAcademicTerm);
 adminRouter.patch("/academic-terms/:id", patchAdminAcademicTerm);
+adminRouter.get("/clinical/timetable", getAdminClinicalTimetableHandler);
 adminRouter.post("/clinical/assign", postAdminClinicalAssignHandler);
 apiRouter.use("/admin", adminRouter);
 

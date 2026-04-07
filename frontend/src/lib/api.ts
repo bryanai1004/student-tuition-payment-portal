@@ -1354,15 +1354,76 @@ export async function fetchStudentClinicalSchedule(
   return data
 }
 
-export type AdminClinicalAssignPayload = {
-  studentId: string
-  courseCode: string
-  sessionDate: string
-  sessionName?: string | null
-  site?: string | null
-  faculty?: string | null
-  status?: string | null
+/** GET /api/admin/clinical/timetable — legacy `clinic_timetable` rows for slot assignment. */
+export type AdminClinicalTimetableSlot = {
+  id: number
+  term: string
+  year: number
+  weekday: string
+  startTime: string | null
+  endTime: string | null
+  instructor: string | null
+  site: string | null
+  courseCode: string | null
+  slotLabel: string
 }
+
+function isAdminClinicalTimetableSlot(x: unknown): x is AdminClinicalTimetableSlot {
+  if (x == null || typeof x !== 'object') return false
+  const o = x as Record<string, unknown>
+  return (
+    typeof o.id === 'number' &&
+    typeof o.term === 'string' &&
+    typeof o.year === 'number' &&
+    typeof o.weekday === 'string' &&
+    (o.startTime === null || typeof o.startTime === 'string') &&
+    (o.endTime === null || typeof o.endTime === 'string') &&
+    (o.instructor === null || typeof o.instructor === 'string') &&
+    (o.site === null || typeof o.site === 'string') &&
+    (o.courseCode === null || typeof o.courseCode === 'string') &&
+    typeof o.slotLabel === 'string'
+  )
+}
+
+export async function fetchAdminClinicalTimetable(
+  options?: { term?: string; year?: number; signal?: AbortSignal },
+): Promise<AdminClinicalTimetableSlot[]> {
+  const params = new URLSearchParams()
+  if (options?.term != null && options.term.trim() !== '') {
+    params.set('term', options.term.trim())
+  }
+  if (options?.year != null && Number.isFinite(options.year)) {
+    params.set('year', String(options.year))
+  }
+  const q = params.toString()
+  const path =
+    q.length > 0
+      ? `/api/admin/clinical/timetable?${q}`
+      : '/api/admin/clinical/timetable'
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected admin clinical timetable response')
+  }
+  for (const row of data) {
+    if (!isAdminClinicalTimetableSlot(row)) {
+      throw new Error('Unexpected admin clinical timetable response')
+    }
+  }
+  return data
+}
+
+/** Timetable-driven (preferred) or legacy manual assignment body. */
+export type AdminClinicalAssignPayload =
+  | { studentId: string; timetableId: number; status?: string | null }
+  | {
+      studentId: string
+      courseCode: string
+      sessionDate: string
+      sessionName?: string | null
+      site?: string | null
+      faculty?: string | null
+      status?: string | null
+    }
 
 /** POST /api/admin/clinical/assign — creates a `clinical_assignments` row. */
 export async function postAdminClinicalAssign(
