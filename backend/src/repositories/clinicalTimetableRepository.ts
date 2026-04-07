@@ -12,6 +12,11 @@ export type ClinicTimetableDbRow = {
   slot: string;
   instructor_id: string;
   instructor: string;
+  /** Legacy per-level caps (`100Max` … `123Max`); summed for portal capacity when present. */
+  cap_100: number;
+  cap_200: number;
+  cap_300: number;
+  cap_123: number;
 };
 
 function mapTimetableRow(r: RowDataPacket): ClinicTimetableDbRow {
@@ -27,6 +32,10 @@ function mapTimetableRow(r: RowDataPacket): ClinicTimetableDbRow {
     }
     return String(v ?? "").trim();
   };
+  const asInt = (v: unknown): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.trunc(n) : 0;
+  };
   return {
     id: Number(row.id),
     year: Number(row.year),
@@ -37,6 +46,10 @@ function mapTimetableRow(r: RowDataPacket): ClinicTimetableDbRow {
     slot: String(row.slot ?? "").trim(),
     instructor_id: String(row.instructor_id ?? "").trim(),
     instructor: String(row.instructor ?? "").trim(),
+    cap_100: asInt(row.cap_100),
+    cap_200: asInt(row.cap_200),
+    cap_300: asInt(row.cap_300),
+    cap_123: asInt(row.cap_123),
   };
 }
 
@@ -61,7 +74,9 @@ export async function listClinicTimetableSlots(options?: {
   }
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT seqNum AS id, year, term, day AS weekday,
-            time_from, time_to, slot, instructor_id, instructor
+            time_from, time_to, slot, instructor_id, instructor,
+            \`100Max\` AS cap_100, \`200Max\` AS cap_200,
+            \`300Max\` AS cap_300, \`123Max\` AS cap_123
        FROM clinic_timetable
       WHERE 1=1
       ${yearClause}
@@ -80,7 +95,9 @@ export async function getClinicTimetableById(
   }
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT seqNum AS id, year, term, day AS weekday,
-            time_from, time_to, slot, instructor_id, instructor
+            time_from, time_to, slot, instructor_id, instructor,
+            \`100Max\` AS cap_100, \`200Max\` AS cap_200,
+            \`300Max\` AS cap_300, \`123Max\` AS cap_123
        FROM clinic_timetable
       WHERE seqNum = ?
       LIMIT 1`,

@@ -1354,6 +1354,178 @@ export async function fetchStudentClinicalSchedule(
   return data
 }
 
+/** GET /api/students/:studentId/clinical-enrollments/open */
+export type StudentOpenClinicalEnrollmentSlot = {
+  timetableId: number
+  term: string
+  year: number
+  slotLabel: string
+  faculty: string | null
+  site: string | null
+  capacity: number | null
+  enrolledCount: number
+  remainingSeats: number | null
+  alreadyEnrolled: boolean
+}
+
+function isStudentOpenClinicalEnrollmentSlot(
+  x: unknown,
+): x is StudentOpenClinicalEnrollmentSlot {
+  if (x == null || typeof x !== 'object') return false
+  const o = x as Record<string, unknown>
+  return (
+    typeof o.timetableId === 'number' &&
+    typeof o.term === 'string' &&
+    typeof o.year === 'number' &&
+    typeof o.slotLabel === 'string' &&
+    (o.faculty === null || typeof o.faculty === 'string') &&
+    (o.site === null || typeof o.site === 'string') &&
+    (o.capacity === null || typeof o.capacity === 'number') &&
+    typeof o.enrolledCount === 'number' &&
+    (o.remainingSeats === null || typeof o.remainingSeats === 'number') &&
+    typeof o.alreadyEnrolled === 'boolean'
+  )
+}
+
+export async function fetchStudentOpenClinicalEnrollmentSlots(
+  studentId: string,
+  options?: { term?: string; year?: number; signal?: AbortSignal },
+): Promise<StudentOpenClinicalEnrollmentSlot[]> {
+  const params = new URLSearchParams()
+  if (options?.term != null && options.term.trim() !== '') {
+    params.set('term', options.term.trim())
+  }
+  if (options?.year != null && Number.isFinite(options.year)) {
+    params.set('year', String(options.year))
+  }
+  const q = params.toString()
+  const path =
+    q.length > 0
+      ? `/api/students/${encodeURIComponent(studentId)}/clinical-enrollments/open?${q}`
+      : `/api/students/${encodeURIComponent(studentId)}/clinical-enrollments/open`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected open clinical enrollment slots response')
+  }
+  for (const row of data) {
+    if (!isStudentOpenClinicalEnrollmentSlot(row)) {
+      throw new Error('Unexpected open clinical enrollment slots response')
+    }
+  }
+  return data
+}
+
+/** GET /api/students/:studentId/clinical-enrollments */
+export type StudentClinicalEnrollmentRow = {
+  id: number
+  studentId: string
+  timetableId: number
+  term: string
+  year: number
+  status: string
+  slotLabel: string
+  faculty: string | null
+  site: string | null
+  createdAt: string
+}
+
+function isStudentClinicalEnrollmentRow(x: unknown): x is StudentClinicalEnrollmentRow {
+  if (x == null || typeof x !== 'object') return false
+  const o = x as Record<string, unknown>
+  return (
+    typeof o.id === 'number' &&
+    typeof o.studentId === 'string' &&
+    typeof o.timetableId === 'number' &&
+    typeof o.term === 'string' &&
+    typeof o.year === 'number' &&
+    typeof o.status === 'string' &&
+    typeof o.slotLabel === 'string' &&
+    (o.faculty === null || typeof o.faculty === 'string') &&
+    (o.site === null || typeof o.site === 'string') &&
+    typeof o.createdAt === 'string'
+  )
+}
+
+export async function fetchStudentClinicalEnrollments(
+  studentId: string,
+  options?: { term?: string; year?: number; signal?: AbortSignal },
+): Promise<StudentClinicalEnrollmentRow[]> {
+  const params = new URLSearchParams()
+  if (options?.term != null && options.term.trim() !== '') {
+    params.set('term', options.term.trim())
+  }
+  if (options?.year != null && Number.isFinite(options.year)) {
+    params.set('year', String(options.year))
+  }
+  const q = params.toString()
+  const path =
+    q.length > 0
+      ? `/api/students/${encodeURIComponent(studentId)}/clinical-enrollments?${q}`
+      : `/api/students/${encodeURIComponent(studentId)}/clinical-enrollments`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected student clinical enrollments response')
+  }
+  for (const row of data) {
+    if (!isStudentClinicalEnrollmentRow(row)) {
+      throw new Error('Unexpected student clinical enrollments response')
+    }
+  }
+  return data
+}
+
+/** POST /api/students/:studentId/clinical-enrollments — 201 { ok, enrollmentId, assignmentId } */
+export async function postStudentClinicalEnrollment(
+  studentId: string,
+  body: { timetableId: number },
+  options?: { signal?: AbortSignal },
+): Promise<{ ok: boolean; enrollmentId: number; assignmentId: number }> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/clinical-enrollments`
+  const data = (await fetchApiJson(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected clinical enrollment create response')
+  }
+  const o = data as Record<string, unknown>
+  if (
+    o.ok !== true ||
+    typeof o.enrollmentId !== 'number' ||
+    typeof o.assignmentId !== 'number'
+  ) {
+    throw new Error('Unexpected clinical enrollment create response')
+  }
+  return {
+    ok: true,
+    enrollmentId: o.enrollmentId,
+    assignmentId: o.assignmentId,
+  }
+}
+
+/** DELETE /api/students/:studentId/clinical-enrollments/:enrollmentId */
+export async function deleteStudentClinicalEnrollment(
+  studentId: string,
+  enrollmentId: number,
+  options?: { signal?: AbortSignal },
+): Promise<{ ok: boolean }> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/clinical-enrollments/${encodeURIComponent(String(enrollmentId))}`
+  const data = (await fetchApiJson(path, {
+    method: 'DELETE',
+    signal: options?.signal,
+  })) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected clinical enrollment delete response')
+  }
+  const o = data as Record<string, unknown>
+  if (o.ok !== true) {
+    throw new Error('Unexpected clinical enrollment delete response')
+  }
+  return { ok: true }
+}
+
 /** GET /api/admin/clinical/timetable — legacy `clinic_timetable` rows for slot assignment. */
 export type AdminClinicalTimetableSlot = {
   id: number

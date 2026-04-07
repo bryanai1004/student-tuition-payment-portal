@@ -75,6 +75,12 @@ import {
   postStudentClinicalRequestHandler,
 } from "../controllers/clinicalRequestController.js";
 import {
+  deleteStudentClinicalEnrollmentHandler,
+  getStudentClinicalEnrollmentsHandler,
+  getStudentOpenClinicalEnrollmentSlotsHandler,
+  postStudentClinicalEnrollmentHandler,
+} from "../controllers/clinicalEnrollmentController.js";
+import {
   getAdminClinicalTimetableHandler,
   getStudentClinicalScheduleHandler,
   postAdminClinicalAssignHandler,
@@ -173,6 +179,22 @@ apiRouter.get("/students/:studentId/account", getStudentAccount);
 apiRouter.get(
   "/students/:studentId/clinical-schedule",
   getStudentClinicalScheduleHandler,
+);
+apiRouter.get(
+  "/students/:studentId/clinical-enrollments/open",
+  getStudentOpenClinicalEnrollmentSlotsHandler,
+);
+apiRouter.get(
+  "/students/:studentId/clinical-enrollments",
+  getStudentClinicalEnrollmentsHandler,
+);
+apiRouter.post(
+  "/students/:studentId/clinical-enrollments",
+  postStudentClinicalEnrollmentHandler,
+);
+apiRouter.delete(
+  "/students/:studentId/clinical-enrollments/:enrollmentId",
+  deleteStudentClinicalEnrollmentHandler,
 );
 apiRouter.post(
   "/students/:studentId/clinical-requests",
