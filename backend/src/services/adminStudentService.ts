@@ -30,7 +30,10 @@ import {
   legacyDbDateToIso,
   resolveEnrollmentDate,
 } from "./studentProfileService.js";
-import { buildClinicalProgress } from "./clinicalProgressService.js";
+import {
+  batchBuildClinicalProgressForStudentIds,
+  buildClinicalProgress,
+} from "./clinicalProgressService.js";
 
 function str(v: unknown): string {
   if (v == null) return "";
@@ -167,24 +170,25 @@ export async function listAdminStudentsPage(options: {
   if (!options.includeClinicalSummary) {
     items = base;
   } else {
-    items = await Promise.all(
-      base.map(async (item) => {
-        try {
-          const cp = await buildClinicalProgress(pool, item.studentId);
-          return {
-            ...item,
-            clinicalProgressSummary: clinicalProgressToListSummary(cp),
-          };
-        } catch (e) {
-          console.error(
-            "[admin] buildClinicalProgress failed (list)",
-            item.studentId,
-            e,
-          );
+    try {
+      const byId = await batchBuildClinicalProgressForStudentIds(
+        pool,
+        base.map((b) => b.studentId),
+      );
+      items = base.map((item) => {
+        const cp = byId.get(item.studentId.trim());
+        if (!cp) {
           return item;
         }
-      }),
-    );
+        return {
+          ...item,
+          clinicalProgressSummary: clinicalProgressToListSummary(cp),
+        };
+      });
+    } catch (e) {
+      console.error("[admin] batch clinical progress failed (list)", e);
+      items = base;
+    }
   }
   return { items, total, page, pageSize };
 }
