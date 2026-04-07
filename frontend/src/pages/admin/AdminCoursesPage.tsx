@@ -40,29 +40,39 @@ export function AdminCoursesPage() {
     setTermsLoading(true)
     setCatalogError(null)
     setTermsError(null)
+
     ;(async () => {
       try {
-        const [c, t] = await Promise.all([
-          fetchCourses({ signal: ac.signal }),
-          fetchAcademicTerms({ signal: ac.signal }),
-        ])
+        const c = await fetchCourses({ signal: ac.signal })
         if (ac.signal.aborted) return
         setCatalog(c)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setCatalog([])
+        setCatalogError(
+          e instanceof Error ? e.message : 'Could not load courses.',
+        )
+      } finally {
+        if (!ac.signal.aborted) setCatalogLoading(false)
+      }
+    })()
+
+    ;(async () => {
+      try {
+        const t = await fetchAcademicTerms({ signal: ac.signal })
+        if (ac.signal.aborted) return
         setTerms(t)
       } catch (e) {
         if (ac.signal.aborted) return
-        const msg = e instanceof Error ? e.message : 'Could not load data.'
-        setCatalog([])
-        setCatalogError(msg)
         setTerms([])
-        setTermsError(msg)
+        setTermsError(
+          e instanceof Error ? e.message : 'Could not load academic terms.',
+        )
       } finally {
-        if (!ac.signal.aborted) {
-          setCatalogLoading(false)
-          setTermsLoading(false)
-        }
+        if (!ac.signal.aborted) setTermsLoading(false)
       }
     })()
+
     return () => ac.abort()
   }, [])
 
