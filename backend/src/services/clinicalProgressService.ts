@@ -6,6 +6,9 @@
 import type { Pool, RowDataPacket } from "mysql2/promise";
 import type { ClinicalProgressDomain } from "../domain/studentDomainModels.js";
 
+/** When `requirements.clinic_hours` is missing, null, or non-positive, avoid implying 0 required / "ready". */
+const DEFAULT_CLINIC_REQUIRED_HOURS = 960;
+
 function str(v: unknown): string {
   if (v == null) return "";
   return String(v).trim();
@@ -56,6 +59,27 @@ function aggregateClinicCodesFromRows(
   return { completedHours, completedCourses };
 }
 
+/**
+ * Resolves program clinic hour requirement from DB. Any missing or unusable value falls back to
+ * {@link DEFAULT_CLINIC_REQUIRED_HOURS} so progress UI does not show 0 required or spurious readiness.
+ */
+function resolveRequiredClinicHoursFromRaw(
+  hasRequirementJoinRow: boolean,
+  clinicHoursRaw: unknown,
+): number {
+  if (!hasRequirementJoinRow) {
+    return DEFAULT_CLINIC_REQUIRED_HOURS;
+  }
+  if (clinicHoursRaw == null) {
+    return DEFAULT_CLINIC_REQUIRED_HOURS;
+  }
+  const rh = Number(clinicHoursRaw);
+  if (!Number.isFinite(rh) || rh <= 0) {
+    return DEFAULT_CLINIC_REQUIRED_HOURS;
+  }
+  return rh;
+}
+
 function assembleClinicalProgress(
   completedCourses: string[],
   completedHours: number,
@@ -65,11 +89,11 @@ function assembleClinicalProgress(
   const has211 = hasClinicalPrefix(completedCourses, "CL211");
   const has311 = hasClinicalPrefix(completedCourses, "CL311");
   const readiness: ClinicalProgressDomain["readiness"] =
-    completedHours >= requiredHours ? "ready" : "not_ready";
+    requiredHours > 0 && completedHours >= requiredHours ? "ready" : "not_ready";
   const missing: string[] = [];
   if (!has211) missing.push("Complete CL211");
   if (!has311) missing.push("Complete CL311");
-  if (requiredHours > 0 && completedHours < requiredHours) {
+  if (completedHours < requiredHours) {
     missing.push(`Remaining ${requiredHours - completedHours} hours`);
   }
   return {
@@ -119,9 +143,11 @@ export async function batchBuildClinicalProgressForStudentIds(
   for (const row of reqRows) {
     const r = row as Record<string, unknown>;
     const sid = str(r.student_id);
-    const rh = Number(r.clinic_hours);
-    const requiredHours = Number.isFinite(rh) && rh >= 0 ? rh : 0;
-    requiredByStudent.set(sid, requiredHours);
+    if (sid === "") continue;
+    requiredByStudent.set(
+      sid,
+      resolveRequiredClinicHoursFromRaw(true, r.clinic_hours),
+    );
   }
 
   const clinicByStudent = new Map<string, Array<Record<string, unknown>>>();
@@ -139,7 +165,9 @@ export async function batchBuildClinicalProgressForStudentIds(
 
   for (const sid of normalized) {
     const agg = aggregateClinicCodesFromRows(clinicByStudent.get(sid) ?? []);
-    const requiredHours = requiredByStudent.get(sid) ?? 0;
+    const requiredHours =
+      requiredByStudent.get(sid) ??
+      resolveRequiredClinicHoursFromRaw(false, undefined);
     out.set(
       sid,
       assembleClinicalProgress(
@@ -181,11 +209,13 @@ export async function buildClinicalProgress(
     [sid],
   );
 
-  let requiredHours = 0;
-  if (reqRows.length > 0) {
-    const rh = Number((reqRows[0] as Record<string, unknown>).clinic_hours);
-    requiredHours = Number.isFinite(rh) && rh >= 0 ? rh : 0;
-  }
+  const requiredHours =
+    reqRows.length > 0
+      ? resolveRequiredClinicHoursFromRaw(
+          true,
+          (reqRows[0] as Record<string, unknown>).clinic_hours,
+        )
+      : resolveRequiredClinicHoursFromRaw(false, undefined);
 
   return assembleClinicalProgress(
     agg.completedCourses,

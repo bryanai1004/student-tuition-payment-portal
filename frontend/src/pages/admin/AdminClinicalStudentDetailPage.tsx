@@ -383,7 +383,11 @@ export function AdminClinicalStudentDetailPage() {
                 <div className="portal-grid-4">
                   <div>
                     <p className="portal-card-label">Current level</p>
-                    <p className="portal-card-value">{cp.level}</p>
+                    <p className="portal-card-value">
+                      {!Number.isFinite(cp.level) || cp.level <= 0
+                        ? 'Not started'
+                        : `Level ${cp.level}`}
+                    </p>
                   </div>
                   <div>
                     <p className="portal-card-label">Hours</p>
