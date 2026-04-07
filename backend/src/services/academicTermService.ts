@@ -6,6 +6,7 @@ import type {
   UpdateAcademicTermInput,
 } from "../types/academicTerm.js";
 import {
+  academicTermSchemaCaps,
   getAcademicTermById,
   insertAcademicTerm,
   listAcademicTerms,
@@ -112,6 +113,11 @@ export async function listRecentVisibleTerms(
 
 export async function getCurrentRegistrationOpenTerm(): Promise<AcademicTermDetail | null> {
   return repoGetCurrentRegistrationOpenTerm();
+}
+
+/** For response headers: whether `academic_terms` persists payment DDL / overdue-lock fields. */
+export async function academicTermPaymentPolicyColumnsAvailable(): Promise<boolean> {
+  return (await academicTermSchemaCaps()).hasPaymentPolicyColumns;
 }
 
 export async function createAcademicTerm(
