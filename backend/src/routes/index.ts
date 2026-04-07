@@ -14,6 +14,13 @@ import {
   postAdminCourseSection,
 } from "../controllers/adminCourseSectionController.js";
 import { deleteAdminPortalEnrollmentHandler } from "../controllers/adminEnrollmentController.js";
+import {
+  getAdminFinanceLedgerHandler,
+  getAdminFinanceQuartersHandler,
+  getAdminFinanceStudents,
+  postAdminFinanceChargeHandler,
+  postAdminFinancePaymentHandler,
+} from "../controllers/adminFinanceController.js";
 import { getAdminCoursesOpenForRegistration } from "../controllers/adminOpenRegistrationCoursesController.js";
 import {
   deleteCourseBinItemHandler,
@@ -97,6 +104,11 @@ adminRouter.post("/course-sections", postAdminCourseSection);
 adminRouter.patch("/course-sections/:id", patchAdminCourseSection);
 adminRouter.delete("/course-sections/:id", deleteAdminCourseSection);
 adminRouter.delete("/enrollments", deleteAdminPortalEnrollmentHandler);
+adminRouter.get("/finance/students", getAdminFinanceStudents);
+adminRouter.post("/finance/charge", postAdminFinanceChargeHandler);
+adminRouter.post("/finance/payment", postAdminFinancePaymentHandler);
+adminRouter.get("/finance/:studentId/quarters", getAdminFinanceQuartersHandler);
+adminRouter.get("/finance/:studentId/ledger", getAdminFinanceLedgerHandler);
 adminRouter.post("/academic-terms", postAdminAcademicTerm);
 adminRouter.patch("/academic-terms/:id", patchAdminAcademicTerm);
 apiRouter.use("/admin", adminRouter);

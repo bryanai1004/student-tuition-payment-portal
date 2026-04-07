@@ -6907,6 +6907,45 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   margin-bottom: 1.5rem;
 }
 
+.admin-finance-expand-row .admin-finance-expand-cell {
+  padding: 0;
+  vertical-align: top;
+  background: color-mix(in srgb, var(--amu-card) 92%, var(--portal-border-subtle));
+  border-top: none;
+}
+
+.admin-finance-expand {
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.admin-finance-expand__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.admin-finance-expand__quarter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 12rem;
+}
+
+.admin-finance-expand__quarter .admin-input {
+  min-width: 11rem;
+}
+
+.admin-finance-totals__label {
+  text-align: right;
+}
+
+.admin-table-numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .admin-stat-card {
   padding: 1.15rem 1.25rem;
   background: var(--amu-card);
