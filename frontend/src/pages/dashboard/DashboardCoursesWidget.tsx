@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { useAccount } from '../../context/AccountContext'
 import {
@@ -141,38 +141,41 @@ function scheduleTermOptionValue(term: string, year: number): string {
 
 function DashboardWeekTimetableMobileList({ model }: { model: WeekTimetableModel }) {
   const { visibleDays, blocksByDay } = model
-  const daysWithBlocks = visibleDays.filter((d) => blocksByDay[d].length > 0)
 
   return (
     <div className="portal-dashboard-courses-timetable-mobile" aria-label="Weekly timetable, list view">
-      {daysWithBlocks.map((day) => (
+      {visibleDays.map((day) => (
         <section key={day} className="portal-dashboard-courses-timetable-mobile-day">
           <h3 className="portal-dashboard-courses-timetable-mobile-day-title">
             {WEEKDAY_LONG_LABEL[day]}
           </h3>
-          <ul className="portal-dashboard-courses-timetable-mobile-slots">
-            {blocksByDay[day].map((block, bi) => (
-              <li
-                key={`${day}-${block.courseCode}-${block.startMinutes}-${bi}`}
-                className="portal-dashboard-courses-timetable-mobile-slot"
-              >
-                <span className="portal-dashboard-courses-timetable-mobile-time">
-                  {formatBlockTimeRange24(block)}
-                </span>
-                <span className="portal-dashboard-courses-timetable-mobile-course">
-                  <strong className="portal-dashboard-courses-timetable-mobile-code">
-                    {block.courseCode}
-                  </strong>
-                  {block.subtitle ? (
-                    <span className="portal-dashboard-courses-timetable-mobile-title">
-                      {' '}
-                      {block.subtitle}
-                    </span>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {blocksByDay[day].length === 0 ? (
+            <p className="portal-dashboard-courses-timetable-mobile-empty">No classes</p>
+          ) : (
+            <ul className="portal-dashboard-courses-timetable-mobile-slots">
+              {blocksByDay[day].map((block, bi) => (
+                <li
+                  key={`${day}-${block.courseCode}-${block.startMinutes}-${bi}`}
+                  className="portal-dashboard-courses-timetable-mobile-slot"
+                >
+                  <span className="portal-dashboard-courses-timetable-mobile-time">
+                    {formatBlockTimeRange24(block)}
+                  </span>
+                  <span className="portal-dashboard-courses-timetable-mobile-course">
+                    <strong className="portal-dashboard-courses-timetable-mobile-code">
+                      {block.courseCode}
+                    </strong>
+                    {block.subtitle ? (
+                      <span className="portal-dashboard-courses-timetable-mobile-title">
+                        {' '}
+                        {block.subtitle}
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ))}
     </div>
@@ -183,14 +186,18 @@ function DashboardWeekTimetableGrid({ model }: { model: WeekTimetableModel }) {
   const { visibleDays, gridStartMinutes, gridEndMinutes, blocksByDay } = model
   const colCount = visibleDays.length
   const ticks = hourTickMinutes(gridStartMinutes, gridEndMinutes)
+  const hourBands = (gridEndMinutes - gridStartMinutes) / 60
 
   return (
     <div
       className="portal-dashboard-courses-timetable portal-dashboard-courses-timetable--grid"
-      style={{
-        gridTemplateColumns: `var(--portal-timetable-time-col) repeat(${colCount}, minmax(var(--portal-timetable-day-min), 1fr))`,
-        minWidth: `calc(var(--portal-timetable-time-col) + ${colCount} * var(--portal-timetable-day-min))`,
-      }}
+      style={
+        {
+          gridTemplateColumns: `var(--portal-timetable-time-col) repeat(${colCount}, minmax(var(--portal-timetable-day-min), 1fr))`,
+          minWidth: `calc(var(--portal-timetable-time-col) + ${colCount} * var(--portal-timetable-day-min))`,
+          '--portal-timetable-hour-bands': String(hourBands),
+        } as CSSProperties
+      }
     >
       <div
         className="portal-dashboard-courses-timetable-corner"
@@ -249,7 +256,7 @@ function DashboardWeekTimetableGrid({ model }: { model: WeekTimetableModel }) {
 }
 
 export function DashboardCoursesWidget() {
-  const [view, setView] = useState<CalendarView>('list')
+  const [view, setView] = useState<CalendarView>('week')
   const {
     account,
     loading,

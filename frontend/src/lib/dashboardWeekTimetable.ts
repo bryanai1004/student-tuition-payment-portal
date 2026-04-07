@@ -165,17 +165,18 @@ export function accountScheduleRowsHaveWeekGridData(rows: ScheduleRow[]): boolea
 }
 
 export type WeekTimetableModel = {
-  /** Days shown left-to-right (Mon–Fri always; Sat/Sun appended when used). */
+  /** Days shown left-to-right (Mon–Sun). */
   visibleDays: WeekdayKey[]
-  /** Minutes since midnight — grid top. */
+  /** Minutes since midnight — grid top (inclusive). */
   gridStartMinutes: number
-  /** Minutes since midnight — grid bottom. */
+  /** Minutes since midnight — grid bottom (exclusive), same convention as `timetableBlockLayout`. */
   gridEndMinutes: number
   blocksByDay: Record<WeekdayKey, WeekTimetableBlock[]>
 }
 
-const DEFAULT_START_MIN = 8 * 60
-const DEFAULT_END_MIN = 18 * 60
+/** Fixed academic-day window for the dashboard week grid: 8:00 AM through end of 9:00 PM. */
+export const DASHBOARD_WEEK_GRID_START_MINUTES = 8 * 60
+export const DASHBOARD_WEEK_GRID_END_MINUTES = (21 + 1) * 60
 
 function mergeBlocksForDay(blocks: WeekTimetableBlock[]): WeekTimetableBlock[] {
   return [...blocks].sort((a, b) => a.startMinutes - b.startMinutes)
@@ -195,15 +196,10 @@ export function buildWeekTimetableFromScheduleRows(rows: ScheduleRow[]): WeekTim
     sunday: [],
   }
 
-  let minT = Number.POSITIVE_INFINITY
-  let maxT = Number.NEGATIVE_INFINITY
-
   for (const row of rows) {
     const meetings = parseScheduleStringToMeetings(String(row.schedule ?? ''))
     const subtitle = row.title?.trim() ? row.title.trim() : ''
     for (const m of meetings) {
-      minT = Math.min(minT, m.startMinutes)
-      maxT = Math.max(maxT, m.endMinutes)
       blocksByDay[m.day].push({
         courseCode: row.courseCode?.trim() || '—',
         timeLabel: m.timeLabel,
@@ -217,27 +213,16 @@ export function buildWeekTimetableFromScheduleRows(rows: ScheduleRow[]): WeekTim
   const usedDays = WEEK_ORDER.filter((d) => blocksByDay[d].length > 0)
   if (usedDays.length === 0) return null
 
-  const visibleDays: WeekdayKey[] = [...WEEK_ORDER.slice(0, 5)]
-  if (usedDays.includes('saturday')) visibleDays.push('saturday')
-  if (usedDays.includes('sunday')) visibleDays.push('sunday')
+  const visibleDays: WeekdayKey[] = [...WEEK_ORDER]
 
   for (const d of WEEK_ORDER) {
     blocksByDay[d] = mergeBlocksForDay(blocksByDay[d])
   }
 
-  let gridStart = Number.isFinite(minT) ? Math.floor(minT / 60) * 60 : DEFAULT_START_MIN
-  let gridEnd = Number.isFinite(maxT) ? Math.ceil(maxT / 60) * 60 : DEFAULT_END_MIN
-  gridStart = Math.max(0, gridStart - 60)
-  gridEnd = Math.min(24 * 60, gridEnd + 60)
-  if (gridEnd <= gridStart) {
-    gridStart = DEFAULT_START_MIN
-    gridEnd = DEFAULT_END_MIN
-  }
-
   return {
     visibleDays,
-    gridStartMinutes: gridStart,
-    gridEndMinutes: gridEnd,
+    gridStartMinutes: DASHBOARD_WEEK_GRID_START_MINUTES,
+    gridEndMinutes: DASHBOARD_WEEK_GRID_END_MINUTES,
     blocksByDay,
   }
 }
@@ -298,10 +283,13 @@ export function blockVerticalStyle(
 ): { top: string; height: string } {
   const span = gridEndMinutes - gridStartMinutes
   if (span <= 0) return { top: '0%', height: '0%' }
-  const top = ((block.startMinutes - gridStartMinutes) / span) * 100
-  const height = ((block.endMinutes - block.startMinutes) / span) * 100
+  const clipStart = Math.max(block.startMinutes, gridStartMinutes)
+  const clipEnd = Math.min(block.endMinutes, gridEndMinutes)
+  if (clipEnd <= clipStart) return { top: '0%', height: '0%' }
+  const top = ((clipStart - gridStartMinutes) / span) * 100
+  const height = ((clipEnd - clipStart) / span) * 100
   return {
-    top: `${Math.max(0, top)}%`,
-    height: `${Math.max(0, Math.min(100 - top, height))}%`,
+    top: `${top}%`,
+    height: `${height}%`,
   }
 }
