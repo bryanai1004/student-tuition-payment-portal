@@ -102,54 +102,76 @@ export function AdminCourseSectionsPage() {
   useEffect(() => {
     const ac = new AbortController()
     ;(async () => {
-      try {
-        const [t, c] = await Promise.all([
-          fetchAcademicTerms({ signal: ac.signal }),
-          fetchCourses({ signal: ac.signal }),
-        ])
-        if (ac.signal.aborted) return
-        setTerms(t)
-        setCourses(c)
+      const [termOutcome, courseOutcome] = await Promise.allSettled([
+        fetchAcademicTerms({ signal: ac.signal }),
+        fetchCourses({ signal: ac.signal }),
+      ])
+      if (ac.signal.aborted) return
 
-        const sp = new URLSearchParams(window.location.search)
-        const urlTerm = sp.get('term')?.trim() ?? ''
-        const urlCourse = sp.get('course')?.trim() ?? ''
-        const urlQ = sp.get('q') ?? ''
+      const t = termOutcome.status === 'fulfilled' ? termOutcome.value : []
+      const c = courseOutcome.status === 'fulfilled' ? courseOutcome.value : []
+      setTerms(t)
+      setCourses(c)
 
-        const nextTerm =
-          urlTerm && t.some((x) => x.id === urlTerm)
-            ? urlTerm
-            : t.length > 0
-              ? t[0].id
-              : ''
-        const nextCourse =
-          urlCourse && c.some((x) => x.code === urlCourse)
-            ? urlCourse
-            : c.length > 0
-              ? c[0].code
-              : ''
-
-        setAcademicTermId(nextTerm)
-        setCourseCode(nextCourse)
-        setCourseSearch(urlQ)
-
-        setSearchParams(
-          (prev) =>
-            applyAdminSchedulingToSearchParams(prev, {
-              term: nextTerm,
-              course: nextCourse,
-              q: urlQ,
-            }),
-          { replace: true },
-        )
-      } catch (e) {
-        if (ac.signal.aborted) return
-        setTerms([])
-        setCourses([])
+      const termFailed = termOutcome.status === 'rejected'
+      const courseFailed = courseOutcome.status === 'rejected'
+      if (termFailed && courseFailed) {
+        const a =
+          termOutcome.reason instanceof Error
+            ? termOutcome.reason.message
+            : 'Could not load academic terms.'
+        const b =
+          courseOutcome.reason instanceof Error
+            ? courseOutcome.reason.message
+            : 'Could not load courses.'
+        setSectionsError(`${a} — ${b}`)
+      } else if (termFailed) {
         setSectionsError(
-          e instanceof Error ? e.message : 'Could not load terms or courses.',
+          termOutcome.reason instanceof Error
+            ? termOutcome.reason.message
+            : 'Could not load academic terms.',
         )
+      } else if (courseFailed) {
+        setSectionsError(
+          courseOutcome.reason instanceof Error
+            ? courseOutcome.reason.message
+            : 'Could not load courses.',
+        )
+      } else {
+        setSectionsError(null)
       }
+
+      const sp = new URLSearchParams(window.location.search)
+      const urlTerm = sp.get('term')?.trim() ?? ''
+      const urlCourse = sp.get('course')?.trim() ?? ''
+      const urlQ = sp.get('q') ?? ''
+
+      const nextTerm =
+        urlTerm && t.some((x) => x.id === urlTerm)
+          ? urlTerm
+          : t.length > 0
+            ? t[0].id
+            : ''
+      const nextCourse =
+        urlCourse && c.some((x) => x.code === urlCourse)
+          ? urlCourse
+          : c.length > 0
+            ? c[0].code
+            : ''
+
+      setAcademicTermId(nextTerm)
+      setCourseCode(nextCourse)
+      setCourseSearch(urlQ)
+
+      setSearchParams(
+        (prev) =>
+          applyAdminSchedulingToSearchParams(prev, {
+            term: nextTerm,
+            course: nextCourse,
+            q: urlQ,
+          }),
+        { replace: true },
+      )
     })()
     return () => ac.abort()
   }, [setSearchParams])

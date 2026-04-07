@@ -1425,8 +1425,22 @@ function parseNullableIsoDate(v: unknown): string | null {
   return null
 }
 
+function parseAcademicTermId(v: unknown): string | null {
+  if (v == null) return null
+  if (typeof v === 'string') {
+    const s = v.trim()
+    return s === '' ? null : s
+  }
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    return String(Math.trunc(v))
+  }
+  if (typeof v === 'bigint') return String(v)
+  return null
+}
+
 function parseAcademicTermRow(row: Record<string, unknown>): AcademicTerm | null {
-  if (typeof row.id !== 'string' || typeof row.term_label !== 'string') return null
+  const id = parseAcademicTermId(row.id)
+  if (id == null || typeof row.term_label !== 'string') return null
   const term_name = row.term_name
   if (
     typeof term_name !== 'string' ||
@@ -1454,7 +1468,7 @@ function parseAcademicTermRow(row: Record<string, unknown>): AcademicTerm | null
     return null
   }
   return {
-    id: row.id.trim(),
+    id,
     term_label: row.term_label.trim(),
     year: Math.trunc(year),
     term_name: term_name as AcademicTermName,

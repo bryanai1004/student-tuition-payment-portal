@@ -225,13 +225,15 @@ export async function listCourseSectionsWithEnrollmentAggregates(
         ) AS enrolled_students_json
       FROM portal_enrollments e
       INNER JOIN portal_courses pc ON pc.course_id = e.course_id
-      LEFT JOIN portal_students ps ON ps.student_external_id = e.student_external_id
+      LEFT JOIN portal_students ps
+        ON CONVERT(ps.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+           CONVERT(e.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
       GROUP BY pc.course_code, e.term, e.year
     ) agg
-      ON agg.agg_course_code COLLATE utf8mb4_unicode_ci =
-         cs.course_code COLLATE utf8mb4_unicode_ci
-      AND agg.agg_term COLLATE utf8mb4_unicode_ci =
-          cs.term COLLATE utf8mb4_unicode_ci
+      ON CONVERT(agg.agg_course_code USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+         CONVERT(cs.course_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND CONVERT(agg.agg_term USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(cs.term USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND agg.agg_year = cs.year
     WHERE cs.term = ? AND cs.year = ?
     ${courseClause}
