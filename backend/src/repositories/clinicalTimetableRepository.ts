@@ -177,9 +177,41 @@ export type ClinicTimetableWritePayload = {
   cap_123: number;
 };
 
+function nonNegativeIntCap(n: number): number {
+  if (!Number.isFinite(n)) {
+    return 0;
+  }
+  return Math.max(0, Math.trunc(n));
+}
+
+/**
+ * Trim string fields and coerce legacy caps to integers ≥ 0 before INSERT/UPDATE.
+ */
+function normalizeClinicTimetableWritePayload(
+  payload: ClinicTimetableWritePayload,
+): ClinicTimetableWritePayload {
+  const y = Number(payload.year);
+  const year = Number.isFinite(y) ? Math.trunc(y) : 0;
+  return {
+    year,
+    term: String(payload.term ?? "").trim(),
+    day: String(payload.day ?? "").trim(),
+    time_from: String(payload.time_from ?? "").trim(),
+    time_to: String(payload.time_to ?? "").trim(),
+    slot: String(payload.slot ?? "").trim(),
+    instructor_id: String(payload.instructor_id ?? "").trim(),
+    instructor: String(payload.instructor ?? "").trim(),
+    cap_100: nonNegativeIntCap(payload.cap_100),
+    cap_200: nonNegativeIntCap(payload.cap_200),
+    cap_300: nonNegativeIntCap(payload.cap_300),
+    cap_123: nonNegativeIntCap(payload.cap_123),
+  };
+}
+
 export async function createClinicTimetableSlot(
   payload: ClinicTimetableWritePayload,
 ): Promise<number> {
+  const row = normalizeClinicTimetableWritePayload(payload);
   const [res] = await pool.query<ResultSetHeader>(
     `INSERT INTO clinic_timetable (
         year, term, day, time_from, time_to, slot,
@@ -187,18 +219,18 @@ export async function createClinicTimetableSlot(
         \`100Max\`, \`200Max\`, \`300Max\`, \`123Max\`
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      payload.year,
-      payload.term,
-      payload.day,
-      payload.time_from,
-      payload.time_to,
-      payload.slot,
-      payload.instructor_id,
-      payload.instructor,
-      payload.cap_100,
-      payload.cap_200,
-      payload.cap_300,
-      payload.cap_123,
+      row.year,
+      row.term,
+      row.day,
+      row.time_from,
+      row.time_to,
+      row.slot,
+      row.instructor_id,
+      row.instructor,
+      row.cap_100,
+      row.cap_200,
+      row.cap_300,
+      row.cap_123,
     ],
   );
   return Number(res.insertId);
@@ -211,6 +243,7 @@ export async function updateClinicTimetableSlot(
   if (!Number.isFinite(seqNum) || seqNum <= 0) {
     return false;
   }
+  const row = normalizeClinicTimetableWritePayload(payload);
   const [res] = await pool.query<ResultSetHeader>(
     `UPDATE clinic_timetable SET
         year = ?, term = ?, day = ?, time_from = ?, time_to = ?, slot = ?,
@@ -218,18 +251,18 @@ export async function updateClinicTimetableSlot(
         \`100Max\` = ?, \`200Max\` = ?, \`300Max\` = ?, \`123Max\` = ?
       WHERE seqNum = ?`,
     [
-      payload.year,
-      payload.term,
-      payload.day,
-      payload.time_from,
-      payload.time_to,
-      payload.slot,
-      payload.instructor_id,
-      payload.instructor,
-      payload.cap_100,
-      payload.cap_200,
-      payload.cap_300,
-      payload.cap_123,
+      row.year,
+      row.term,
+      row.day,
+      row.time_from,
+      row.time_to,
+      row.slot,
+      row.instructor_id,
+      row.instructor,
+      row.cap_100,
+      row.cap_200,
+      row.cap_300,
+      row.cap_123,
       seqNum,
     ],
   );

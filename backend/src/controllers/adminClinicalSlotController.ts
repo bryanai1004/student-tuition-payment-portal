@@ -15,7 +15,8 @@ function devMessage(e: unknown): string {
 }
 
 function parseQueryAcademicTermId(req: Request): string | null {
-  const raw = req.query.academic_term_id;
+  const raw =
+    req.query.academicTermId ?? req.query.academic_term_id;
   const v = Array.isArray(raw) ? raw[0] : raw;
   if (typeof v !== "string") return null;
   const t = v.trim();
@@ -113,7 +114,8 @@ function parsePatchBody(body: unknown): AdminClinicalSlotPatchInput | null {
 }
 
 /**
- * GET /api/admin/clinical/slots?academic_term_id=optional
+ * GET /api/admin/clinical/slots
+ * Optional query: `academicTermId` or `academic_term_id` (portal academic_terms.id).
  */
 export async function getAdminClinicalSlotsHandler(
   req: Request,
@@ -151,7 +153,7 @@ export async function postAdminClinicalSlotHandler(
     if (!input) {
       res.status(400).json({
         error:
-          "Invalid body: require academicTermId, weekday, timeFrom, timeTo, slot, instructor; optional instructorId, cap100–cap123.",
+          "Invalid body: require academicTermId, weekday, timeFrom, timeTo, slot; optional instructor (blank or TBA), instructorId, cap100–cap123.",
       });
       return;
     }

@@ -103,15 +103,31 @@ function trimStr(v: unknown, fallback = ""): string {
   return String(v).trim();
 }
 
-function parseCap(v: unknown): number {
+/**
+ * Parse a cap from admin JSON: empty → 0; otherwise must be a non‑negative integer.
+ */
+function parseAdminCap(v: unknown, label: string): number {
   if (v === undefined || v === null || v === "") {
     return 0;
   }
-  const n = typeof v === "number" ? v : Number(String(v).trim());
-  if (!Number.isFinite(n)) {
+  if (typeof v === "number") {
+    if (!Number.isFinite(v) || !Number.isInteger(v) || v < 0) {
+      throw new AdminClinicalSlotError(`${label} must be a non-negative integer.`);
+    }
+    return v;
+  }
+  const s = String(v).trim();
+  if (s === "") {
     return 0;
   }
-  return Math.trunc(n);
+  if (!/^\d+$/.test(s)) {
+    throw new AdminClinicalSlotError(`${label} must be a non-negative integer.`);
+  }
+  const n = Number(s);
+  if (!Number.isSafeInteger(n) || n < 0) {
+    throw new AdminClinicalSlotError(`${label} must be a non-negative integer.`);
+  }
+  return n;
 }
 
 function requireNonNegativeCap(n: number, label: string): void {
@@ -274,10 +290,10 @@ export async function createAdminClinicalSlot(
   const instructor = normalizeInstructor(input.instructor);
   const instructorId = normalizeInstructorId(input.instructorId);
 
-  const cap100 = parseCap(input.cap100);
-  const cap200 = parseCap(input.cap200);
-  const cap300 = parseCap(input.cap300);
-  const cap123 = parseCap(input.cap123);
+  const cap100 = parseAdminCap(input.cap100, "100 level cap");
+  const cap200 = parseAdminCap(input.cap200, "200 level cap");
+  const cap300 = parseAdminCap(input.cap300, "300 level cap");
+  const cap123 = parseAdminCap(input.cap123, "All levels cap");
   requireNonNegativeCap(cap100, "100 level cap");
   requireNonNegativeCap(cap200, "200 level cap");
   requireNonNegativeCap(cap300, "300 level cap");
@@ -383,13 +399,21 @@ export async function updateAdminClinicalSlot(
       : existing.instructor_id;
 
   const cap100 =
-    patch.cap100 !== undefined ? parseCap(patch.cap100) : existing.cap_100;
+    patch.cap100 !== undefined
+      ? parseAdminCap(patch.cap100, "100 level cap")
+      : existing.cap_100;
   const cap200 =
-    patch.cap200 !== undefined ? parseCap(patch.cap200) : existing.cap_200;
+    patch.cap200 !== undefined
+      ? parseAdminCap(patch.cap200, "200 level cap")
+      : existing.cap_200;
   const cap300 =
-    patch.cap300 !== undefined ? parseCap(patch.cap300) : existing.cap_300;
+    patch.cap300 !== undefined
+      ? parseAdminCap(patch.cap300, "300 level cap")
+      : existing.cap_300;
   const cap123 =
-    patch.cap123 !== undefined ? parseCap(patch.cap123) : existing.cap_123;
+    patch.cap123 !== undefined
+      ? parseAdminCap(patch.cap123, "All levels cap")
+      : existing.cap_123;
 
   requireNonNegativeCap(cap100, "100 level cap");
   requireNonNegativeCap(cap200, "200 level cap");

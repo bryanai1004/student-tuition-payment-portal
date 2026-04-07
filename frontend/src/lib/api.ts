@@ -1686,7 +1686,7 @@ export async function fetchAdminClinicalSlots(options?: {
     options?.academicTermId != null &&
     String(options.academicTermId).trim() !== ''
   ) {
-    params.set('academic_term_id', String(options.academicTermId).trim())
+    params.set('academicTermId', String(options.academicTermId).trim())
   }
   const q = params.toString()
   const path =

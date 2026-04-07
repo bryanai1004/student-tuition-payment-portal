@@ -751,8 +751,7 @@ export function AdminClinicalPage() {
                   {slots.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="portal-card-note">
-                        No clinical slots for this term yet. Use Create Slot to add
-                        one.
+                        No clinical slots for this term yet.
                       </td>
                     </tr>
                   ) : (
