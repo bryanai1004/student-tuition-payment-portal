@@ -1,3 +1,7 @@
+/**
+ * **Clinical progress** domain: legacy `clinic` rows + `requirements.clinic_hours`. Independent of academic attempts
+ * and transcript display rows — do not derive this from `marks` or merge clinic transcript lines into academic units.
+ */
 function str(v) {
     if (v == null)
         return "";

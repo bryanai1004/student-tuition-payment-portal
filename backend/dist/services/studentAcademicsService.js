@@ -1,3 +1,9 @@
+/**
+ * Student academics API: merges **portal registration** (`portal_enrollments` + `course_sections`) with **marks**
+ * attempts. `transcript` in the response is marks-only; `enrollmentHistory` is the **combined** sorted timeline
+ * (legacy JSON field name). This service does **not** compute degree audit or clinical progress — those belong in
+ * `computeDegreeAudit` and `clinicalProgressService` respectively, merged only at the account layer when needed.
+ */
 import { DEMO_STUDENT_ID } from "../config/constants.js";
 import { pool } from "../lib/db.js";
 import { getLegacyStudentDisplayName, listMarksForStudent, } from "../repositories/studentAcademicsRepository.js";
@@ -7,7 +13,7 @@ import { loadCoursesTranscriptLookup } from "../repositories/studentTranscriptRe
 import { buildAcademicCourseRecordsFromMarksWithLookup, buildAvailableTermsFromCourseRecords, courseRecordToEnrollmentItem, courseRecordToScheduleItem, courseRecordToTranscriptItem, legacyCompletedBlocksPortalRow, pickNewerRegistrationAnchor, portalEnrollmentRowToAcademicCourseRecord, resolveCourseDisplayTitle, resolveRegistrationAnchoredAcademicTerm, sortTranscriptPreviewRecords, termsMatch, } from "./studentAcademicCourseRecords.js";
 import { courseFeedbackLookupKey, getFeedbackSubmittedAtMapForStudent, } from "./studentCourseFeedbackService.js";
 function mergeEnrollmentFeedbackIntoPayload(payload, submittedAtByKey) {
-    const enrollmentHistory = payload.courseRecords.map((r) => {
+    const combinedAcademicHistory = payload.courseRecords.map((r) => {
         const k = courseFeedbackLookupKey(r.courseCode, r.term, r.year);
         const at = submittedAtByKey.get(k) ?? null;
         return courseRecordToEnrollmentItem(r, {
@@ -15,11 +21,17 @@ function mergeEnrollmentFeedbackIntoPayload(payload, submittedAtByKey) {
             submittedAt: at,
         });
     });
-    return { ...payload, enrollmentHistory };
+    return { ...payload, enrollmentHistory: combinedAcademicHistory };
 }
 function buildMergedPayload(studentId, studentName, marksRows, legacyCourseRecords, portalCourseRecords, latestRegistration) {
-    const courseRecords = [...legacyCourseRecords, ...portalCourseRecords];
-    sortTranscriptPreviewRecords(courseRecords);
+    const academicAttemptsFromMarks = legacyCourseRecords;
+    const registrationHistoryFromPortal = portalCourseRecords;
+    const combinedSortedCourseRecords = [
+        ...academicAttemptsFromMarks,
+        ...registrationHistoryFromPortal,
+    ];
+    sortTranscriptPreviewRecords(combinedSortedCourseRecords);
+    const courseRecords = combinedSortedCourseRecords;
     const resolvedActive = resolveRegistrationAnchoredAcademicTerm(latestRegistration, marksRows);
     const currentTerm = resolvedActive;
     const currentSchedule = currentTerm == null
@@ -28,14 +40,15 @@ function buildMergedPayload(studentId, studentName, marksRows, legacyCourseRecor
             .filter((r) => r.year === currentTerm.year &&
             termsMatch(r.term, currentTerm.term))
             .map(courseRecordToScheduleItem);
+    const combinedAcademicHistory = courseRecords.map((r) => courseRecordToEnrollmentItem(r));
     return {
         studentId,
         studentName,
         currentTerm,
         availableTerms: buildAvailableTermsFromCourseRecords(courseRecords),
         currentSchedule,
-        transcript: legacyCourseRecords.map(courseRecordToTranscriptItem),
-        enrollmentHistory: courseRecords.map((r) => courseRecordToEnrollmentItem(r)),
+        transcript: academicAttemptsFromMarks.map(courseRecordToTranscriptItem),
+        enrollmentHistory: combinedAcademicHistory,
         courseRecords,
     };
 }

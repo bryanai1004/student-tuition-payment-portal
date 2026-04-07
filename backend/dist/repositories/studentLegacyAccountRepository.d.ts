@@ -9,6 +9,9 @@ export type LegacyMysqlClient = Pool | PoolConnection;
  * - `registration.term`, `year`, `total_fees`, `date`
  * - `accounting.id` — same student key as `students.id` / `registration.id`
  * - `accounting.seqNumber` — row PK; `date` is YYYYMMDD int; signed `debit`/`credit` (e.g. refunds as negative debit)
+ *
+ * Domain: **`registration`** rows anchor the student’s enrolled term for billing snapshot (`loadLegacyAccountSnapshot`);
+ * they are **not** the same as `marks` attempts or `portal_enrollments`. Accounting quarters list ledger activity only.
  */
 export type LegacyAccountSnapshot = {
     studentId: string;

@@ -1,3 +1,8 @@
+/**
+ * Student account (billing + schedule + **merged** context): the layer where legacy **academic** schedule data and
+ * **clinical** progress (`buildClinicalProgress`) may appear together for the dashboard. Keep domain separation
+ * upstream — `computeDegreeAudit` is not wired here yet.
+ */
 import { DEMO_STUDENT_ID } from "../config/constants.js";
 import { pool } from "../lib/db.js";
 import { listMarksForStudent } from "../repositories/studentAcademicsRepository.js";

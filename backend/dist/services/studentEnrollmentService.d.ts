@@ -1,3 +1,7 @@
+/**
+ * **Registration** writes: enrolls into `portal_enrollments` / sections under an academic term. This is the portal
+ * enrollment action — separate from `marks` outcomes, transcript display, and degree audit.
+ */
 import { type EnrollSectionInput } from "../repositories/studentEnrollmentRepository.js";
 export type { EnrollSectionInput };
 /** Thrown when academic term policy blocks registration (maps to HTTP 400 with this message). */

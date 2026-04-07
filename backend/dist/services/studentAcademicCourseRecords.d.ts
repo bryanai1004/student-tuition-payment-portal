@@ -1,3 +1,15 @@
+/**
+ * Mappers and sort helpers for **academic attempts** (legacy `marks` + transcript-only `clinic` rows) and
+ * **portal registration** rows projected into `StudentAcademicCourseRecord`.
+ *
+ * - **AcademicAttempt** (domain): one graded or in-progress outcome; sources `marks` or `clinic` — see
+ *   `domain/studentDomainModels.ts`. Clinic rows here feed transcript-style views; do not treat them as earned
+ *   didactic units for degree audit.
+ * - **TranscriptRecord** / transcript display: built in `studentTranscriptService` — not equivalent to raw attempts
+ *   and not used as degree progress source of truth.
+ * - **Degree progress**: belongs in `computeDegreeAudit` (skeleton in `domain/studentDomainModels.ts`); must not be
+ *   inferred from transcript preview.
+ */
 import type { ClinicTranscriptRow, CourseTranscriptLookupEntry } from "../repositories/studentTranscriptRepository.js";
 import type { MarksRow } from "../repositories/studentAcademicsRepository.js";
 import type { StudentAcademicCourseRecord, StudentAcademicCourseStatus, StudentAcademicsAvailableTerm, StudentAcademicsEnrollmentItem, StudentAcademicsScheduleItem, StudentAcademicsTranscriptItem } from "../types/studentAcademics.js";
@@ -53,10 +65,15 @@ export declare function normalizeEnglishTitle(code: string, rawTitle: string, lo
 export declare function resolveCourseDisplayTitle(code: string, legacyTitle: string, lookup: Map<string, CourseTranscriptLookupEntry>): string;
 export declare function isClinicalCourse(courseCode: string, courseTitle: string): boolean;
 export declare function isClinicalMarksRow(r: MarksRow): boolean;
+/** Source of truth: legacy `marks` → domain `AcademicAttempt` with `source: "marks"`. */
 export declare function marksRowToAcademicCourseRecord(studentId: string, r: MarksRow, activeTerm: {
     term: string;
     year: number;
 } | null, courseTitle: string): StudentAcademicCourseRecord;
+/**
+ * Source of truth: legacy `clinic` table → attempt-shaped row for **transcript display** only (`source: "clinic"`).
+ * Do not merge these rows into academic unit totals for degree audit.
+ */
 export declare function clinicRowToAcademicCourseRecord(studentId: string, r: ClinicTranscriptRow, courseTitle: string, activeTerm: {
     term: string;
     year: number;
@@ -97,6 +114,10 @@ export declare function pickNewerRegistrationAnchor(legacy: {
     term: string;
     year: number;
 } | null;
+/**
+ * Source of truth: `portal_enrollments` + `course_sections` slice → domain `RegistrationRecord` shape on
+ * `StudentAcademicCourseRecord` (`source: "portal"`). Not a `marks` outcome — grades stay null.
+ */
 export declare function portalEnrollmentRowToAcademicCourseRecord(studentId: string, row: {
     course_code: string;
     course_title_raw: string;

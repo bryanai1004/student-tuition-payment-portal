@@ -1,3 +1,8 @@
+/**
+ * Transcript preview: merges **marks** + **clinic** into display-sorted `TranscriptRecord` rows (`StudentTranscriptRow`).
+ * This is a **presentation** read model only — not registration, not degree audit, and not the place to compute
+ * earned units or graduation status (`computeDegreeAudit` owns audit math; clinic hours stay in `clinicalProgressService`).
+ */
 import { DEMO_STUDENT_ID } from "../config/constants.js";
 import { pool } from "../lib/db.js";
 import { findLatestLegacyTermYear } from "../repositories/studentLegacyAccountRepository.js";

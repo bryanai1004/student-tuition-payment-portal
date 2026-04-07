@@ -1,3 +1,7 @@
+/**
+ * **Registration** writes: enrolls into `portal_enrollments` / sections under an academic term. This is the portal
+ * enrollment action — separate from `marks` outcomes, transcript display, and degree audit.
+ */
 import { getAcademicTermById } from "../repositories/academicTermRepository.js";
 import { enrollStudentInSections, } from "../repositories/studentEnrollmentRepository.js";
 import { InvalidAcademicTermError } from "./courseSectionService.js";
