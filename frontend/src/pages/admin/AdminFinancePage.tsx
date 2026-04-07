@@ -8,8 +8,11 @@ import {
   type AdminFinanceStudentRow,
 } from '../../lib/api'
 
+type BalanceFilter = 'all' | 'positive' | 'negative' | 'zero'
+
 export function AdminFinancePage() {
   const [q, setQ] = useState('')
+  const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>('all')
   const [rows, setRows] = useState<AdminFinanceStudentRow[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -83,13 +86,22 @@ export function AdminFinancePage() {
   const filtered = useMemo(() => {
     if (rows == null) return []
     const s = q.trim().toLowerCase()
-    if (!s) return rows
-    return rows.filter(
-      (r) =>
-        r.studentId.toLowerCase().includes(s) ||
-        r.name.toLowerCase().includes(s),
-    )
-  }, [q, rows])
+    let list = rows
+    if (s) {
+      list = rows.filter(
+        (r) =>
+          r.studentId.toLowerCase().includes(s) ||
+          r.name.toLowerCase().includes(s),
+      )
+    }
+    if (balanceFilter === 'all') return list
+    return list.filter((r) => {
+      const b = r.balance
+      if (balanceFilter === 'positive') return b > 0
+      if (balanceFilter === 'negative') return b < 0
+      return b === 0
+    })
+  }, [balanceFilter, q, rows])
 
   const sectionLoading = loading && rows === null && error === null
   const noQuarter = quarters.length === 0 && quartersErr == null
@@ -124,6 +136,23 @@ export function AdminFinancePage() {
             </select>
           </label>
           <div className="admin-page__toolbar-actions admin-page__toolbar-actions--wrap admin-finance-page-controls__search">
+            <label className="admin-finance-page-controls__field admin-finance-page-controls__field--balance-filter">
+              <span className="portal-text-muted admin-form-hint">Balance</span>
+              <select
+                className="admin-input"
+                value={balanceFilter}
+                onChange={(e) =>
+                  setBalanceFilter(e.target.value as BalanceFilter)
+                }
+                aria-label="Filter roster by balance sign"
+                disabled={sectionLoading || Boolean(error) || noQuarter}
+              >
+                <option value="all">All balances</option>
+                <option value="positive">Positive balance</option>
+                <option value="negative">Negative balance</option>
+                <option value="zero">Zero balance</option>
+              </select>
+            </label>
             <input
               type="search"
               className="admin-input admin-input--search"
@@ -197,7 +226,7 @@ export function AdminFinancePage() {
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="portal-text-muted">
-                    No students match your search.
+                    No students match your filters.
                   </td>
                 </tr>
               ) : (

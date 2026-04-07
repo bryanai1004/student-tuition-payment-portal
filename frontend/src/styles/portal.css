@@ -7195,6 +7195,12 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   margin-left: auto;
   flex: 1 1 14rem;
   min-width: 12rem;
+  align-items: flex-end;
+}
+
+.admin-finance-page-controls__field--balance-filter {
+  min-width: 0;
+  flex: 0 0 auto;
 }
 
 /* Match Admin Students roster: plain body text, not .admin-code chip/monospace */
