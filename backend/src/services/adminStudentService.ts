@@ -27,6 +27,7 @@ import {
   legacyDbDateToIso,
   resolveEnrollmentDate,
 } from "./studentProfileService.js";
+import { buildClinicalProgress } from "./clinicalProgressService.js";
 
 function str(v: unknown): string {
   if (v == null) return "";
@@ -178,10 +179,17 @@ export async function getAdminStudentDetail(
   const latestRegistrationTerm = latest
     ? formatLatestRegistrationTerm(latest.term, latest.year)
     : null;
-  return mapProfileRowToAdminDetail(
+  const base = mapProfileRowToAdminDetail(
     row as Record<string, unknown>,
     latestRegistrationTerm,
   );
+  try {
+    const clinicalProgress = await buildClinicalProgress(pool, studentId);
+    return { ...base, clinicalProgress };
+  } catch (e) {
+    console.error("[admin] buildClinicalProgress failed", studentId, e);
+    return base;
+  }
 }
 
 const DATE_VALIDATION_PREFIX = "Validation:";

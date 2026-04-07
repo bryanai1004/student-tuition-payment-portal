@@ -172,6 +172,16 @@ export type AdminStudentRegistrationHistoryTerm = {
   items: AdminStudentRegistrationHistoryItem[]
 }
 
+/** Same contract as student account `clinicalProgress` (admin detail includes when available). */
+export type ClinicalProgress = {
+  level: number
+  completedHours: number
+  requiredHours: number
+  completedCourses: string[]
+  readiness: 'ready' | 'not_ready'
+  missing: string[]
+}
+
 /** GET/PUT /api/admin/students/:studentId — admin student detail. */
 export type AdminStudentDetail = {
   studentId: string
@@ -191,6 +201,7 @@ export type AdminStudentDetail = {
   state: string | null
   zip: string | null
   latestRegistrationTerm: string | null
+  clinicalProgress?: ClinicalProgress
   /** When present, drives quarter-based registration history on the admin detail page. */
   registrationHistory?: AdminStudentRegistrationHistoryTerm[]
 }
@@ -287,6 +298,33 @@ function parseOptionalRegistrationHistoryItem(
   }
 }
 
+function parseOptionalClinicalProgress(
+  v: unknown,
+): ClinicalProgress | undefined {
+  if (v == null || typeof v !== 'object') return undefined
+  const p = v as Record<string, unknown>
+  const level = Number(p.level)
+  const completedHours = Number(p.completedHours)
+  const requiredHours = Number(p.requiredHours)
+  const readinessRaw = String(p.readiness ?? '')
+  const readiness: ClinicalProgress['readiness'] =
+    readinessRaw === 'ready' || readinessRaw === 'not_ready'
+      ? readinessRaw
+      : 'not_ready'
+  const completedCourses = Array.isArray(p.completedCourses)
+    ? p.completedCourses.map((x) => String(x))
+    : []
+  const missing = Array.isArray(p.missing) ? p.missing.map((x) => String(x)) : []
+  return {
+    level: Number.isFinite(level) ? level : 0,
+    completedHours: Number.isFinite(completedHours) ? completedHours : 0,
+    requiredHours: Number.isFinite(requiredHours) ? requiredHours : 0,
+    completedCourses,
+    readiness,
+    missing,
+  }
+}
+
 function parseOptionalRegistrationHistory(
   v: unknown,
 ): AdminStudentRegistrationHistoryTerm[] | undefined {
@@ -345,6 +383,9 @@ function parseAdminStudentDetailPayload(data: unknown): AdminStudentDetail {
   const registrationHistory = parseOptionalRegistrationHistory(
     o.registrationHistory ?? o.registration_history,
   )
+  const clinicalProgress = parseOptionalClinicalProgress(
+    o.clinicalProgress ?? o.clinical_progress,
+  )
   return {
     studentId: o.studentId,
     division: parseAdminDivision(o.division),
@@ -363,6 +404,7 @@ function parseAdminStudentDetailPayload(data: unknown): AdminStudentDetail {
     state: parseNullableString(o.state),
     zip: parseNullableString(o.zip),
     latestRegistrationTerm: parseNullableString(o.latestRegistrationTerm),
+    ...(clinicalProgress != null ? { clinicalProgress } : {}),
     ...(registrationHistory != null ? { registrationHistory } : {}),
   }
 }

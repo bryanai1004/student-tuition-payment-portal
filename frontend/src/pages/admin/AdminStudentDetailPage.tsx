@@ -4,6 +4,7 @@ import {
   fetchAdminStudentDetail,
   type AdminStudentDetail,
   type AdminStudentRegistrationHistoryItem,
+  type ClinicalProgress,
 } from '../../lib/api'
 
 function dashText(value: string | null | undefined): string {
@@ -80,6 +81,17 @@ function cellHistory(
   if (typeof v === 'number') return String(v)
   const s = v.trim()
   return s.length > 0 ? s : '—'
+}
+
+function clinicalReadinessLabel(readiness: ClinicalProgress['readiness']): string {
+  return readiness === 'ready' ? 'Ready' : 'Not ready'
+}
+
+function clinicalHoursProgressPct(cp: ClinicalProgress): number {
+  if (cp.requiredHours > 0) {
+    return Math.min(100, Math.round((cp.completedHours / cp.requiredHours) * 100))
+  }
+  return cp.completedHours > 0 ? 100 : 0
 }
 
 export function AdminStudentDetailPage() {
@@ -274,12 +286,42 @@ export function AdminStudentDetailPage() {
                 className="portal-card portal-stack"
                 aria-labelledby="admin-student-reg-summary"
               >
-                <h2
-                  id="admin-student-reg-summary"
-                  className="portal-section-heading"
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                  }}
                 >
-                  Registration summary
-                </h2>
+                  <h2
+                    id="admin-student-reg-summary"
+                    className="portal-section-heading"
+                    style={{ marginBottom: 0 }}
+                  >
+                    Registration summary
+                  </h2>
+                  {detail.clinicalProgress ? (
+                    <div
+                      style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}
+                      aria-label="Clinical summary"
+                    >
+                      <span className="portal-status portal-status--scheduled">
+                        Level {detail.clinicalProgress.level}
+                      </span>
+                      <span
+                        className={
+                          detail.clinicalProgress.readiness === 'ready'
+                            ? 'portal-status portal-status--paid'
+                            : 'portal-status portal-status--pending'
+                        }
+                      >
+                        {clinicalReadinessLabel(detail.clinicalProgress.readiness)}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
                 <dl>
                   <div className="portal-row">
                     <dt>Latest registration term</dt>
@@ -302,6 +344,112 @@ export function AdminStudentDetailPage() {
                     <dd>{formatEntryYear(detail.entryYear)}</dd>
                   </div>
                 </dl>
+              </section>
+
+              <section
+                className={`portal-card portal-stack${detail.clinicalProgress ? ' portal-academics-progress-card' : ''}`}
+                aria-labelledby="admin-student-clinical-progress"
+              >
+                <h2
+                  id="admin-student-clinical-progress"
+                  className="portal-section-heading"
+                >
+                  Clinical progress
+                </h2>
+                {detail.clinicalProgress == null ? (
+                  <p
+                    className="portal-card-note admin-detail-empty"
+                    role="status"
+                  >
+                    Clinical progress is not available for this student record.
+                  </p>
+                ) : (
+                  <>
+                    <div className="portal-grid-4">
+                      <div>
+                        <p className="portal-card-label">Current level</p>
+                        <p className="portal-card-value">
+                          {detail.clinicalProgress.level}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="portal-card-label">Hours</p>
+                        <p className="portal-card-value">
+                          {detail.clinicalProgress.completedHours} /{' '}
+                          {detail.clinicalProgress.requiredHours}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="portal-card-label">Readiness</p>
+                        <p className="portal-card-value">
+                          <span
+                            className={
+                              detail.clinicalProgress.readiness === 'ready'
+                                ? 'portal-status portal-status--paid'
+                                : 'portal-status portal-status--pending'
+                            }
+                          >
+                            {clinicalReadinessLabel(
+                              detail.clinicalProgress.readiness,
+                            )}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      className="portal-academics-progress-track"
+                      role="progressbar"
+                      aria-valuenow={clinicalHoursProgressPct(detail.clinicalProgress)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="Clinical hours progress"
+                    >
+                      <div
+                        className="portal-academics-progress-fill"
+                        style={{
+                          width: `${clinicalHoursProgressPct(detail.clinicalProgress)}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="portal-academics-progress-caption portal-inline-note portal-inline-note--flush">
+                      {detail.clinicalProgress.completedHours} of{' '}
+                      {detail.clinicalProgress.requiredHours} required hours in
+                      clinical records.
+                    </p>
+                    <div className="portal-stack" style={{ gap: '0.75rem' }}>
+                      <div>
+                        <p className="portal-card-label">Completed courses</p>
+                        {detail.clinicalProgress.completedCourses.length === 0 ? (
+                          <p className="portal-inline-note portal-inline-note--flush">
+                            No clinical course rows on file yet.
+                          </p>
+                        ) : (
+                          <p className="portal-card-value" style={{ marginTop: '0.25rem' }}>
+                            {detail.clinicalProgress.completedCourses.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="portal-card-label">Missing</p>
+                        {detail.clinicalProgress.missing.length === 0 ? (
+                          <p className="portal-inline-note portal-inline-note--flush">
+                            No open items listed.
+                          </p>
+                        ) : (
+                          <ul className="portal-module-list">
+                            {detail.clinicalProgress.missing.map((item) => (
+                              <li key={item} className="portal-module-list-item">
+                                <span className="portal-module-list-label">
+                                  {item}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
 
               <section
