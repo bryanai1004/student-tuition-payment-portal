@@ -10,26 +10,13 @@ const CHARGE_CATEGORIES = [
 function roundMoney(n) {
     return Math.round(n * 100) / 100;
 }
-async function balanceForLatestQuarter(studentId) {
-    const { quarters } = await getAccountingQuartersPayload(studentId);
-    if (quarters.length === 0) {
-        return 0;
-    }
-    const q = quarters[0];
-    const ledger = await getAccountingLedgerPayload(studentId, q.term, q.year);
-    if (ledger == null) {
-        return 0;
-    }
-    return roundMoney(ledger.summary.balance);
-}
 export async function listAdminFinanceStudents() {
     const roster = await listFinanceRosterRows(pool);
-    const out = await Promise.all(roster.map(async (r) => ({
+    return roster.map((r) => ({
         studentId: r.studentId,
         name: r.name,
-        balance: await balanceForLatestQuarter(r.studentId),
-    })));
-    return out;
+        balance: null,
+    }));
 }
 export async function getAdminFinanceQuarters(studentId) {
     return getAccountingQuartersPayload(studentId);

@@ -114,12 +114,10 @@ export async function listLegacyAccountingQuarters(pool, studentId) {
          WHEN 'WINTER' THEN 1
          ELSE 0
        END DESC`, [studentId]);
-    const out = rows.map((r) => ({
+    return rows.map((r) => ({
         term: normalizeTerm(r.term),
         year: Math.trunc(num(r.year)),
     }));
-    console.debug("[account-debug] listLegacyAccountingQuarters", JSON.stringify({ studentId, count: out.length }));
-    return out;
 }
 /**
  * Load one legacy `students` row by primary key `id` (e.g. C17310).

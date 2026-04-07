@@ -2,7 +2,8 @@ import { type PortalBillingCategory } from "../repositories/adminFinanceReposito
 export type AdminFinanceStudentRow = {
     studentId: string;
     name: string;
-    balance: number;
+    /** Omitted on list until ledger is opened (avoids N× quarters+ledger on roster load). */
+    balance: number | null;
 };
 export declare function listAdminFinanceStudents(): Promise<AdminFinanceStudentRow[]>;
 export declare function getAdminFinanceQuarters(studentId: string): Promise<{
