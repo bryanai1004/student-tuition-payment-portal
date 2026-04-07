@@ -99,14 +99,14 @@
   flex-grow: 0;
 }
 
-/* Dashboard homepage: wider centered stage than generic / internal reading columns. */
+/* Dashboard homepage: wider centered stage than generic .portal-main-content (internal modules use .portal-shell--internal-module). */
 .portal-shell--dashboard-home .portal-main-content {
-  max-width: 1520px;
   width: 100%;
+  max-width: 1560px;
   margin-left: auto;
   margin-right: auto;
-  padding-left: 24px;
-  padding-right: 24px;
+  padding-left: 28px;
+  padding-right: 28px;
   box-sizing: border-box;
 }
 
