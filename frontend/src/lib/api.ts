@@ -1310,6 +1310,50 @@ export async function fetchStudentAcademics(
   return data as StudentAcademicsResponse
 }
 
+/** GET /api/students/:studentId/clinical-schedule — JSON array of assignment rows. */
+export type ClinicalScheduleSession = {
+  id: number
+  studentId: string
+  courseCode: string
+  sessionDate: string
+  sessionName: string | null
+  site: string | null
+  faculty: string | null
+  status: string
+}
+
+function isClinicalScheduleSessionRow(x: unknown): x is ClinicalScheduleSession {
+  if (x == null || typeof x !== 'object') return false
+  const o = x as Record<string, unknown>
+  return (
+    typeof o.id === 'number' &&
+    typeof o.studentId === 'string' &&
+    typeof o.courseCode === 'string' &&
+    typeof o.sessionDate === 'string' &&
+    (o.sessionName === null || typeof o.sessionName === 'string') &&
+    (o.site === null || typeof o.site === 'string') &&
+    (o.faculty === null || typeof o.faculty === 'string') &&
+    typeof o.status === 'string'
+  )
+}
+
+export async function fetchStudentClinicalSchedule(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<ClinicalScheduleSession[]> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/clinical-schedule`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected clinical schedule response')
+  }
+  for (const row of data) {
+    if (!isClinicalScheduleSessionRow(row)) {
+      throw new Error('Unexpected clinical schedule response')
+    }
+  }
+  return data
+}
+
 export type CourseFeedbackApiItem = {
   id: number
   courseCode: string
