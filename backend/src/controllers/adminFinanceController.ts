@@ -200,7 +200,7 @@ export async function putFinanceQuarterSettings(
       return;
     }
 
-    await putQuarterSettings({
+    const saveResult = await putQuarterSettings({
       term,
       year: Math.trunc(year),
       paymentDueDate,
@@ -210,6 +210,10 @@ export async function putFinanceQuarterSettings(
         : undefined,
       updatedBy: null,
     });
+    if (!saveResult.ok) {
+      res.status(200).json(saveResult);
+      return;
+    }
     res.json({ ok: true });
   } catch (e) {
     console.error("[admin/finance/quarter-settings put]", e);

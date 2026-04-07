@@ -135,6 +135,15 @@ export function AdminFinancePage() {
 
   const sectionLoading = loading && rows === null && error === null
   const noQuarter = quarters.length === 0 && quartersErr == null
+  const canSaveDdl =
+    settings?.ddlPersistenceAvailable === true &&
+    selectedQuarter != null &&
+    quartersErr == null
+  const hasPaymentDdl = Boolean(settings?.paymentDueDate?.trim())
+  const canRunLateFee =
+    selectedQuarter != null &&
+    quartersErr == null &&
+    hasPaymentDdl
 
   function toggleLedger(studentId: string) {
     setExpandedId((cur) => (cur === studentId ? null : studentId))
@@ -151,13 +160,17 @@ export function AdminFinancePage() {
     try {
       const paymentDueDate =
         ddlInput.trim() === '' ? null : ddlInput.trim().slice(0, 10)
-      await putFinanceQuarterSettings({
+      const putRes = await putFinanceQuarterSettings({
         term: selectedQuarter.term,
         year: selectedQuarter.year,
         paymentDueDate,
         lateFeeEnabled: settings?.lateFeeEnabled ?? true,
         lateFeeAmount: settings?.lateFeeAmount ?? 30,
       })
+      if (!putRes.ok) {
+        setBanner(putRes.message)
+        return
+      }
       setBanner('Payment due date saved.')
       const s = await fetchFinanceQuarterSettings(
         selectedQuarter.term,
@@ -240,7 +253,7 @@ export function AdminFinancePage() {
               type="button"
               className="portal-btn portal-btn--secondary portal-btn--compact"
               disabled={
-                selectedQuarter == null || saveDdlBusy || quartersErr != null
+                !canSaveDdl || saveDdlBusy || settingsBusy
               }
               onClick={() => void saveDdl()}
             >
@@ -250,13 +263,35 @@ export function AdminFinancePage() {
               type="button"
               className="portal-btn portal-btn--secondary portal-btn--compact"
               disabled={
-                selectedQuarter == null || lateFeeBusy || quartersErr != null
+                !canRunLateFee || lateFeeBusy || settingsBusy
               }
               onClick={() => void runLateFee()}
+              title={
+                canRunLateFee
+                  ? undefined
+                  : 'Set a payment due date for this academic term before running late fee check.'
+              }
             >
               {lateFeeBusy ? 'Running…' : 'Run Late Fee Check'}
             </button>
           </div>
+          {settings != null &&
+          settings.ddlSaveNote != null &&
+          settings.ddlSaveNote !== '' ? (
+            <p className="portal-text-muted admin-form-hint">
+              {settings.ddlSaveNote}
+            </p>
+          ) : null}
+          {settings != null &&
+          !hasPaymentDdl &&
+          selectedQuarter != null &&
+          quartersErr == null &&
+          !settingsBusy ? (
+            <p className="portal-text-muted admin-form-hint">
+              Set a payment due date for this academic term before running late
+              fee check.
+            </p>
+          ) : null}
           <div className="admin-page__toolbar-actions admin-page__toolbar-actions--wrap admin-finance-page-controls__search">
             <input
               type="search"
@@ -294,9 +329,9 @@ export function AdminFinancePage() {
         <section className="portal-card portal-profile-state">
           <p className="portal-profile-state__title">No finance quarters yet</p>
           <p className="portal-profile-state__detail">
-            Quarters appear when enrollments, legacy accounting, or portal billing
-            activity exists. You can still add term settings after creating a
-            quarter record.
+            Quarters come from academic terms plus enrollments, legacy accounting,
+            or portal billing activity. Configure terms under Academic Terms; payment
+            due dates attach to those rows when supported by the database.
           </p>
         </section>
       ) : null}

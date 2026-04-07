@@ -885,6 +885,9 @@ export type FinanceQuarterSettingsResponse = {
   paymentDueDate: string | null
   lateFeeEnabled: boolean
   lateFeeAmount: number
+  /** When false, Save DDL should be disabled (no column or no academic_terms row). */
+  ddlPersistenceAvailable?: boolean
+  ddlSaveNote?: string | null
 }
 
 /** GET /api/admin/finance/quarter-settings?term=&year= */
@@ -917,12 +920,25 @@ export async function fetchFinanceQuarterSettings(
         : typeof pdd === 'string'
           ? pdd.slice(0, 10)
           : null
+    const ddlPersistenceAvailable =
+      typeof o.ddlPersistenceAvailable === 'boolean'
+        ? o.ddlPersistenceAvailable
+        : false
+    const rawNote = o.ddlSaveNote
+    const ddlSaveNote =
+      rawNote === null || rawNote === undefined
+        ? null
+        : typeof rawNote === 'string'
+          ? rawNote
+          : null
     return {
       term: o.term as string,
       year: o.year as number,
       paymentDueDate,
       lateFeeEnabled: o.lateFeeEnabled as boolean,
       lateFeeAmount: o.lateFeeAmount as number,
+      ddlPersistenceAvailable,
+      ddlSaveNote,
     }
   }
   throw new Error('Unexpected quarter settings response')
@@ -940,19 +956,23 @@ export type PutFinanceQuarterSettingsBody = {
 export async function putFinanceQuarterSettings(
   body: PutFinanceQuarterSettingsBody,
   options?: { signal?: AbortSignal },
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: true } | { ok: false; message: string }> {
   const data = (await fetchApiJson('/api/admin/finance/quarter-settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal: options?.signal,
   })) as unknown
-  if (
-    data != null &&
-    typeof data === 'object' &&
-    (data as { ok?: unknown }).ok === true
-  ) {
-    return { ok: true }
+  if (data != null && typeof data === 'object') {
+    const o = data as Record<string, unknown>
+    if (o.ok === true) return { ok: true }
+    if (
+      o.ok === false &&
+      typeof o.message === 'string' &&
+      o.message.trim() !== ''
+    ) {
+      return { ok: false, message: o.message }
+    }
   }
   throw new Error('Unexpected quarter settings save response')
 }
