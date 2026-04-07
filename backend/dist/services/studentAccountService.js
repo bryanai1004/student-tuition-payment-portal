@@ -6,6 +6,7 @@ import { findLatestTermYearForStudent, listPortalScheduleTermsForStudent, loadAc
 import { loadCoursesTranscriptLookup } from "../repositories/studentTranscriptRepository.js";
 import { getCatalogDemoAccountPayload } from "./demoAccountService.js";
 import { resolveRegistrationAnchoredAcademicTerm, termSortOrder, } from "./studentAcademicCourseRecords.js";
+import { buildClinicalProgress } from "./clinicalProgressService.js";
 import { assembleLegacyStudentAccountPayload } from "./studentLegacyAccountAssembler.js";
 import { buildAccountCurrentTerm } from "./studentAccountDashboard.js";
 import { assembleStudentAccountPayload } from "./studentAccountAssembler.js";
@@ -110,11 +111,12 @@ async function getRealStudentAccountPayload(studentId, termYear) {
     if (!snap) {
         return null;
     }
-    const [accountingRows, allMarksRows, courseLookup, latestReg] = await Promise.all([
+    const [accountingRows, allMarksRows, courseLookup, latestReg, clinicalProgress] = await Promise.all([
         loadLegacyAccountingRows(pool, studentId, term, year),
         listMarksForStudent(pool, studentId),
         loadCoursesTranscriptLookup(pool),
         findLatestLegacyTermYear(pool, studentId),
+        buildClinicalProgress(pool, studentId),
     ]);
     let portalActiveTerm = null;
     if (latestReg != null) {
@@ -124,7 +126,7 @@ async function getRealStudentAccountPayload(studentId, termYear) {
         }
     }
     const availableScheduleTerms = mergeScheduleTermOptionLists(toScheduleTermOptions(listedPairs), snap.term, snap.year);
-    return assembleLegacyStudentAccountPayload(snap, accountingRows, allMarksRows, courseLookup, { portalActiveTerm, availableScheduleTerms });
+    return assembleLegacyStudentAccountPayload(snap, accountingRows, allMarksRows, courseLookup, { portalActiveTerm, availableScheduleTerms, clinicalProgress });
 }
 export async function getStudentAccountPayload(studentId, termYear) {
     if (studentId === DEMO_STUDENT_ID) {

@@ -67,7 +67,7 @@ allMarksRows, courseLookup, options) {
         }));
     }
     const browseTerm = { term: snap.term, year: snap.year };
-    const { portalActiveTerm, availableScheduleTerms } = options;
+    const { portalActiveTerm, availableScheduleTerms, clinicalProgress } = options;
     const marksRowsForBrowse = allMarksRows.filter((m) => m.year === browseTerm.year && termsMatch(m.term, browseTerm.term));
     const courseRecords = buildAcademicCourseRecordsFromMarksWithLookup(snap.studentId, allMarksRows, courseLookup, portalActiveTerm);
     const browseRecords = courseRecords.filter((r) => r.year === browseTerm.year && termsMatch(r.term, browseTerm.term));
@@ -120,6 +120,7 @@ allMarksRows, courseLookup, options) {
         installmentPolicy: [],
         billingStatus: null,
         termChargeEffectiveDate: null,
+        clinicalProgress,
     };
 }
 //# sourceMappingURL=studentLegacyAccountAssembler.js.map

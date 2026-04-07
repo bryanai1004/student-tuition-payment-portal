@@ -70,6 +70,15 @@ export type InstallmentScheduleEntry = {
     dueDate: string;
     amount: number;
 };
+/** Legacy clinical ladder + hours vs program `requirements.clinic_hours` (real account payload only). */
+export type ClinicalProgress = {
+    level: number;
+    completedHours: number;
+    requiredHours: number;
+    completedCourses: string[];
+    readiness: "ready" | "not_ready";
+    missing: string[];
+};
 export type StudentAccountPayload = {
     program: string | null;
     term: string;
@@ -99,6 +108,7 @@ export type StudentAccountPayload = {
     installmentPolicy: string[];
     billingStatus: string | null;
     termChargeEffectiveDate: string | null;
+    clinicalProgress?: ClinicalProgress;
 };
 export type EnrollmentRecord = {
     studentId: string;
