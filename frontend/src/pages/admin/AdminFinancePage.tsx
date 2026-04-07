@@ -91,7 +91,7 @@ export function AdminFinancePage() {
         >
           <p className="portal-profile-state__title">Loading finance roster</p>
           <p className="portal-profile-state__detail">
-            Fetching students and latest-quarter balances from the server.
+            Fetching finance roster from the server.
           </p>
         </section>
       ) : null}
@@ -135,7 +135,7 @@ export function AdminFinancePage() {
                       </td>
                       <td>{r.name}</td>
                       <td className="admin-table-numeric">
-                        {formatMoney(r.balance)}
+                        {r.balance == null ? '—' : formatMoney(r.balance)}
                       </td>
                       <td>
                         <button

@@ -667,11 +667,11 @@ export async function fetchAccountingLedger(
   throw new Error('Unexpected accounting ledger response')
 }
 
-/** GET /api/admin/finance/students — ledger roster with latest-quarter balance per student. */
+/** GET /api/admin/finance/students — lightweight roster; balance filled when ledger is opened. */
 export type AdminFinanceStudentRow = {
   studentId: string
   name: string
-  balance: number
+  balance: number | null
 }
 
 function parseAdminFinanceStudentRow(
@@ -681,14 +681,16 @@ function parseAdminFinanceStudentRow(
     throw new Error('Unexpected admin finance students response')
   }
   const bal = o.balance
-  const balance =
-    typeof bal === 'number' && Number.isFinite(bal)
-      ? bal
-      : typeof bal === 'string'
-        ? Number(bal)
-        : Number.NaN
-  if (!Number.isFinite(balance)) {
-    throw new Error('Unexpected admin finance students response')
+  let balance: number | null
+  if (bal === null || bal === undefined) {
+    balance = null
+  } else if (typeof bal === 'number' && Number.isFinite(bal)) {
+    balance = bal
+  } else if (typeof bal === 'string') {
+    const n = Number(bal)
+    balance = Number.isFinite(n) ? n : null
+  } else {
+    balance = null
   }
   return { studentId: o.studentId, name: o.name, balance }
 }

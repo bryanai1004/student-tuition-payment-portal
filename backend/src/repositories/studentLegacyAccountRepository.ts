@@ -212,17 +212,10 @@ export async function listLegacyAccountingQuarters(
     [studentId],
   );
 
-  const out: LegacyAccountingQuarter[] = rows.map((r) => ({
+  return rows.map((r) => ({
     term: normalizeTerm(r.term),
     year: Math.trunc(num(r.year)),
   }));
-
-  console.debug(
-    "[account-debug] listLegacyAccountingQuarters",
-    JSON.stringify({ studentId, count: out.length }),
-  );
-
-  return out;
 }
 
 /**

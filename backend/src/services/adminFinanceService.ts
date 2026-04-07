@@ -13,7 +13,8 @@ import {
 export type AdminFinanceStudentRow = {
   studentId: string;
   name: string;
-  balance: number;
+  /** Omitted on list until ledger is opened (avoids N× quarters+ledger on roster load). */
+  balance: number | null;
 };
 
 const CHARGE_CATEGORIES: PortalBillingCategory[] = [
@@ -27,31 +28,15 @@ function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-async function balanceForLatestQuarter(studentId: string): Promise<number> {
-  const { quarters } = await getAccountingQuartersPayload(studentId);
-  if (quarters.length === 0) {
-    return 0;
-  }
-  const q = quarters[0]!;
-  const ledger = await getAccountingLedgerPayload(studentId, q.term, q.year);
-  if (ledger == null) {
-    return 0;
-  }
-  return roundMoney(ledger.summary.balance);
-}
-
 export async function listAdminFinanceStudents(): Promise<
   AdminFinanceStudentRow[]
 > {
   const roster = await listFinanceRosterRows(pool);
-  const out: AdminFinanceStudentRow[] = await Promise.all(
-    roster.map(async (r) => ({
-      studentId: r.studentId,
-      name: r.name,
-      balance: await balanceForLatestQuarter(r.studentId),
-    })),
-  );
-  return out;
+  return roster.map((r) => ({
+    studentId: r.studentId,
+    name: r.name,
+    balance: null,
+  }));
 }
 
 export async function getAdminFinanceQuarters(studentId: string) {
