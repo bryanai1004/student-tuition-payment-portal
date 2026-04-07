@@ -1464,8 +1464,13 @@ function parseAcademicTermRow(row: Record<string, unknown>): AcademicTerm | null
     end_date: parseNullableIsoDate(row.end_date),
     registration_open: parseNullableIsoDate(row.registration_open),
     registration_close: parseNullableIsoDate(row.registration_close),
-    payment_due_date: parseNullableIsoDate(row.payment_due_date),
-    lock_registration_if_overdue: parseAcademicTermBool(row.lock_registration_if_overdue),
+    payment_due_date: parseNullableIsoDate(
+      row.payment_due_date !== undefined ? row.payment_due_date : null,
+    ),
+    lock_registration_if_overdue:
+      row.lock_registration_if_overdue !== undefined
+        ? parseAcademicTermBool(row.lock_registration_if_overdue)
+        : false,
     status: status as AcademicTermStatus,
     is_visible: parseAcademicTermBool(row.is_visible),
   }

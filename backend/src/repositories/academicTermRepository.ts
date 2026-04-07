@@ -24,6 +24,14 @@ function asBool(v: unknown): boolean {
 }
 
 function normalizeRow(row: RowDataPacket): AcademicTermDetail {
+  const paymentDue =
+    row.payment_due_date !== undefined
+      ? nullableDateString(row.payment_due_date)
+      : null;
+  const lockReg =
+    row.lock_registration_if_overdue !== undefined
+      ? asBool(row.lock_registration_if_overdue)
+      : false;
   return {
     id: String(row.id ?? ""),
     term_label: String(row.term_label ?? ""),
@@ -35,14 +43,32 @@ function normalizeRow(row: RowDataPacket): AcademicTermDetail {
     end_date: nullableDateString(row.end_date),
     registration_open: nullableDateString(row.registration_open),
     registration_close: nullableDateString(row.registration_close),
-    payment_due_date: nullableDateString(row.payment_due_date),
-    lock_registration_if_overdue: asBool(row.lock_registration_if_overdue),
+    payment_due_date: paymentDue,
+    lock_registration_if_overdue: lockReg,
     status: row.status as AcademicTermStatus,
     is_visible: asBool(row.is_visible),
   };
 }
 
-const TERM_SELECT = `
+/** Columns shared by legacy and current `academic_terms` schemas. */
+const TERM_SELECT_BASE = `
+  SELECT
+    id,
+    term_label,
+    year,
+    term_name,
+    quarter_index,
+    sequence_no,
+    start_date,
+    end_date,
+    registration_open,
+    registration_close,
+    status,
+    is_visible
+  FROM academic_terms
+`;
+
+const TERM_SELECT_WITH_PAYMENT_COLUMNS = `
   SELECT
     id,
     term_label,
@@ -61,8 +87,31 @@ const TERM_SELECT = `
   FROM academic_terms
 `;
 
+let cachedTermSelectSql: string | null = null;
+
+/**
+ * Resolves the SELECT fragment once per process: full row when both finance-related
+ * columns exist; otherwise a legacy SELECT and defaults in `normalizeRow`.
+ */
+async function termSelectSql(): Promise<string> {
+  if (cachedTermSelectSql !== null) {
+    return cachedTermSelectSql;
+  }
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'academic_terms'
+       AND COLUMN_NAME IN ('payment_due_date', 'lock_registration_if_overdue')`,
+  );
+  const n = Number((rows[0] as RowDataPacket | undefined)?.c ?? 0);
+  cachedTermSelectSql =
+    n >= 2 ? TERM_SELECT_WITH_PAYMENT_COLUMNS : TERM_SELECT_BASE;
+  return cachedTermSelectSql;
+}
+
 export async function listAcademicTerms(): Promise<AcademicTermDetail[]> {
-  const sql = `${TERM_SELECT} ORDER BY sequence_no DESC`;
+  const sel = await termSelectSql();
+  const sql = `${sel} ORDER BY sequence_no DESC`;
   const [rows] = await pool.query<RowDataPacket[]>(sql);
   return rows.map((r) => normalizeRow(r));
 }
@@ -76,9 +125,10 @@ export async function listVisibleAcademicTerms(
     limit > 0
       ? limit
       : undefined;
+  const sel = await termSelectSql();
   const sql = lim
-    ? `${TERM_SELECT} WHERE is_visible = 1 ORDER BY sequence_no DESC LIMIT ?`
-    : `${TERM_SELECT} WHERE is_visible = 1 ORDER BY sequence_no DESC`;
+    ? `${sel} WHERE is_visible = 1 ORDER BY sequence_no DESC LIMIT ?`
+    : `${sel} WHERE is_visible = 1 ORDER BY sequence_no DESC`;
   const [rows] = await pool.query<RowDataPacket[]>(
     sql,
     lim ? [lim] : [],
@@ -95,14 +145,16 @@ export async function listRecentVisibleAcademicTerms(
 export async function getAcademicTermById(
   id: string,
 ): Promise<AcademicTermDetail | null> {
-  const sql = `${TERM_SELECT} WHERE id = ? LIMIT 1`;
+  const sel = await termSelectSql();
+  const sql = `${sel} WHERE id = ? LIMIT 1`;
   const [rows] = await pool.query<RowDataPacket[]>(sql, [id]);
   const row = rows[0];
   return row ? normalizeRow(row) : null;
 }
 
 export async function getCurrentRegistrationOpenTerm(): Promise<AcademicTermDetail | null> {
-  const sql = `${TERM_SELECT} WHERE status = 'registration_open' ORDER BY sequence_no DESC LIMIT 1`;
+  const sel = await termSelectSql();
+  const sql = `${sel} WHERE status = 'registration_open' ORDER BY sequence_no DESC LIMIT 1`;
   const [rows] = await pool.query<RowDataPacket[]>(sql);
   const row = rows[0];
   return row ? normalizeRow(row) : null;
