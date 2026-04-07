@@ -4811,9 +4811,9 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 .portal-dashboard-home-grid {
   display: grid;
   width: 100%;
-  /* Asymmetric split (~golden ratio): Services comfortable, calendar dominant */
-  grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
-  gap: 1.5rem clamp(1.25rem, 2vw, 1.75rem);
+  /* Sidebar-style Services (~30%), calendar primary (~70%) */
+  grid-template-columns: minmax(0, 30fr) minmax(0, 70fr);
+  gap: 1.5rem clamp(1rem, 1.5vw, 1.5rem);
   align-items: stretch;
 }
 
@@ -4833,10 +4833,10 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   height: 100%;
 }
 
-/* Large desktop: wider gap; proportional split inherited from .portal-dashboard-home-grid */
+/* Large desktop: row breathing room; column gap stays 16–24px */
 @media (min-width: 1025px) {
   .portal-dashboard-home-grid {
-    gap: 1.75rem clamp(1.25rem, 1.35vw, 1.75rem);
+    gap: 1.75rem clamp(1rem, 1.35vw, 1.5rem);
   }
 
   .portal-dashboard-home-primary > .portal-dashboard-services,
