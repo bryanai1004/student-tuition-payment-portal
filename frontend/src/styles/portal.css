@@ -6756,6 +6756,18 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   color: var(--text-dark);
 }
 
+.admin-timetable-v2__block-subtitle {
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-dark);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
 .admin-timetable-v2__block-meta {
   font-size: 0.65rem;
   color: var(--portal-text-muted);

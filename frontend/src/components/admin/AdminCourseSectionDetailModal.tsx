@@ -1,5 +1,10 @@
 import { Link } from 'react-router-dom'
 import type { AdminCourseSection } from '../../lib/api'
+import {
+  getPreferredCourseTitle,
+  getSecondaryCourseTitle,
+  type CourseTitleFields,
+} from '../../lib/courseDisplayName'
 import { scheduleTrackDetailLabel } from '../../lib/scheduleTrack'
 import { formatDeliveryModeForDisplay } from '../../lib/deliveryMode'
 import { formatTimeRangeHmsForDisplay } from '../../lib/formatScheduleTime'
@@ -7,6 +12,8 @@ import { formatWeekdaysLongFromStored } from '../../lib/weekdaySchedule'
 
 type Props = {
   section: AdminCourseSection | null
+  /** Catalog names for `section.course_code`, when available */
+  courseCatalog?: CourseTitleFields | null
   /** e.g. timetable column day, for context */
   dayColumnLabel?: string | null
   /** Resolved catalog label for selected term, if available */
@@ -29,6 +36,7 @@ function row(dt: string, dd: string) {
 
 export function AdminCourseSectionDetailModal({
   section,
+  courseCatalog = null,
   dayColumnLabel,
   termCatalogLabel,
   academicTermId,
@@ -36,6 +44,20 @@ export function AdminCourseSectionDetailModal({
   onClose,
 }: Props) {
   if (section == null) return null
+
+  const titleFields: CourseTitleFields = {
+    code: section.course_code,
+    eng_name: courseCatalog?.eng_name ?? null,
+    chi_name: courseCatalog?.chi_name ?? null,
+  }
+  const courseTitlePrimary = getPreferredCourseTitle(
+    titleFields,
+    section.schedule_track,
+  )
+  const courseTitleAlternate = getSecondaryCourseTitle(
+    titleFields,
+    section.schedule_track,
+  )
 
   const termLine =
     termCatalogLabel?.trim() ||
@@ -66,6 +88,10 @@ export function AdminCourseSectionDetailModal({
         )}
         <dl className="admin-section-detail-modal__dl">
           {row('Course code', section.course_code)}
+          {row('Course title', courseTitlePrimary)}
+          {courseTitleAlternate !== ''
+            ? row('Alternate title', courseTitleAlternate)
+            : null}
           {row('Timetable track', scheduleTrackDetailLabel(section.schedule_track))}
           {row('Section code', section.section_code)}
           {row('Academic term', termLine)}

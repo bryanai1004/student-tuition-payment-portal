@@ -1,9 +1,14 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useCourseBin, type CourseBinItem } from './CourseBinContext'
+import { getPreferredCourseTitle } from '../../lib/courseDisplayName'
+import {
+  courseBinSectionKey,
+  useCourseBin,
+  type CourseBinItem,
+} from './CourseBinContext'
 import { useRegistrationTermSearchParam } from './registrationTermSearch'
 
 function binRowKey(item: CourseBinItem): string {
-  return `${item.course_code.trim().toLowerCase()}|${item.section.trim().toLowerCase()}`
+  return courseBinSectionKey(item.course_code, item.section, item.schedule_track)
 }
 
 export function MyCourseBinPage() {
@@ -78,7 +83,14 @@ export function MyCourseBinPage() {
                       <div className="portal-course-bin-course-cell">
                         <span className="portal-course-bin-course-code">{item.course_code.trim() || '—'}</span>
                         <span className="portal-course-bin-course-title">
-                          {item.eng_name.trim() || '—'}
+                          {getPreferredCourseTitle(
+                            {
+                              code: item.course_code,
+                              eng_name: item.eng_name,
+                              chi_name: item.chi_name,
+                            },
+                            item.schedule_track,
+                          )}
                         </span>
                       </div>
                     </td>

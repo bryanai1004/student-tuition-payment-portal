@@ -16,6 +16,10 @@ import {
   formatWeekdaysLongFromStored,
   type WeekdayFull,
 } from '../../lib/weekdaySchedule'
+import {
+  getPreferredCourseTitle,
+  getSecondaryCourseTitle,
+} from '../../lib/courseDisplayName'
 import { offeredTimetableHeading, scheduleTrackDetailLabel } from '../../lib/scheduleTrack'
 import {
   courseBinSectionKey,
@@ -54,6 +58,7 @@ type OfferedWeekGridProps = {
   placedWeekdays: ReturnType<typeof buildTimetablePlacedBlocksByDay>
   hourRows: number[]
   bodyHeightPx: number
+  catalogByCode: Map<string, CatalogCourseLite>
   binItems: CourseBinItem[]
   onSelectSection: (sec: AdminCourseSection) => void
 }
@@ -62,6 +67,7 @@ function OfferedTimetableWeekGrid({
   placedWeekdays,
   hourRows,
   bodyHeightPx,
+  catalogByCode,
   binItems,
   onSelectSection,
 }: OfferedWeekGridProps) {
@@ -105,6 +111,18 @@ function OfferedTimetableWeekGrid({
                   const colW = 100 / b.colCount
                   const insetPx = 3
                   const inBin = isSectionInBin(binItems, b.section)
+                  const cat = catalogByCode.get(
+                    cellText(b.section.course_code).toUpperCase(),
+                  )
+                  const preferredTitle = getPreferredCourseTitle(
+                    cat ?? {
+                      code: b.section.course_code,
+                      eng_name: null,
+                      chi_name: null,
+                    },
+                    b.section.schedule_track,
+                  )
+                  const labelCore = `${b.section.course_code} ${b.section.section_code}. ${preferredTitle}`
                   return (
                     <button
                       key={`${b.section.id}-${d.full}-${b.startMin}-${b.colIndex}`}
@@ -125,8 +143,8 @@ function OfferedTimetableWeekGrid({
                       onClick={() => onSelectSection(b.section)}
                       aria-label={
                         inBin
-                          ? `${b.section.course_code} section ${b.section.section_code}, in CourseBin — open details`
-                          : `View details for ${b.section.course_code} section ${b.section.section_code}`
+                          ? `${labelCore}, in CourseBin — open details`
+                          : `View details for ${labelCore}`
                       }
                     >
                       <span className="admin-timetable-v2__block-title">
@@ -134,6 +152,9 @@ function OfferedTimetableWeekGrid({
                         {inBin ? (
                           <span className="portal-offered-timetable__badge"> Added</span>
                         ) : null}
+                      </span>
+                      <span className="admin-timetable-v2__block-subtitle">
+                        {preferredTitle}
                       </span>
                       <span className="admin-timetable-v2__block-meta">
                         {formatTimeHmsForDisplay(b.section.start_time)} –{' '}
@@ -301,9 +322,19 @@ export function OfferedTimetablePage() {
   const detailCatalog = detailSection
     ? catalogByCode.get(cellText(detailSection.course_code).toUpperCase())
     : undefined
-  const detailEngTitle = detailCatalog
-    ? cellText(detailCatalog.eng_name)
-    : ''
+  const detailTitleFields = {
+    code: detailSection?.course_code,
+    eng_name: detailCatalog ? cellText(detailCatalog.eng_name) : null,
+    chi_name: detailCatalog ? cellText(detailCatalog.chi_name) : null,
+  }
+  const detailPrimaryTitle =
+    detailSection != null
+      ? getPreferredCourseTitle(detailTitleFields, detailSection.schedule_track)
+      : ''
+  const detailAlternateTitle =
+    detailSection != null
+      ? getSecondaryCourseTitle(detailTitleFields, detailSection.schedule_track)
+      : ''
   const detailInBin =
     detailSection != null && isSectionInBin(binItems, detailSection)
 
@@ -381,6 +412,7 @@ export function OfferedTimetablePage() {
                   placedWeekdays={placedEn}
                   hourRows={hourRows}
                   bodyHeightPx={bodyHeightPx}
+                  catalogByCode={catalogByCode}
                   binItems={binItems}
                   onSelectSection={setDetailSection}
                 />
@@ -399,6 +431,7 @@ export function OfferedTimetablePage() {
                   placedWeekdays={placedCn}
                   hourRows={hourRows}
                   bodyHeightPx={bodyHeightPx}
+                  catalogByCode={catalogByCode}
                   binItems={binItems}
                   onSelectSection={setDetailSection}
                 />
@@ -430,10 +463,16 @@ export function OfferedTimetablePage() {
                 <dt>Course code</dt>
                 <dd>{detailSection.course_code}</dd>
               </div>
-              {detailEngTitle !== '' ? (
+              {detailPrimaryTitle !== '' && detailPrimaryTitle !== '—' ? (
                 <div>
-                  <dt>Title (English)</dt>
-                  <dd>{detailEngTitle}</dd>
+                  <dt>Course title</dt>
+                  <dd>{detailPrimaryTitle}</dd>
+                </div>
+              ) : null}
+              {detailAlternateTitle !== '' ? (
+                <div>
+                  <dt>Alternate title</dt>
+                  <dd>{detailAlternateTitle}</dd>
                 </div>
               ) : null}
               <div>

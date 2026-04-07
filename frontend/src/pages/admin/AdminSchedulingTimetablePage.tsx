@@ -5,9 +5,12 @@ import { AdminCourseSectionDetailModal } from '../../components/admin/AdminCours
 import {
   fetchAcademicTerms,
   fetchAdminCourseSections,
+  fetchCourses,
   type AcademicTerm,
   type AdminCourseSection,
+  type CourseCatalogItem,
 } from '../../lib/api'
+import { getPreferredCourseTitle } from '../../lib/courseDisplayName'
 import { formatDeliveryModeForDisplay } from '../../lib/deliveryMode'
 import { formatTimeHmsForDisplay } from '../../lib/formatScheduleTime'
 import {
@@ -38,6 +41,7 @@ type AdminTimetableGridProps = {
   placedByDay: ReturnType<typeof buildTimetablePlacedBlocksByDay>
   hourRows: number[]
   bodyHeightPx: number
+  catalogByCode: Map<string, CourseCatalogItem>
   onBlockClick: (section: AdminCourseSection, dayLabel: string) => void
 }
 
@@ -45,6 +49,7 @@ function AdminTimetableWeekGrid({
   placedByDay,
   hourRows,
   bodyHeightPx,
+  catalogByCode,
   onBlockClick,
 }: AdminTimetableGridProps) {
   return (
@@ -84,6 +89,16 @@ function AdminTimetableWeekGrid({
               {placedByDay[di]!.map((b) => {
                 const colW = 100 / b.colCount
                 const insetPx = 3
+                const codeKey = b.section.course_code.trim().toUpperCase()
+                const cat = catalogByCode.get(codeKey)
+                const preferredTitle = getPreferredCourseTitle(
+                  cat ?? {
+                    code: b.section.course_code,
+                    eng_name: null,
+                    chi_name: null,
+                  },
+                  b.section.schedule_track,
+                )
                 return (
                   <button
                     key={`${b.section.id}-${d.full}-${b.startMin}-${b.colIndex}`}
@@ -99,6 +114,9 @@ function AdminTimetableWeekGrid({
                   >
                     <span className="admin-timetable-v2__block-title">
                       {b.section.course_code} {b.section.section_code}
+                    </span>
+                    <span className="admin-timetable-v2__block-subtitle">
+                      {preferredTitle}
                     </span>
                     <span className="admin-timetable-v2__block-meta">
                       {formatTimeHmsForDisplay(b.section.start_time)} –{' '}
@@ -123,6 +141,9 @@ export function AdminSchedulingTimetablePage() {
   const [terms, setTerms] = useState<AcademicTerm[] | null>(null)
   const [academicTermId, setAcademicTermId] = useState('')
   const [sections, setSections] = useState<AdminCourseSection[] | null>(null)
+  const [courseCatalog, setCourseCatalog] = useState<CourseCatalogItem[] | null>(
+    null,
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<{
@@ -133,47 +154,57 @@ export function AdminSchedulingTimetablePage() {
   useEffect(() => {
     const ac = new AbortController()
     ;(async () => {
-      try {
-        const t = await fetchAcademicTerms({ signal: ac.signal })
-        if (ac.signal.aborted) return
-        setTerms(t)
+      const [termOutcome, courseOutcome] = await Promise.allSettled([
+        fetchAcademicTerms({ signal: ac.signal }),
+        fetchCourses({ signal: ac.signal }),
+      ])
+      if (ac.signal.aborted) return
 
-        const sp = new URLSearchParams(window.location.search)
-        const urlTerm = sp.get('term')?.trim() ?? ''
-        const urlCourse = sp.get('course')?.trim() ?? ''
-        const urlQ = sp.get('q') ?? ''
+      const t = termOutcome.status === 'fulfilled' ? termOutcome.value : []
+      const cat =
+        courseOutcome.status === 'fulfilled' ? courseOutcome.value : []
+      setTerms(t)
+      setCourseCatalog(cat)
 
-        const nextTerm =
-          urlTerm && t.some((x) => x.id === urlTerm)
-            ? urlTerm
-            : t.length > 0
-              ? t[0].id
-              : ''
-
-        setAcademicTermId(nextTerm)
-
-        setSearchParams(
-          (prev) => {
-            const merged = applyAdminSchedulingToSearchParams(
-              prev,
-              {
-                term: nextTerm,
-                course: urlCourse,
-                q: urlQ,
-              },
-              { clearEdit: false },
-            )
-            return merged
-          },
-          { replace: true },
-        )
-      } catch (e) {
-        if (ac.signal.aborted) return
-        setTerms([])
+      if (termOutcome.status === 'rejected') {
         setError(
-          e instanceof Error ? e.message : 'Could not load academic terms.',
+          termOutcome.reason instanceof Error
+            ? termOutcome.reason.message
+            : 'Could not load academic terms.',
         )
+      } else {
+        setError(null)
       }
+
+      const sp = new URLSearchParams(window.location.search)
+      const urlTerm = sp.get('term')?.trim() ?? ''
+      const urlCourse = sp.get('course')?.trim() ?? ''
+      const urlQ = sp.get('q') ?? ''
+
+      const nextTerm =
+        urlTerm && t.some((x) => x.id === urlTerm)
+          ? urlTerm
+          : t.length > 0
+            ? t[0].id
+            : ''
+
+      setAcademicTermId(nextTerm)
+
+      setSearchParams(
+        (prev) => {
+          const merged = applyAdminSchedulingToSearchParams(
+            prev,
+            {
+              term: nextTerm,
+              course: urlCourse,
+              q: urlQ,
+            },
+            { clearEdit: false },
+          )
+          return merged
+        },
+        { replace: true },
+      )
     })()
     return () => ac.abort()
   }, [setSearchParams])
@@ -254,6 +285,15 @@ export function AdminSchedulingTimetablePage() {
   )
 
   const bodyHeightPx = timetableBodyHeightPx()
+
+  const catalogByCode = useMemo(() => {
+    const m = new Map<string, CourseCatalogItem>()
+    for (const c of courseCatalog ?? []) {
+      const k = c.code.trim().toUpperCase()
+      if (k !== '') m.set(k, c)
+    }
+    return m
+  }, [courseCatalog])
 
   const termCatalogLabel =
     terms?.find((t) => t.id === academicTermId)?.term_label ?? null
@@ -363,6 +403,7 @@ export function AdminSchedulingTimetablePage() {
                   placedByDay={placedByDayEn}
                   hourRows={hourRows}
                   bodyHeightPx={bodyHeightPx}
+                  catalogByCode={catalogByCode}
                   onBlockClick={(section, dayLabel) =>
                     setDetail({ section, dayLabel })
                   }
@@ -384,6 +425,7 @@ export function AdminSchedulingTimetablePage() {
                   placedByDay={placedByDayCn}
                   hourRows={hourRows}
                   bodyHeightPx={bodyHeightPx}
+                  catalogByCode={catalogByCode}
                   onBlockClick={(section, dayLabel) =>
                     setDetail({ section, dayLabel })
                   }
@@ -397,6 +439,10 @@ export function AdminSchedulingTimetablePage() {
       {detail != null && (
         <AdminCourseSectionDetailModal
           section={detail.section}
+          courseCatalog={
+            catalogByCode.get(detail.section.course_code.trim().toUpperCase()) ??
+            null
+          }
           dayColumnLabel={detail.dayLabel}
           termCatalogLabel={termCatalogLabel}
           academicTermId={academicTermId.trim() || null}

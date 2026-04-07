@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useAccount } from '../../context/AccountContext'
 import { fetchStudentEnrolledSections } from '../../lib/api'
+import { getPreferredCourseTitle } from '../../lib/courseDisplayName'
 import { formatDeliveryModeForDisplay } from '../../lib/deliveryMode'
 import { formatTimeHmsForDisplay } from '../../lib/formatScheduleTime'
 import {
@@ -77,6 +78,25 @@ export function SchedulePage() {
     }
     return [...map.values()]
   }, [enrolledItems, items])
+
+  const preferredCourseTitleByBinKey = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const it of displayItems) {
+      const k = courseBinSectionKey(it.course_code, it.section, it.schedule_track)
+      m.set(
+        k,
+        getPreferredCourseTitle(
+          {
+            code: it.course_code,
+            eng_name: it.eng_name,
+            chi_name: it.chi_name,
+          },
+          it.schedule_track,
+        ),
+      )
+    }
+    return m
+  }, [displayItems])
 
   const { sections, unplaced } = useMemo(
     () => partitionCourseBinItemsForTimetable(displayItems),
@@ -182,6 +202,14 @@ export function SchedulePage() {
                       {placedWeekdays[di]!.map((b) => {
                         const colW = 100 / b.colCount
                         const insetPx = 3
+                        const binKey = courseBinSectionKey(
+                          b.section.course_code,
+                          b.section.section_code,
+                          b.section.schedule_track,
+                        )
+                        const courseTitle =
+                          preferredCourseTitleByBinKey.get(binKey) ??
+                          b.section.course_code
                         return (
                           <div
                             key={`${b.section.id}-${d.full}-${b.startMin}-${b.colIndex}`}
@@ -193,10 +221,13 @@ export function SchedulePage() {
                               width: `calc(${colW}% - ${insetPx * 2}px)`,
                             }}
                             role="group"
-                            aria-label={`${b.section.course_code} section ${b.section.section_code}`}
+                            aria-label={`${b.section.course_code} section ${b.section.section_code}. ${courseTitle}`}
                           >
                             <span className="admin-timetable-v2__block-title">
                               {b.section.course_code} {b.section.section_code}
+                            </span>
+                            <span className="admin-timetable-v2__block-subtitle">
+                              {courseTitle}
                             </span>
                             <span className="admin-timetable-v2__block-meta">
                               {formatTimeHmsForDisplay(b.section.start_time)} –{' '}
@@ -234,9 +265,24 @@ export function SchedulePage() {
             </p>
             <ul className="portal-my-timetable-unplaced__list">
               {unplaced.map((u) => (
-                <li key={`${u.course_code}|${u.section}`}>
+                <li
+                  key={courseBinSectionKey(
+                    u.course_code,
+                    u.section,
+                    u.schedule_track,
+                  )}
+                >
                   <strong>{u.course_code.trim() || '—'}</strong>
                   {u.section.trim() ? ` · ${u.section}` : ''}
+                  {' · '}
+                  {getPreferredCourseTitle(
+                    {
+                      code: u.course_code,
+                      eng_name: u.eng_name,
+                      chi_name: u.chi_name,
+                    },
+                    u.schedule_track,
+                  )}
                   {u.time.trim() && u.time !== 'TBA' ? ` · ${u.time}` : ''}
                   {u.days.trim() && u.days !== 'TBA' ? ` · ${u.days}` : ''}
                 </li>

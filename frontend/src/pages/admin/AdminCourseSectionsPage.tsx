@@ -34,6 +34,10 @@ import {
   type WeekdayFull,
 } from '../../lib/weekdaySchedule'
 import { AdminSectionEnrolledStudentsModal } from '../../components/admin/AdminSectionEnrolledStudentsModal'
+import {
+  formatCourseCatalogSelectLabel,
+  getPreferredCourseTitle,
+} from '../../lib/courseDisplayName'
 import { scheduleTrackTableLabel } from '../../lib/scheduleTrack'
 
 function displayCell(value: string | null | undefined): string {
@@ -231,10 +235,17 @@ export function AdminCourseSectionsPage() {
     if (q === '') return sortedCourses
     return sortedCourses.filter((c) => {
       if (c.code.toLowerCase().includes(q)) return true
-      const title = c.eng_name?.trim().toLowerCase() ?? ''
-      return title.includes(q)
+      const eng = c.eng_name?.trim().toLowerCase() ?? ''
+      if (eng.includes(q)) return true
+      const chi = c.chi_name?.trim().toLowerCase() ?? ''
+      return chi.includes(q)
     })
   }, [sortedCourses, courseSearch])
+
+  const selectedCourseCatalog = useMemo(
+    () => sortedCourses.find((c) => c.code === courseCode) ?? null,
+    [sortedCourses, courseCode],
+  )
 
   const courseSelectOptions = useMemo(() => {
     const selected = sortedCourses.find((c) => c.code === courseCode)
@@ -574,8 +585,8 @@ export function AdminCourseSectionsPage() {
                   { clearEdit: false },
                 )
               }}
-              placeholder="Code or English title…"
-              aria-label="Filter courses by code or title"
+              placeholder="Code, English title, or Chinese title…"
+              aria-label="Filter courses by code or English or Chinese title"
               disabled={sortedCourses.length === 0}
             />
           </label>
@@ -604,8 +615,7 @@ export function AdminCourseSectionsPage() {
               ) : (
                 courseSelectOptions.map((c) => (
                   <option key={c.code} value={c.code}>
-                    {c.code}
-                    {c.eng_name ? ` — ${c.eng_name}` : ''}
+                    {formatCourseCatalogSelectLabel(c)}
                   </option>
                 ))
               )}
@@ -625,6 +635,7 @@ export function AdminCourseSectionsPage() {
           <thead>
             <tr>
               <th scope="col">Section</th>
+              <th scope="col">Course title</th>
               <th scope="col">Track</th>
               <th scope="col">Weekday</th>
               <th scope="col">Start</th>
@@ -641,25 +652,25 @@ export function AdminCourseSectionsPage() {
           <tbody>
             {sectionsLoading && (
               <tr>
-                <td colSpan={12}>Loading sections…</td>
+                <td colSpan={13}>Loading sections…</td>
               </tr>
             )}
             {!sectionsLoading && sections != null && sections.length === 0 && (
               <tr>
-                <td colSpan={12}>No sections for this term and course.</td>
+                <td colSpan={13}>No sections for this term and course.</td>
               </tr>
             )}
             {!sectionsLoading && sections != null && sections.length > 0 && (
               <>
                 <tbody>
                   <tr>
-                    <td colSpan={12}>
+                    <td colSpan={13}>
                       <strong>English Timetable Sections</strong>
                     </td>
                   </tr>
                   {enSectionRows.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="portal-text-muted">
+                      <td colSpan={13} className="portal-text-muted">
                         None for this course in this term.
                       </td>
                     </tr>
@@ -667,6 +678,16 @@ export function AdminCourseSectionsPage() {
                   {enSectionRows.map((row) => (
                     <tr key={row.id}>
                       <td>{row.section_code}</td>
+                      <td>
+                        {getPreferredCourseTitle(
+                          selectedCourseCatalog ?? {
+                            code: row.course_code,
+                            eng_name: null,
+                            chi_name: null,
+                          },
+                          row.schedule_track,
+                        )}
+                      </td>
                       <td>{scheduleTrackTableLabel(row.schedule_track)}</td>
                       <td>{formatWeekdaysShortFromStored(row.weekday)}</td>
                       <td>{formatTimeHmsForDisplay(row.start_time)}</td>
@@ -715,13 +736,13 @@ export function AdminCourseSectionsPage() {
                 </tbody>
                 <tbody>
                   <tr>
-                    <td colSpan={12}>
+                    <td colSpan={13}>
                       <strong>Chinese Timetable Sections</strong>
                     </td>
                   </tr>
                   {cnSectionRows.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="portal-text-muted">
+                      <td colSpan={13} className="portal-text-muted">
                         None for this course in this term.
                       </td>
                     </tr>
@@ -729,6 +750,16 @@ export function AdminCourseSectionsPage() {
                   {cnSectionRows.map((row) => (
                     <tr key={row.id}>
                       <td>{row.section_code}</td>
+                      <td>
+                        {getPreferredCourseTitle(
+                          selectedCourseCatalog ?? {
+                            code: row.course_code,
+                            eng_name: null,
+                            chi_name: null,
+                          },
+                          row.schedule_track,
+                        )}
+                      </td>
                       <td>{scheduleTrackTableLabel(row.schedule_track)}</td>
                       <td>{formatWeekdaysShortFromStored(row.weekday)}</td>
                       <td>{formatTimeHmsForDisplay(row.start_time)}</td>
