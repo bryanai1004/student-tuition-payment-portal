@@ -1,4 +1,9 @@
-/** GET /api/students/:studentId/academics — legacy `marks` + merged `portal_enrollments` (transcript list stays marks/clinic-only). */
+/**
+ * GET /api/students/:studentId/academics — legacy `marks` + merged `portal_enrollments`.
+ *
+ * Domain: `transcript` is marks-only (didactic history). `enrollmentHistory` is a **combined** timeline of
+ * portal registration rows and marks attempts — the JSON key is historical; see {@link CombinedAcademicHistoryItem}.
+ */
 
 /** Deterministic row status from legacy `marks` (and merged transcript uses the same for `marks`/`clinic`). */
 export type StudentAcademicCourseStatus =
@@ -9,7 +14,10 @@ export type StudentAcademicCourseStatus =
   | "dropped"
   | "unknown";
 
-/** One normalized student course row — single source for schedule, transcript, enrollment, and future feedback eligibility. */
+/**
+ * Normalized row for API assembly: **marks** / **clinic** attempts (`source`) or **portal** registration (`source: "portal"`).
+ * Finer domain shapes: `AcademicAttempt` and `RegistrationRecord` in `domain/studentDomainModels.ts`.
+ */
 export type StudentAcademicCourseRecord = {
   studentId: string;
   courseCode: string;
@@ -80,15 +88,30 @@ export type StudentAcademicsEnrollmentItem = {
   feedbackSubmittedAt: string | null;
 };
 
+/**
+ * Semantically: merged **registration** (portal) + **academic attempts** (marks). Same shape as
+ * {@link StudentAcademicsEnrollmentItem}; aliased so call sites can name the concept without the legacy
+ * response field name.
+ */
+export type CombinedAcademicHistoryItem = StudentAcademicsEnrollmentItem;
+
 export type StudentAcademicsResponse = {
   studentId: string;
   studentName: string;
   currentTerm: StudentAcademicsCurrentTerm | null;
   availableTerms: StudentAcademicsAvailableTerm[];
   currentSchedule: StudentAcademicsScheduleItem[];
+  /** Didactic history from `marks` only — not the full transcript preview (no `clinic` merge here). */
   transcript: StudentAcademicsTranscriptItem[];
-  enrollmentHistory: StudentAcademicsEnrollmentItem[];
-  /** Full normalized rows (marks-only for this endpoint); derived lists above are views of this array. */
+  /**
+   * Combined portal registration rows + marks attempts (sorted with transcript preview ordering).
+   * JSON key remains `enrollmentHistory` for clients; value type is {@link CombinedAcademicHistoryItem}.
+   */
+  enrollmentHistory: CombinedAcademicHistoryItem[];
+  /**
+   * Union of marks-derived attempts and portal registration rows (`source` discriminates).
+   * Not to be confused with registration-only or transcript-authoritative data.
+   */
   courseRecords: StudentAcademicCourseRecord[];
 };
 
