@@ -99,6 +99,17 @@
   flex-grow: 0;
 }
 
+/* Dashboard homepage: wider centered stage than generic / internal reading columns. */
+.portal-shell--dashboard-home .portal-main-content {
+  max-width: 1520px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 24px;
+  padding-right: 24px;
+  box-sizing: border-box;
+}
+
 /* Full-width fixed header: gold school bar + myAMU banner (above sidebar) */
 .portal-app-header {
   position: fixed;
@@ -495,23 +506,23 @@
   min-width: 0;
 }
 
-/* Internal module pages: compact sidebar + full-width main column (no centered reading cap). */
+/* Internal module pages: compact sidebar + constrained centered main column (narrower than dashboard). */
 .portal-shell--internal-module {
   --portal-sidebar-width: 210px;
 }
 
 .portal-shell--internal-module .portal-main {
-  padding-left: 12px;
+  padding-left: 0;
   box-sizing: border-box;
 }
 
 .portal-shell--internal-module .portal-main-content {
+  max-width: 1460px;
   width: 100%;
-  max-width: none;
-  margin-left: 0;
-  margin-right: 0;
-  padding-left: 12px;
-  padding-right: 12px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 24px;
+  padding-right: 24px;
   box-sizing: border-box;
 }
 
