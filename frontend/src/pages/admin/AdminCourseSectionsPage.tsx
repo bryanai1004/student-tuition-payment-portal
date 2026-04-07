@@ -461,111 +461,119 @@ export function AdminCourseSectionsPage() {
           onClose={() => setEnrolledModalSection(null)}
         />
       ) : null}
-      <div className="admin-page__toolbar">
-        <h1 className="admin-page__title admin-page__title--inline">
-          Course Sections
-        </h1>
-        <div className="admin-page__toolbar-actions admin-page__toolbar-actions--wrap">
-          <Link
-            to={{
-              pathname: '/admin/course-sections/timetable',
-              search: (() => {
-                const qs = adminSchedulingQueryString({
-                  term: academicTermId,
-                  course: courseCode,
-                  q: courseSearch,
-                })
-                return qs ? `?${qs}` : ''
-              })(),
-            }}
-            className="portal-btn portal-btn--secondary portal-btn--compact"
-          >
-            View Timetable
-          </Link>
-          <label className="admin-field admin-field--inline">
-            <span className="admin-field__label">Academic term</span>
-            <select
-              className="admin-input"
-              value={academicTermId}
-              onChange={(e) => {
-                const v = e.target.value
-                setAcademicTermId(v)
-                pushSchedulingContext({
-                  term: v,
-                  course: courseCode,
-                  q: courseSearch,
-                })
-                resetForm()
-              }}
-              disabled={terms == null || terms.length === 0}
-              aria-label="Academic term"
-            >
-              {terms == null ? (
-                <option value="">Loading…</option>
-              ) : (
-                terms.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.term_label} ({t.id})
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-          <div className="admin-course-picker">
-            <label className="admin-field admin-field--inline admin-course-picker__search">
-              <span className="admin-field__label">Search courses</span>
-              <input
-                type="search"
-                className="admin-input admin-input--search"
-                value={courseSearch}
-                onChange={(e) => {
-                  const v = e.target.value
-                  setCourseSearch(v)
-                  pushSchedulingContext(
-                    {
-                      term: academicTermId,
-                      course: courseCode,
-                      q: v,
-                    },
-                    { clearEdit: false },
-                  )
-                }}
-                placeholder="Code or English title…"
-                aria-label="Filter courses by code or title"
-                disabled={sortedCourses.length === 0}
-              />
-            </label>
-            <label className="admin-field admin-field--inline">
-              <span className="admin-field__label">Course</span>
-              <select
-                className="admin-input admin-input--wide"
-                value={courseCode}
-                onChange={(e) => {
-                  const v = e.target.value
-                  setCourseCode(v)
-                  pushSchedulingContext({
+      <div className="admin-page__toolbar admin-course-sections-toolbar">
+        <div className="admin-course-sections-toolbar__row admin-course-sections-toolbar__row--title">
+          <h1 className="admin-page__title admin-page__title--inline admin-course-sections-toolbar__title">
+            Course Sections
+          </h1>
+          <div className="admin-course-sections-toolbar__group admin-course-sections-toolbar__group--primary">
+            <Link
+              to={{
+                pathname: '/admin/course-sections/timetable',
+                search: (() => {
+                  const qs = adminSchedulingQueryString({
                     term: academicTermId,
-                    course: v,
+                    course: courseCode,
+                    q: courseSearch,
+                  })
+                  return qs ? `?${qs}` : ''
+                })(),
+              }}
+              className="portal-btn portal-btn--secondary portal-btn--compact admin-course-sections-toolbar__timetable"
+            >
+              View Timetable
+            </Link>
+            <label className="admin-field admin-field--inline admin-course-sections-toolbar__field admin-course-sections-toolbar__term">
+              <span className="admin-field__label admin-course-sections-toolbar__label">
+                Academic term
+              </span>
+              <select
+                className="admin-input"
+                value={academicTermId}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setAcademicTermId(v)
+                  pushSchedulingContext({
+                    term: v,
+                    course: courseCode,
                     q: courseSearch,
                   })
                   resetForm()
                 }}
-                disabled={sortedCourses.length === 0}
-                aria-label="Course"
+                disabled={terms == null || terms.length === 0}
+                aria-label="Academic term"
               >
-                {courseSelectOptions.length === 0 ? (
-                  <option value="">No matches</option>
+                {terms == null ? (
+                  <option value="">Loading…</option>
                 ) : (
-                  courseSelectOptions.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.code}
-                      {c.eng_name ? ` — ${c.eng_name}` : ''}
+                  terms.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.term_label} ({t.id})
                     </option>
                   ))
                 )}
               </select>
             </label>
           </div>
+        </div>
+        <div className="admin-course-sections-toolbar__row admin-course-sections-toolbar__row--filters">
+          <label className="admin-field admin-field--inline admin-course-sections-toolbar__field admin-course-sections-toolbar__search">
+            <span className="admin-field__label admin-course-sections-toolbar__label">
+              Search courses
+            </span>
+            <input
+              type="search"
+              className="admin-input admin-input--search"
+              value={courseSearch}
+              onChange={(e) => {
+                const v = e.target.value
+                setCourseSearch(v)
+                pushSchedulingContext(
+                  {
+                    term: academicTermId,
+                    course: courseCode,
+                    q: v,
+                  },
+                  { clearEdit: false },
+                )
+              }}
+              placeholder="Code or English title…"
+              aria-label="Filter courses by code or title"
+              disabled={sortedCourses.length === 0}
+            />
+          </label>
+          <label className="admin-field admin-field--inline admin-course-sections-toolbar__field admin-course-sections-toolbar__course">
+            <span className="admin-field__label admin-course-sections-toolbar__label">
+              Course
+            </span>
+            <select
+              className="admin-input admin-input--wide"
+              value={courseCode}
+              onChange={(e) => {
+                const v = e.target.value
+                setCourseCode(v)
+                pushSchedulingContext({
+                  term: academicTermId,
+                  course: v,
+                  q: courseSearch,
+                })
+                resetForm()
+              }}
+              disabled={sortedCourses.length === 0}
+              aria-label="Course"
+            >
+              {courseSelectOptions.length === 0 ? (
+                <option value="">No matches</option>
+              ) : (
+                courseSelectOptions.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code}
+                    {c.eng_name ? ` — ${c.eng_name}` : ''}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
         </div>
       </div>
 
