@@ -397,6 +397,7 @@
   padding: 0.35rem 0.5rem;
   font-size: 14px;
   font-weight: 400;
+  letter-spacing: 0.2px;
   line-height: 1.35;
   color: var(--portal-sidebar-text);
   text-decoration: none;
@@ -446,7 +447,7 @@
   background: var(--portal-sidebar-row-active);
   color: var(--portal-sidebar-link-active);
   border-color: transparent;
-  font-weight: 400;
+  font-weight: 500;
 }
 
 .portal-nav-link--disabled {
@@ -516,8 +517,8 @@
 }
 
 .portal-shell--internal-module .portal-main-content {
-  max-width: 1500px;
   width: 100%;
+  max-width: 1600px;
   margin-left: auto;
   margin-right: auto;
   padding-left: 24px;
@@ -551,7 +552,7 @@
 }
 
 .portal-shell--internal-module .portal-sidebar .portal-nav-link {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
   line-height: 1.35;
   color: #ffffff;
