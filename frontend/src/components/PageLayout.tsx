@@ -5,7 +5,16 @@ type PageLayoutProps = {
   children: ReactNode
 }
 
-/** Authenticated layout for billing and legacy flows; includes the student account strip. */
+/** Authenticated layout for legacy flows (e.g. payment plan); matches internal module shell (no student strip / banner). */
 export function PageLayout({ children }: PageLayoutProps) {
-  return <PortalShell showStudentBar>{children}</PortalShell>
+  return (
+    <PortalShell
+      showStudentBar={false}
+      showPortalBanner={false}
+      internalModuleLayout
+      sidebarNavVariant="internal"
+    >
+      {children}
+    </PortalShell>
+  )
 }

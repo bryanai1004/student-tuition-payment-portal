@@ -9,11 +9,11 @@ function isDashboardRoute(pathname: string) {
   return pathname === '/dashboard' || pathname === '/dashboard/'
 }
 
-/** Layout route wrapper for authenticated portal modules. Finances shows the student account strip. */
+/** Layout route wrapper for authenticated portal modules. Internal modules omit the student account strip and myAMU banner. */
 export function PortalLayout() {
   const { pathname } = useLocation()
   const isDashboard = isDashboardRoute(pathname)
-  const showStudentBar = pathname.startsWith('/finances')
+  const showStudentBar = false
   const showSidebar = !isDashboard
   /** myAMU strip only on the dashboard; internal module pages use the gold bar only (+ compact header height). */
   const showPortalBanner = isDashboard

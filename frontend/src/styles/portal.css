@@ -495,23 +495,23 @@
   min-width: 0;
 }
 
-/* Internal module pages: compact sidebar (220px) + wide content (~80–90% of viewport past sidebar). */
+/* Internal module pages: compact sidebar + full-width main column (no centered reading cap). */
 .portal-shell--internal-module {
-  --portal-sidebar-width: 220px;
+  --portal-sidebar-width: 210px;
 }
 
 .portal-shell--internal-module .portal-main {
-  padding-left: 20px;
+  padding-left: 12px;
   box-sizing: border-box;
 }
 
 .portal-shell--internal-module .portal-main-content {
-  max-width: 1680px;
   width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-  padding-left: 16px;
-  padding-right: 16px;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 12px;
+  padding-right: 12px;
   box-sizing: border-box;
 }
 
@@ -527,26 +527,26 @@
 
 /* Internal module sidebar: AMU red, text-only nav (desktop + drawer). */
 .portal-shell--internal-module .portal-sidebar {
-  background: #a6192e;
+  background: #A6192E;
   border-right: 1px solid rgba(0, 0, 0, 0.12);
-  padding: 0.5rem 0 0.75rem;
+  padding: 0.4rem 0 0.65rem;
 }
 
 .portal-shell--internal-module .portal-sidebar-nav {
-  padding: 0.125rem 0.5rem 0;
+  padding: 0.1rem 0.4rem 0;
 }
 
 .portal-shell--internal-module .portal-sidebar-nav-list {
-  gap: 0.125rem;
+  gap: 0.0625rem;
 }
 
 .portal-shell--internal-module .portal-sidebar .portal-nav-link {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400;
-  line-height: 1.4;
+  line-height: 1.35;
   color: #ffffff;
   min-height: 0;
-  padding: 0.4rem 0.5rem;
+  padding: 0.34rem 0.45rem;
 }
 
 .portal-shell--internal-module .portal-sidebar .sidebar-item {
@@ -572,7 +572,7 @@
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
   font-weight: 500;
-  box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.35);
+  box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.32);
 }
 
 .portal-shell--internal-module .portal-sidebar-drawer-close {
