@@ -270,11 +270,11 @@ export async function assignClinicalSession(body) {
         };
     }
 }
-async function assignClinicalFromTimetableSlot(studentId, timetableId, status) {
-    const tt = await getClinicTimetableById(timetableId);
-    if (tt == null) {
-        return { ok: false, error: "timetableId not found", status: 404 };
-    }
+/**
+ * Build the same `clinical_assignments` insert payload used by
+ * `POST /api/admin/clinical/assign` for timetable-driven rows (CLINIC + placeholder date).
+ */
+export function buildTimetableClinicalAssignmentPayload(studentId, tt, status) {
     const slotLabel = timetableRowToSlotLabel(tt);
     const term = tt.term.slice(0, 20);
     const year = tt.year;
@@ -286,18 +286,25 @@ async function assignClinicalFromTimetableSlot(studentId, timetableId, status) {
         }
     }
     const faculty = tt.instructor.trim() === "" ? null : tt.instructor.trim();
-    const payload = {
+    return {
         studentId,
         courseCode: "CLINIC",
         sessionDate: TIMETABLE_ASSIGNMENT_SESSION_DATE_PLACEHOLDER,
         sessionName: slotLabel,
         site: null,
         faculty,
-        timetableId,
+        timetableId: tt.id,
         assignmentTerm: term || null,
         assignmentYear: year,
         ...(statusForDb !== undefined ? { status: statusForDb } : {}),
     };
+}
+async function assignClinicalFromTimetableSlot(studentId, timetableId, status) {
+    const tt = await getClinicTimetableById(timetableId);
+    if (tt == null) {
+        return { ok: false, error: "timetableId not found", status: 404 };
+    }
+    const payload = buildTimetableClinicalAssignmentPayload(studentId, tt, status);
     try {
         const id = await insertClinicalAssignment(payload);
         return { ok: true, id };

@@ -1,3 +1,5 @@
+import { type ClinicTimetableDbRow } from "../repositories/clinicalTimetableRepository.js";
+import { type InsertClinicalAssignmentPayload } from "../repositories/clinicalScheduleRepository.js";
 /** Thrown when `getStudentClinicalSchedule` receives an invalid student id (maps to HTTP 400). */
 export declare class ClinicalScheduleValidationError extends Error {
     constructor(message: string);
@@ -67,4 +69,9 @@ export type AssignClinicalSessionResult = {
     status: number;
 };
 export declare function assignClinicalSession(body: AssignClinicalSessionBody): Promise<AssignClinicalSessionResult>;
+/**
+ * Build the same `clinical_assignments` insert payload used by
+ * `POST /api/admin/clinical/assign` for timetable-driven rows (CLINIC + placeholder date).
+ */
+export declare function buildTimetableClinicalAssignmentPayload(studentId: string, tt: ClinicTimetableDbRow, status: string | null | undefined): InsertClinicalAssignmentPayload;
 //# sourceMappingURL=clinicalScheduleService.d.ts.map

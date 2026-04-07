@@ -90,7 +90,8 @@ export async function listStudentClinicalAssignments(studentId) {
                ca.id ASC`, [sid]);
     return rows.map(mapRow);
 }
-export async function insertClinicalAssignment(payload) {
+export async function insertClinicalAssignment(payload, connection) {
+    const cx = connection ?? pool;
     const status = payload.status != null && String(payload.status).trim() !== ""
         ? String(payload.status).trim()
         : "Scheduled";
@@ -106,7 +107,7 @@ export async function insertClinicalAssignment(payload) {
     const year = payload.assignmentYear != null && Number.isFinite(payload.assignmentYear)
         ? Number(payload.assignmentYear)
         : null;
-    const [res] = await pool.query(`INSERT INTO clinical_assignments
+    const [res] = await cx.query(`INSERT INTO clinical_assignments
       (student_id, course_code, session_date, session_name, site, faculty,
        timetable_id, term, \`year\`, status)
      VALUES (TRIM(?), TRIM(?), ?, ?, ?, ?, ?, ?, ?, ?)`, [

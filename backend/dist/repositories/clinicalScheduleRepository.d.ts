@@ -1,3 +1,4 @@
+import type { PoolConnection } from "mysql2/promise";
 export type ClinicalAssignmentDbRow = {
     id: number;
     student_id: string;
@@ -32,5 +33,5 @@ export type InsertClinicalAssignmentPayload = {
     assignmentTerm?: string | null;
     assignmentYear?: number | null;
 };
-export declare function insertClinicalAssignment(payload: InsertClinicalAssignmentPayload): Promise<number>;
+export declare function insertClinicalAssignment(payload: InsertClinicalAssignmentPayload, connection?: PoolConnection): Promise<number>;
 //# sourceMappingURL=clinicalScheduleRepository.d.ts.map
