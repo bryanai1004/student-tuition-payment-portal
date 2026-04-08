@@ -34,7 +34,6 @@ import { GpaPage } from './pages/academics/GpaPage'
 import { AcademicProgressPage } from './pages/academics/AcademicProgressPage'
 import { EnrollmentVerificationPage } from './pages/academics/EnrollmentVerificationPage'
 import { ClinicalLayout } from './pages/clinical/ClinicalLayout'
-import { ClinicalHomePage } from './pages/clinical/ClinicalHomePage'
 import { ClinicalSchedulePage } from './pages/clinical/ClinicalSchedulePage'
 import { ClinicalAddDropPage } from './pages/clinical/ClinicalAddDropPage'
 import { ClinicalExamPracticePage } from './pages/clinical/ClinicalExamPracticePage'
@@ -126,7 +125,7 @@ export default function App() {
             <Route path="enrollment-verification" element={<EnrollmentVerificationPage />} />
           </Route>
           <Route path="/clinical" element={<ClinicalLayout />}>
-            <Route index element={<ClinicalHomePage />} />
+            <Route index element={<Navigate to="schedule" replace />} />
             <Route path="schedule" element={<ClinicalSchedulePage />} />
             <Route path="add-drop" element={<ClinicalAddDropPage />} />
             <Route path="exam-practice" element={<ClinicalExamPracticePage />} />
