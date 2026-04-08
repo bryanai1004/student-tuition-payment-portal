@@ -13,6 +13,7 @@ import type { MarksRow } from "../repositories/studentAcademicsRepository.js";
 import type { StudentAcademicCourseRecord, StudentAcademicCourseStatus, StudentAcademicsAvailableTerm, StudentAcademicsEnrollmentItem, StudentAcademicsScheduleItem, StudentAcademicsTranscriptItem } from "../types/studentAcademics.js";
 import type { StudentTranscriptRow } from "../types/studentTranscript.js";
 import type { ScheduleRow } from "../types/studentAccount.js";
+import type { PortalEnrollmentAcademicRow } from "../repositories/studentEnrollmentRepository.js";
 /** Fall > Summer > Spring > Winter > other (matches legacy `marks` ORDER BY). */
 export declare function termSortOrder(term: string): number;
 export declare function termsMatch(a: string, b: string): boolean;
@@ -116,17 +117,7 @@ export declare function pickNewerRegistrationAnchor(legacy: {
  * Source of truth: `portal_enrollments` + `course_sections` slice → domain `RegistrationRecord` shape on
  * `StudentAcademicCourseRecord` (`source: "portal"`). Not a `marks` outcome — grades stay null.
  */
-export declare function portalEnrollmentRowToAcademicCourseRecord(studentId: string, row: {
-    course_code: string;
-    course_title_raw: string;
-    term: string;
-    year: number;
-    units: number | null;
-    weekday: string | null;
-    start_time: unknown;
-    end_time: unknown;
-    instructor: string | null;
-}, courseTitle: string, activeTerm: {
+export declare function portalEnrollmentRowToAcademicCourseRecord(studentId: string, row: PortalEnrollmentAcademicRow, courseTitle: string, activeTerm: {
     term: string;
     year: number;
 } | null): StudentAcademicCourseRecord;

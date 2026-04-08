@@ -39,7 +39,8 @@ function buildMergedPayload(studentId, studentName, marksRows, legacyCourseRecor
     const currentSchedule = currentTerm == null
         ? []
         : courseRecords
-            .filter((r) => r.year === currentTerm.year &&
+            .filter((r) => r.status !== "withdrawn" &&
+            r.year === currentTerm.year &&
             termsMatch(r.term, currentTerm.term))
             .map(courseRecordToScheduleItem);
     const combinedAcademicHistory = courseRecords.map((r) => courseRecordToEnrollmentItem(r));

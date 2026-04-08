@@ -21,6 +21,7 @@ export declare function enrollStudentInSections(studentExternalId: string, term:
  * multiple sections exist for a course (lowest `id`). Timetable display for course-only portal enrollments.
  */
 export declare function listStudentEnrolledSectionRows(studentExternalId: string, term: string, year: number): Promise<CourseSectionDetail[]>;
+export type PortalEnrollmentAcademicStatus = "active" | "withdrawn" | "completed" | "dropped" | "unknown";
 export type PortalEnrollmentAcademicRow = {
     course_code: string;
     course_title_raw: string;
@@ -31,6 +32,8 @@ export type PortalEnrollmentAcademicRow = {
     start_time: unknown;
     end_time: unknown;
     instructor: string | null;
+    status: PortalEnrollmentAcademicStatus;
+    withdrawn_at: string | null;
 };
 /**
  * Latest portal enrollment term/year for a student (same ordering as legacy registration “latest”).

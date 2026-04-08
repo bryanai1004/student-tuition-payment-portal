@@ -221,6 +221,22 @@ export async function listStudentEnrolledSectionRows(studentExternalId, term, ye
     ]);
     return rows.map((r) => mapCourseSectionRow(r));
 }
+function normalizePortalEnrollmentAcademicStatus(raw) {
+    if (raw == null)
+        return "active";
+    const s = String(raw).trim().toLowerCase();
+    if (s === "")
+        return "active";
+    if (s === "withdrawn")
+        return "withdrawn";
+    if (s === "active")
+        return "active";
+    if (s === "completed")
+        return "completed";
+    if (s === "dropped")
+        return "dropped";
+    return "unknown";
+}
 /**
  * Latest portal enrollment term/year for a student (same ordering as legacy registration “latest”).
  */
@@ -264,7 +280,9 @@ export async function listPortalEnrollmentRowsForStudentAcademics(studentExterna
       cs_pick.weekday,
       cs_pick.start_time,
       cs_pick.end_time,
-      cs_pick.instructor
+      cs_pick.instructor,
+      e.status AS enrollment_status,
+      e.withdrawn_at AS withdrawn_at
     FROM portal_enrollments e
     INNER JOIN portal_courses pc ON pc.course_id = e.course_id
     LEFT JOIN (
@@ -301,21 +319,33 @@ export async function listPortalEnrollmentRowsForStudentAcademics(studentExterna
       pc.course_code ASC
   `;
     const [rows] = await pool.query(sql, [sid]);
-    return rows.map((r) => ({
-        course_code: String(r.course_code ?? "").trim(),
-        course_title_raw: String(r.course_title_raw ?? "").trim(),
-        term: String(r.term ?? "").trim(),
-        year: Number(r.year),
-        units: r.units == null || r.units === ""
-            ? null
-            : Number.isFinite(Number(r.units))
-                ? Number(r.units)
-                : null,
-        weekday: r.weekday == null ? null : String(r.weekday).trim() || null,
-        start_time: r.start_time,
-        end_time: r.end_time,
-        instructor: r.instructor == null ? null : String(r.instructor).trim() || null,
-    }));
+    return rows.map((r) => {
+        const w = r.withdrawn_at;
+        let withdrawnAt = null;
+        if (w != null && w !== "") {
+            withdrawnAt =
+                w instanceof Date
+                    ? w.toISOString()
+                    : String(w).trim() || null;
+        }
+        return {
+            course_code: String(r.course_code ?? "").trim(),
+            course_title_raw: String(r.course_title_raw ?? "").trim(),
+            term: String(r.term ?? "").trim(),
+            year: Number(r.year),
+            units: r.units == null || r.units === ""
+                ? null
+                : Number.isFinite(Number(r.units))
+                    ? Number(r.units)
+                    : null,
+            weekday: r.weekday == null ? null : String(r.weekday).trim() || null,
+            start_time: r.start_time,
+            end_time: r.end_time,
+            instructor: r.instructor == null ? null : String(r.instructor).trim() || null,
+            status: normalizePortalEnrollmentAcademicStatus(r.enrollment_status),
+            withdrawn_at: withdrawnAt,
+        };
+    });
 }
 /**
  * Removes one course-level portal enrollment (any section). Only `portal_enrollments` is affected.

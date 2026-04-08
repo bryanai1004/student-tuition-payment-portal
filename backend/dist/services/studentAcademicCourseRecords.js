@@ -367,6 +367,24 @@ export function pickNewerRegistrationAnchor(legacy, portal) {
  * `StudentAcademicCourseRecord` (`source: "portal"`). Not a `marks` outcome — grades stay null.
  */
 export function portalEnrollmentRowToAcademicCourseRecord(studentId, row, courseTitle, activeTerm) {
+    if (row.status === "withdrawn") {
+        return {
+            studentId,
+            courseCode: row.course_code,
+            courseTitle,
+            term: row.term,
+            year: row.year,
+            credits: row.units,
+            instructor: nullableStr(row.instructor ?? ""),
+            days: row.weekday,
+            timeFrom: formatMysqlTime(row.start_time),
+            timeTo: formatMysqlTime(row.end_time),
+            grade: "W",
+            numericGrade: null,
+            status: "withdrawn",
+            source: "portal",
+        };
+    }
     const status = inferAcademicCourseStatus({
         term: row.term,
         year: row.year,
