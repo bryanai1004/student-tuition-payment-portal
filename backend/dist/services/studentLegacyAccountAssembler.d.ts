@@ -10,7 +10,7 @@ export declare function legacyAccountingDateToIso(dateRaw: number): string;
  * Category splits are minimal; `lineItems` and portal-only fields stay empty until later steps.
  */
 export type AssembleLegacyStudentAccountOptions = {
-    /** True active enrollment term (latest open registration on marks); drives `currentTerm` on the payload. */
+    /** Active enrollment term from legacy+portal anchor and marks/portal open-enrollment rules; drives `currentTerm`. */
     portalActiveTerm: {
         term: string;
         year: number;

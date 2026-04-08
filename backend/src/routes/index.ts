@@ -15,6 +15,7 @@ import {
   postAdminCourseSection,
 } from "../controllers/adminCourseSectionController.js";
 import { deleteAdminPortalEnrollmentHandler } from "../controllers/adminEnrollmentController.js";
+import { setStudentGrade } from "../controllers/adminMarksController.js";
 import {
   deleteAdminFinanceChargeByIdHandler,
   deleteAdminFinancePaymentByIdHandler,
@@ -151,6 +152,7 @@ adminRouter.post("/course-sections", postAdminCourseSection);
 adminRouter.patch("/course-sections/:id", patchAdminCourseSection);
 adminRouter.delete("/course-sections/:id", deleteAdminCourseSection);
 adminRouter.delete("/enrollments", deleteAdminPortalEnrollmentHandler);
+adminRouter.post("/marks/set-grade", setStudentGrade);
 adminRouter.get("/finance/quarters", getGlobalFinanceQuarters);
 adminRouter.get("/finance/quarter-settings", getFinanceQuarterSettings);
 adminRouter.put("/finance/quarter-settings", putFinanceQuarterSettings);

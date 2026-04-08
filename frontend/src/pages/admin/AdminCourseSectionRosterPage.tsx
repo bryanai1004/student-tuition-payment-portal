@@ -149,6 +149,12 @@ export function AdminCourseSectionRosterPage() {
     const row = students.find((x) => x.studentId === studentId)
     const grade = (gradeDraft[studentId] ?? row?.grade ?? '').trim()
     if (!grade || grade === 'W') return
+    if (!Object.prototype.hasOwnProperty.call(GRADE_SCALE, grade)) {
+      setActionError(
+        'Pick a standard letter grade from the list before saving.',
+      )
+      return
+    }
 
     const numeric = GRADE_SCALE[grade] ?? null
 
@@ -364,6 +370,27 @@ export function AdminCourseSectionRosterPage() {
                                   {g}
                                 </option>
                               ))}
+                              {(() => {
+                                const v = (
+                                  gradeDraft[s.studentId] ??
+                                  s.grade ??
+                                  ''
+                                ).trim()
+                                if (
+                                  v !== '' &&
+                                  !Object.prototype.hasOwnProperty.call(
+                                    GRADE_SCALE,
+                                    v,
+                                  )
+                                ) {
+                                  return (
+                                    <option key={`legacy-${v}`} value={v}>
+                                      {v}
+                                    </option>
+                                  )
+                                }
+                                return null
+                              })()}
                             </select>
                           )}
                         </td>

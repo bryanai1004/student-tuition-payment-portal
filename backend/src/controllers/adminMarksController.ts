@@ -12,7 +12,12 @@ function parseSetGradeBody(
   if (body == null || typeof body !== "object") return null;
   const o = body as Record<string, unknown>;
   const studentId = typeof o.studentId === "string" ? o.studentId.trim() : "";
-  const courseCode = typeof o.courseCode === "string" ? o.courseCode.trim() : "";
+  const courseCode =
+    typeof o.courseCode === "string"
+      ? o.courseCode.trim()
+      : typeof o.course_code === "string"
+        ? o.course_code.trim()
+        : "";
   /** Roster sends portal academic term UUID as `term` (legacy marks uses term_name + year separately). */
   const termRaw = o.term ?? o.academic_term_id;
   const academicTermId =

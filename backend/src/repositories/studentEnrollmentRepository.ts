@@ -241,6 +241,7 @@ export async function listStudentEnrolledSectionRows(
       cs.room,
       cs.instructor,
       cs.notes,
+      cs.course_title,
       0 AS enrolled_count,
       CAST(NULL AS JSON) AS enrolled_students_json
     FROM (
@@ -258,11 +259,18 @@ export async function listStudentEnrolledSectionRows(
         cs_inner.room,
         cs_inner.instructor,
         cs_inner.notes,
+        COALESCE(
+          NULLIF(TRIM(cat.eng_name), ''),
+          NULLIF(TRIM(pc.title), '')
+        ) AS course_title,
         ROW_NUMBER() OVER (PARTITION BY cs_inner.course_code ORDER BY cs_inner.id) AS rn
       FROM course_sections cs_inner
       INNER JOIN portal_courses pc
         ON pc.course_code COLLATE utf8mb4_unicode_ci =
            cs_inner.course_code COLLATE utf8mb4_unicode_ci
+      LEFT JOIN courses cat
+        ON TRIM(cat.code) COLLATE utf8mb4_unicode_ci =
+           TRIM(cs_inner.course_code) COLLATE utf8mb4_unicode_ci
       INNER JOIN portal_enrollments e
         ON e.course_id = pc.course_id
         AND e.student_external_id COLLATE utf8mb4_unicode_ci =
@@ -324,7 +332,18 @@ export async function listAdminEnrollmentRowsForSection(
       TRIM(e.student_external_id) AS student_external_id,
       TRIM(ps.full_name) AS full_name,
       e.status AS enrollment_status,
-      e.withdrawn_at AS withdrawn_at
+      e.withdrawn_at AS withdrawn_at,
+      (
+        SELECT TRIM(m.grade)
+        FROM marks m
+        WHERE TRIM(m.id) = TRIM(e.student_external_id)
+          AND m.code COLLATE utf8mb4_unicode_ci =
+              CONVERT(pc.course_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          AND LOWER(TRIM(m.term)) = LOWER(TRIM(e.term))
+          AND m.year = e.year
+        ORDER BY m.seqNumber DESC
+        LIMIT 1
+      ) AS marks_grade
     FROM portal_enrollments e
     INNER JOIN portal_courses pc ON pc.course_id = e.course_id
     LEFT JOIN portal_students ps
@@ -349,6 +368,14 @@ export async function listAdminEnrollmentRowsForSection(
         w instanceof Date ? w.toISOString() : String(w).trim() || null;
     }
     const status = normalizePortalEnrollmentAcademicStatus(r.enrollment_status);
+    const marksG = r.marks_grade;
+    const marksGrade =
+      marksG == null
+        ? null
+        : (() => {
+            const s = String(marksG).trim();
+            return s === "" ? null : s;
+          })();
     return {
       studentId: String(r.student_external_id ?? "").trim(),
       name: (() => {
@@ -358,7 +385,10 @@ export async function listAdminEnrollmentRowsForSection(
         return s === "" ? null : s;
       })(),
       status,
-      grade: status === "withdrawn" ? "W" : null,
+      grade:
+        status === "withdrawn"
+          ? "W"
+          : marksGrade,
       withdrawn_at: withdrawnAt,
     };
   });

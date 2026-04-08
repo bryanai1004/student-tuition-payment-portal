@@ -66,6 +66,7 @@ export function mapCourseSectionRow(row) {
         room: nullableString(row.room),
         instructor: nullableString(row.instructor),
         notes: nullableString(row.notes),
+        course_title: nullableString(row.course_title),
         enrolled_count: Number(row.enrolled_count ?? 0),
         enrolled_students: parseEnrolledStudentsJson(row.enrolled_students_json),
     };
@@ -175,7 +176,6 @@ export async function listCourseSectionsWithEnrollmentAggregates(term, year, opt
       LEFT JOIN portal_students ps
         ON CONVERT(ps.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci =
            CONVERT(e.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-      WHERE (e.status IS NULL OR e.status = 'active')
       GROUP BY pc.course_code, e.term, e.year
     ) agg
       ON CONVERT(agg.agg_course_code USING utf8mb4) COLLATE utf8mb4_unicode_ci =

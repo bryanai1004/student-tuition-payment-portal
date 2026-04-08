@@ -24,9 +24,13 @@ export function enrolledSectionsToScheduleRows(
     }
     const room = sec.room?.trim() ?? ''
     const inst = sec.instructor?.trim() ?? ''
+    const title =
+      sec.course_title != null && String(sec.course_title).trim() !== ''
+        ? String(sec.course_title).trim()
+        : ''
     return {
       courseCode: sec.course_code?.trim() || '',
-      title: '',
+      title,
       type: sec.delivery_mode?.trim() ? String(sec.delivery_mode).trim() : '',
       units: null,
       hours: null,

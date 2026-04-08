@@ -17,6 +17,8 @@ export type CourseSectionDetail = {
   room: string | null;
   instructor: string | null;
   notes: string | null;
+  /** Set when `portal_courses.title` is selected (e.g. student enrolled-sections). Otherwise null. */
+  course_title: string | null;
   /** Distinct students enrolled in this course (same term/year) via `portal_enrollments`. */
   enrolled_count: number;
   /** Present when at least one enrollment exists for the course in this term/year. */
@@ -92,6 +94,7 @@ export function mapCourseSectionRow(row: RowDataPacket): CourseSectionDetail {
     room: nullableString(row.room),
     instructor: nullableString(row.instructor),
     notes: nullableString(row.notes),
+    course_title: nullableString(row.course_title),
     enrolled_count: Number(row.enrolled_count ?? 0),
     enrolled_students: parseEnrolledStudentsJson(row.enrolled_students_json),
   };

@@ -179,6 +179,7 @@ export async function listStudentEnrolledSectionRows(studentExternalId, term, ye
       cs.room,
       cs.instructor,
       cs.notes,
+      cs.course_title,
       0 AS enrolled_count,
       CAST(NULL AS JSON) AS enrolled_students_json
     FROM (
@@ -196,11 +197,18 @@ export async function listStudentEnrolledSectionRows(studentExternalId, term, ye
         cs_inner.room,
         cs_inner.instructor,
         cs_inner.notes,
+        COALESCE(
+          NULLIF(TRIM(cat.eng_name), ''),
+          NULLIF(TRIM(pc.title), '')
+        ) AS course_title,
         ROW_NUMBER() OVER (PARTITION BY cs_inner.course_code ORDER BY cs_inner.id) AS rn
       FROM course_sections cs_inner
       INNER JOIN portal_courses pc
         ON pc.course_code COLLATE utf8mb4_unicode_ci =
            cs_inner.course_code COLLATE utf8mb4_unicode_ci
+      LEFT JOIN courses cat
+        ON TRIM(cat.code) COLLATE utf8mb4_unicode_ci =
+           TRIM(cs_inner.course_code) COLLATE utf8mb4_unicode_ci
       INNER JOIN portal_enrollments e
         ON e.course_id = pc.course_id
         AND e.student_external_id COLLATE utf8mb4_unicode_ci =
@@ -208,7 +216,6 @@ export async function listStudentEnrolledSectionRows(studentExternalId, term, ye
         AND e.term COLLATE utf8mb4_unicode_ci =
             cs_inner.term COLLATE utf8mb4_unicode_ci
         AND e.year = cs_inner.year
-        AND (e.status IS NULL OR e.status = 'active')
       WHERE cs_inner.term = ? AND cs_inner.year = ?
     ) cs
     WHERE cs.rn = 1
@@ -236,6 +243,74 @@ function normalizePortalEnrollmentAcademicStatus(raw) {
     if (s === "dropped")
         return "dropped";
     return "unknown";
+}
+export async function listAdminEnrollmentRowsForSection(courseCode, term, year) {
+    const code = courseCode.trim();
+    const t = term.trim();
+    const sql = `
+    SELECT
+      TRIM(e.student_external_id) AS student_external_id,
+      TRIM(ps.full_name) AS full_name,
+      e.status AS enrollment_status,
+      e.withdrawn_at AS withdrawn_at,
+      (
+        SELECT TRIM(m.grade)
+        FROM marks m
+        WHERE TRIM(m.id) = TRIM(e.student_external_id)
+          AND m.code COLLATE utf8mb4_unicode_ci =
+              CONVERT(pc.course_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          AND LOWER(TRIM(m.term)) = LOWER(TRIM(e.term))
+          AND m.year = e.year
+        ORDER BY m.seqNumber DESC
+        LIMIT 1
+      ) AS marks_grade
+    FROM portal_enrollments e
+    INNER JOIN portal_courses pc ON pc.course_id = e.course_id
+    LEFT JOIN portal_students ps
+      ON CONVERT(ps.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+         CONVERT(e.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
+    WHERE pc.course_code COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.term COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.year = ?
+    ORDER BY
+      CASE WHEN ps.full_name IS NULL OR TRIM(ps.full_name) = '' THEN 1 ELSE 0 END,
+      TRIM(ps.full_name) ASC,
+      TRIM(e.student_external_id) ASC
+  `;
+    const [rows] = await pool.query(sql, [code, t, year]);
+    return rows.map((r) => {
+        const w = r.withdrawn_at;
+        let withdrawnAt = null;
+        if (w != null && w !== "") {
+            withdrawnAt =
+                w instanceof Date ? w.toISOString() : String(w).trim() || null;
+        }
+        const status = normalizePortalEnrollmentAcademicStatus(r.enrollment_status);
+        const marksG = r.marks_grade;
+        const marksGrade = marksG == null
+            ? null
+            : (() => {
+                const s = String(marksG).trim();
+                return s === "" ? null : s;
+            })();
+        return {
+            studentId: String(r.student_external_id ?? "").trim(),
+            name: (() => {
+                const fn = r.full_name;
+                if (fn == null)
+                    return null;
+                const s = String(fn).trim();
+                return s === "" ? null : s;
+            })(),
+            status,
+            grade: status === "withdrawn"
+                ? "W"
+                : marksGrade,
+            withdrawn_at: withdrawnAt,
+        };
+    });
 }
 /**
  * Latest portal enrollment term/year for a student (same ordering as legacy registration “latest”).

@@ -11,9 +11,10 @@ export function parseScheduleRowsFromStudentAccountJson(raw: unknown): ScheduleR
   return scheduleRowsRaw.map((row) => {
     const r = row as Record<string, unknown>
     const instructorRaw = r.instructor
+    const titleRaw = r.title ?? r.courseTitle ?? r.course_title
     return {
       courseCode: String(r.courseCode ?? ''),
-      title: String(r.title ?? ''),
+      title: titleRaw == null ? '' : String(titleRaw),
       type: String(r.type ?? ''),
       units: r.units == null ? null : Number(r.units),
       hours: r.hours == null ? null : Number(r.hours),

@@ -22,6 +22,15 @@ export declare function enrollStudentInSections(studentExternalId: string, term:
  */
 export declare function listStudentEnrolledSectionRows(studentExternalId: string, term: string, year: number): Promise<CourseSectionDetail[]>;
 export type PortalEnrollmentAcademicStatus = "active" | "withdrawn" | "completed" | "dropped" | "unknown";
+/** Admin section roster: same `portal_enrollments` + joins as student Academics, all statuses. */
+export type AdminSectionEnrollmentRepositoryRow = {
+    studentId: string;
+    name: string | null;
+    status: PortalEnrollmentAcademicStatus;
+    grade: string | null;
+    withdrawn_at: string | null;
+};
+export declare function listAdminEnrollmentRowsForSection(courseCode: string, term: string, year: number): Promise<AdminSectionEnrollmentRepositoryRow[]>;
 export type PortalEnrollmentAcademicRow = {
     course_code: string;
     course_title_raw: string;
