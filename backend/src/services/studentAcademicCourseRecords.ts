@@ -24,6 +24,7 @@ import type {
 } from "../types/studentAcademics.js";
 import type { StudentTranscriptRow } from "../types/studentTranscript.js";
 import type { ScheduleRow } from "../types/studentAccount.js";
+import type { PortalEnrollmentAcademicRow } from "../repositories/studentEnrollmentRepository.js";
 
 const MIN_TERM_YEAR = 1900;
 const MAX_TERM_YEAR = 2100;
@@ -494,20 +495,29 @@ export function pickNewerRegistrationAnchor(
  */
 export function portalEnrollmentRowToAcademicCourseRecord(
   studentId: string,
-  row: {
-    course_code: string;
-    course_title_raw: string;
-    term: string;
-    year: number;
-    units: number | null;
-    weekday: string | null;
-    start_time: unknown;
-    end_time: unknown;
-    instructor: string | null;
-  },
+  row: PortalEnrollmentAcademicRow,
   courseTitle: string,
   activeTerm: { term: string; year: number } | null,
 ): StudentAcademicCourseRecord {
+  if (row.status === "withdrawn") {
+    return {
+      studentId,
+      courseCode: row.course_code,
+      courseTitle,
+      term: row.term,
+      year: row.year,
+      credits: row.units,
+      instructor: nullableStr(row.instructor ?? ""),
+      days: row.weekday,
+      timeFrom: formatMysqlTime(row.start_time),
+      timeTo: formatMysqlTime(row.end_time),
+      grade: "W",
+      numericGrade: null,
+      status: "withdrawn",
+      source: "portal",
+    };
+  }
+
   const status = inferAcademicCourseStatus({
     term: row.term,
     year: row.year,

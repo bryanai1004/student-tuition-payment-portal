@@ -89,6 +89,7 @@ function buildMergedPayload(
       : courseRecords
           .filter(
             (r) =>
+              r.status !== "withdrawn" &&
               r.year === currentTerm.year &&
               termsMatch(r.term, currentTerm.term),
           )

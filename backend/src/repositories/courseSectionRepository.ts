@@ -243,6 +243,7 @@ export async function listCourseSectionsWithEnrollmentAggregates(
       LEFT JOIN portal_students ps
         ON CONVERT(ps.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci =
            CONVERT(e.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      WHERE (e.status IS NULL OR e.status = 'active')
       GROUP BY pc.course_code, e.term, e.year
     ) agg
       ON CONVERT(agg.agg_course_code USING utf8mb4) COLLATE utf8mb4_unicode_ci =
@@ -293,6 +294,7 @@ export async function listPortalEnrollmentRollupsByCourseForTermYear(
     WHERE e.term COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.year = ?
+      AND (e.status IS NULL OR e.status = 'active')
     GROUP BY pc.course_code
     ORDER BY pc.course_code ASC
   `;
