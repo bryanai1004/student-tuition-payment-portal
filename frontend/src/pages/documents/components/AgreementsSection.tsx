@@ -51,7 +51,6 @@ export function AgreementsSection({
   }, [profileName, account.student.name])
 
   const completed = requirement?.status === 'completed'
-  const submittedAt = requirement?.submittedAt ?? null
 
   const closing = useMemo(() => {
     return COPYRIGHT_RELEASE_CLOSING_TEMPLATE.replace('{{NAME}}', displayName)
@@ -87,12 +86,7 @@ export function AgreementsSection({
     }
   }, [academicTermId, agreed, completed, onRefresh, studentId])
 
-  const statusLabel =
-    requirement == null
-      ? 'Unknown'
-      : requirement.status === 'completed'
-        ? 'Completed'
-        : 'Assigned'
+  const submittedLabel = completed ? 'Submitted: Yes' : 'Submitted: No'
 
   return (
     <div className="portal-documents-agreements">
@@ -104,13 +98,7 @@ export function AgreementsSection({
               Review and submit the university copyright release for recordings and promotional use.
             </p>
             <p className="portal-inline-note portal-inline-note--flush">
-              Status: <strong>{statusLabel}</strong>
-              {submittedAt ? (
-                <>
-                  {' '}
-                  · Submitted {new Date(submittedAt).toLocaleString()}
-                </>
-              ) : null}
+              <strong>{submittedLabel}</strong>
             </p>
           </div>
           <div className="portal-doc-quiz-entry-card__aside">
@@ -158,8 +146,7 @@ export function AgreementsSection({
 
                 {completed ? (
                   <p className="portal-documents-agreement-body__success" role="status">
-                    Submitted. This agreement is on file for this term.
-                    {submittedAt ? ` (${new Date(submittedAt).toLocaleString()})` : ''}
+                    Submitted: Yes. This agreement is on file for this term.
                   </p>
                 ) : (
                   <div className="portal-documents-agreement-body__actions">

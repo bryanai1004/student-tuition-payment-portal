@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DOCUMENT_QUIZZES,
   type QuizId,
@@ -20,6 +20,12 @@ const initialCertified = (): Record<QuizId, boolean> => ({
   ferpa: false,
   titleix: false,
   campus: false,
+})
+
+const emptyIncorrectByQuiz = (): Record<QuizId, string[]> => ({
+  ferpa: [],
+  titleix: [],
+  campus: [],
 })
 
 type QuizSectionProps = {
@@ -46,6 +52,8 @@ export function QuizSection({
     titleix: null,
     campus: null,
   })
+  const [incorrectQuestionIdsByQuiz, setIncorrectQuestionIdsByQuiz] =
+    useState<Record<QuizId, string[]>>(emptyIncorrectByQuiz)
   const submitInFlightRef = useRef(false)
 
   const completedByQuiz: Record<QuizId, boolean> = {
@@ -53,6 +61,20 @@ export function QuizSection({
     titleix: requirementsByQuiz.titleix?.status === 'completed',
     campus: requirementsByQuiz.campus?.status === 'completed',
   }
+
+  useEffect(() => {
+    setIncorrectQuestionIdsByQuiz((prev) => {
+      let next = prev
+      const qids: QuizId[] = ['ferpa', 'titleix', 'campus']
+      for (const qid of qids) {
+        if (requirementsByQuiz[qid]?.status === 'completed' && prev[qid].length > 0) {
+          if (next === prev) next = { ...prev }
+          next[qid] = []
+        }
+      }
+      return next
+    })
+  }, [requirementsByQuiz])
 
   const handleToggleExpand = useCallback((qid: QuizId) => {
     setExpandedQuizId((prev) => (prev === qid ? null : qid))
@@ -87,6 +109,10 @@ export function QuizSection({
           { academicTermId: tid, answers },
         )
         console.debug('[documents] quiz submit ← response', res)
+        setIncorrectQuestionIdsByQuiz((prev) => ({
+          ...prev,
+          [quizId]: res.isPassed ? [] : [...res.incorrectQuestionIds],
+        }))
         await onRefresh()
       } catch (e) {
         const message =
@@ -108,10 +134,10 @@ export function QuizSection({
         completedByQuiz={completedByQuiz}
         answersByQuiz={answersByQuiz}
         certifiedByQuiz={certifiedByQuiz}
-        requirementsByQuiz={requirementsByQuiz}
         submittingQuizId={submittingQuizId}
         errorByQuiz={errorByQuiz}
         onToggleExpand={handleToggleExpand}
+        incorrectQuestionIdsByQuiz={incorrectQuestionIdsByQuiz}
         onAnswerChange={(quizId, questionId, option) => {
           setAnswersByQuiz((prev) => ({
             ...prev,
@@ -121,6 +147,14 @@ export function QuizSection({
             },
           }))
           setErrorByQuiz((p) => ({ ...p, [quizId]: null }))
+          setIncorrectQuestionIdsByQuiz((prev) => {
+            const ids = prev[quizId] ?? []
+            if (!ids.includes(questionId)) return prev
+            return {
+              ...prev,
+              [quizId]: ids.filter((id) => id !== questionId),
+            }
+          })
         }}
         onCertifiedChange={(quizId, next) => {
           setCertifiedByQuiz((prev) => ({ ...prev, [quizId]: next }))

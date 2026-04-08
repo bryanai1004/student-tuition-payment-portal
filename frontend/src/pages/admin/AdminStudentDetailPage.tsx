@@ -40,14 +40,6 @@ function formatEntryYear(y: number | null | undefined): string {
   return String(Math.trunc(y))
 }
 
-function formatDateTime(iso: string | null | undefined): string {
-  const s = iso?.trim() ?? ''
-  if (!s) return '—'
-  const d = new Date(s.includes('T') ? s : `${s}T12:00:00`)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
-}
-
 const ADMIN_DOC_REQUIREMENT_ORDER: DocumentRequirementType[] = [
   'ferpa',
   'titleix',
@@ -60,10 +52,6 @@ const ADMIN_DOC_LABELS: Record<DocumentRequirementType, string> = {
   titleix: 'Title IX Quiz',
   campus: 'Campus Safety Quiz',
   copyright_release_agreement: 'Copyright Release Agreement',
-}
-
-function isDocumentQuizType(t: DocumentRequirementType): boolean {
-  return t === 'ferpa' || t === 'titleix' || t === 'campus'
 }
 
 /** Visible terms first when any exist; otherwise full list. Newest by `sequence_no`, then year, then quarter. */
@@ -931,27 +919,7 @@ export function AdminStudentDetailPage() {
                             (r) => r.requirementType === reqType,
                           )
                           const title = ADMIN_DOC_LABELS[reqType]
-                          const statusLabel =
-                            req?.status === 'completed'
-                              ? 'Completed'
-                              : 'Assigned'
-                          const badgeClass =
-                            req?.status === 'completed'
-                              ? 'portal-registration-status-badge'
-                              : 'portal-registration-status-badge portal-registration-status-badge--neutral'
-                          const isQuiz = isDocumentQuizType(reqType)
-                          const hasScore =
-                            req != null &&
-                            req.scoreCorrect !== null &&
-                            req.totalQuestions !== null
-                          let incompleteNote: string | null = null
-                          if (req && isQuiz && req.status === 'assigned') {
-                            if (hasScore && !req.isPassed) {
-                              incompleteNote = 'Requires a perfect score'
-                            } else if (!hasScore) {
-                              incompleteNote = 'Not yet completed'
-                            }
-                          }
+                          const submittedYes = req?.status === 'completed'
                           const singleBusy = resettingRequirement === reqType
                           return (
                             <div
@@ -982,18 +950,6 @@ export function AdminStudentDetailPage() {
                                 >
                                   {title}
                                 </h3>
-                                {req ? (
-                                  <span
-                                    className={badgeClass}
-                                    aria-label={`Status: ${statusLabel}`}
-                                  >
-                                    {statusLabel}
-                                  </span>
-                                ) : (
-                                  <span className="portal-text-muted">
-                                    No record
-                                  </span>
-                                )}
                                 <button
                                   type="button"
                                   className="portal-btn portal-btn--secondary"
@@ -1009,47 +965,12 @@ export function AdminStudentDetailPage() {
                                   {singleBusy ? 'Re-assigning…' : 'Re-assign'}
                                 </button>
                               </div>
-                              {req ? (
-                                <dl>
-                                  <div className="portal-row">
-                                    <dt>Passed</dt>
-                                    <dd>{req.isPassed ? 'Yes' : 'No'}</dd>
-                                  </div>
-                                  {isQuiz ? (
-                                    <div className="portal-row">
-                                      <dt>Score</dt>
-                                      <dd>
-                                        {hasScore
-                                          ? `${req.scoreCorrect} / ${req.totalQuestions}`
-                                          : '—'}
-                                      </dd>
-                                    </div>
-                                  ) : null}
-                                  <div className="portal-row">
-                                    <dt>Submitted</dt>
-                                    <dd>{formatDateTime(req.submittedAt)}</dd>
-                                  </div>
-                                  <div className="portal-row">
-                                    <dt>Last re-assigned</dt>
-                                    <dd>
-                                      {formatDateTime(req.lastReassignedAt)}
-                                    </dd>
-                                  </div>
-                                </dl>
-                              ) : (
-                                <p className="portal-card-note admin-detail-empty">
-                                  No requirement row returned for this term yet.
-                                  Re-assign to initialize it if needed.
-                                </p>
-                              )}
-                              {incompleteNote ? (
-                                <p
-                                  className="portal-registration-status-note"
-                                  style={{ marginTop: 0 }}
-                                >
-                                  {incompleteNote}
-                                </p>
-                              ) : null}
+                              <dl style={{ margin: 0 }}>
+                                <div className="portal-row">
+                                  <dt>Submitted</dt>
+                                  <dd>{submittedYes ? 'Yes' : 'No'}</dd>
+                                </div>
+                              </dl>
                             </div>
                           )
                         })

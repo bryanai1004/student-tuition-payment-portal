@@ -67,6 +67,8 @@ export type QuizSubmitPayload = {
   isPassed: boolean;
   status: DocumentRequirementStatus;
   submittedAt: string | null;
+  /** Question ids the student answered incorrectly; empty when `isPassed` is true. */
+  incorrectQuestionIds: string[];
 };
 
 export type RequirementResetPayload = {
@@ -144,20 +146,35 @@ function assignmentFieldsFromExisting(
 function gradeQuizAnswers(
   quizId: DocumentQuizRequirementType,
   answers: Record<string, string>,
-): { scoreCorrect: number; totalQuestions: number; isPassed: boolean } {
+): {
+  scoreCorrect: number;
+  totalQuestions: number;
+  isPassed: boolean;
+  incorrectQuestionIds: string[];
+} {
   const def = getDocumentQuizDefinition(quizId);
   let scoreCorrect = 0;
+  const incorrectQuestionIds: string[] = [];
   for (const questionId of Object.keys(def.correctAnswers)) {
     const expected = def.correctAnswers[questionId];
     if (expected === undefined) continue;
     const raw = answers[questionId];
     const given = typeof raw === "string" ? raw.trim() : "";
-    if (given === expected.trim()) scoreCorrect += 1;
+    if (given === expected.trim()) {
+      scoreCorrect += 1;
+    } else {
+      incorrectQuestionIds.push(questionId);
+    }
   }
   const totalQuestions = def.totalQuestions;
   const isPassed =
     scoreCorrect === totalQuestions && totalQuestions > 0;
-  return { scoreCorrect, totalQuestions, isPassed };
+  return {
+    scoreCorrect,
+    totalQuestions,
+    isPassed,
+    incorrectQuestionIds: isPassed ? [] : incorrectQuestionIds,
+  };
 }
 
 async function runInTransaction<T>(
@@ -264,7 +281,7 @@ export async function submitStudentAgreement(
       status: "completed",
       scoreCorrect: null,
       totalQuestions: null,
-      isPassed: false,
+      isPassed: true,
       submittedAt,
       ...assignPreserve,
     });
@@ -306,7 +323,8 @@ export async function submitStudentQuizAttempt(
     );
   }
 
-  const { scoreCorrect, totalQuestions, isPassed } = gradeQuizAnswers(qid, answers);
+  const { scoreCorrect, totalQuestions, isPassed, incorrectQuestionIds } =
+    gradeQuizAnswers(qid, answers);
   const assignPreserve = assignmentFieldsFromExisting(existing);
   const status: DocumentRequirementStatus = isPassed ? "completed" : "assigned";
   const submittedAt = isPassed ? new Date().toISOString() : null;
@@ -344,6 +362,7 @@ export async function submitStudentQuizAttempt(
     isPassed,
     status,
     submittedAt,
+    incorrectQuestionIds,
   };
 }
 

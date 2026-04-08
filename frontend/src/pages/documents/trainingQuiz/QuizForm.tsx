@@ -16,7 +16,7 @@ type QuizFormProps = {
   certificationChecked: boolean
   completed: boolean
   submitting: boolean
-  scoreHint: string | null
+  incorrectQuestionIds: string[]
   onAnswerChange: (questionId: string, option: string) => void
   onCertificationChange: (next: boolean) => void
   onSubmit: () => void
@@ -28,7 +28,7 @@ export function QuizForm({
   certificationChecked,
   completed,
   submitting,
-  scoreHint,
+  incorrectQuestionIds,
   onAnswerChange,
   onCertificationChange,
   onSubmit,
@@ -41,6 +41,11 @@ export function QuizForm({
   const canSubmit =
     allAnswered && certificationChecked && !completed && !submitting
   const checkboxId = `doc-quiz-cert-${quiz.id}`
+  const incorrectSet = useMemo(
+    () => new Set(incorrectQuestionIds),
+    [incorrectQuestionIds],
+  )
+  const showIncorrectHint = !completed && incorrectSet.size > 0
 
   return (
     <div className="portal-doc-quiz-expand-form">
@@ -55,9 +60,9 @@ export function QuizForm({
         }}
         noValidate
       >
-        {scoreHint ? (
-          <p className="portal-inline-note portal-inline-note--flush" role="status">
-            {scoreHint}
+        {showIncorrectHint ? (
+          <p className="portal-inline-note portal-inline-note--flush" role="alert">
+            Please correct the highlighted answers.
           </p>
         ) : null}
 
@@ -71,6 +76,7 @@ export function QuizForm({
               value={answers[q.id]}
               onChange={onAnswerChange}
               disabled={completed || submitting}
+              hasIncorrectAnswer={incorrectSet.has(q.id)}
             />
           ))}
         </div>

@@ -2529,6 +2529,21 @@ button.portal-doc-quiz-tab.portal-tab--active {
   min-width: 0;
 }
 
+.portal-doc-quiz-question--incorrect {
+  padding: 0.5rem 0 0.5rem 0.75rem;
+  border-left: 3px solid #c53030;
+  border-radius: 0 var(--portal-radius) var(--portal-radius) 0;
+}
+
+.portal-doc-quiz-question--incorrect .portal-doc-quiz-question__legend {
+  color: #9b2c2c;
+}
+
+.portal-doc-quiz-option-row__label--incorrect-selected {
+  border-color: #c53030 !important;
+  background: #fff5f5 !important;
+}
+
 .portal-doc-quiz-question__legend {
   margin: 0 0 0.75rem;
   padding: 0;

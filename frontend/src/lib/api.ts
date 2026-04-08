@@ -2087,6 +2087,7 @@ export type SubmitDocumentQuizResponse = {
   isPassed: boolean
   status: DocumentRequirementStatus
   submittedAt: string | null
+  incorrectQuestionIds: string[]
 }
 
 function isDocumentRequirementType(v: string): v is DocumentRequirementType {
@@ -2185,6 +2186,15 @@ function parseSubmitDocumentAgreementResponse(
   }
 }
 
+function parseStringArrayField(v: unknown): string[] {
+  if (!Array.isArray(v)) return []
+  const out: string[] = []
+  for (const item of v) {
+    if (typeof item === 'string' && item.trim() !== '') out.push(item.trim())
+  }
+  return out
+}
+
 function parseSubmitDocumentQuizResponse(data: unknown): SubmitDocumentQuizResponse {
   if (data == null || typeof data !== 'object') {
     throw new Error('Unexpected quiz submit response')
@@ -2206,6 +2216,8 @@ function parseSubmitDocumentQuizResponse(data: unknown): SubmitDocumentQuizRespo
   if (o.isPassed !== true && o.isPassed !== false) {
     throw new Error('Unexpected quiz submit response')
   }
+  const incorrectQuestionIds =
+    o.isPassed === true ? [] : parseStringArrayField(o.incorrectQuestionIds)
   return {
     requirementType: rt,
     scoreCorrect,
@@ -2213,6 +2225,7 @@ function parseSubmitDocumentQuizResponse(data: unknown): SubmitDocumentQuizRespo
     isPassed: o.isPassed,
     status,
     submittedAt: parseNullableIsoTimestamp(o.submittedAt),
+    incorrectQuestionIds,
   }
 }
 

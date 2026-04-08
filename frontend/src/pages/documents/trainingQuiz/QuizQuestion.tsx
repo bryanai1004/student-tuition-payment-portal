@@ -7,6 +7,8 @@ type QuizQuestionProps = {
   value: string | undefined
   onChange: (questionId: string, option: string) => void
   disabled?: boolean
+  /** From backend grading only; cleared locally when the student changes this question. */
+  hasIncorrectAnswer?: boolean
 }
 
 export function QuizQuestion({
@@ -16,15 +18,23 @@ export function QuizQuestion({
   value,
   onChange,
   disabled,
+  hasIncorrectAnswer = false,
 }: QuizQuestionProps) {
   const groupName = `${quizId}-${question.id}`
   const legendId = `${groupName}-legend`
 
   return (
     <fieldset
-      className="portal-doc-quiz-question portal-doc-quiz-question--bar-only"
+      className={[
+        'portal-doc-quiz-question',
+        'portal-doc-quiz-question--bar-only',
+        hasIncorrectAnswer ? 'portal-doc-quiz-question--incorrect' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       disabled={disabled}
       aria-labelledby={legendId}
+      aria-invalid={hasIncorrectAnswer ? true : undefined}
     >
       <legend id={legendId} className="portal-doc-quiz-question__legend">
         <span className="portal-doc-quiz-question__num">{index + 1}.</span>{' '}
@@ -49,6 +59,9 @@ export function QuizQuestion({
                 className={[
                   'portal-doc-quiz-option-row__label',
                   checked ? 'portal-doc-quiz-option-row__label--selected' : '',
+                  hasIncorrectAnswer && checked
+                    ? 'portal-doc-quiz-option-row__label--incorrect-selected'
+                    : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
