@@ -257,8 +257,7 @@ export async function listAdminEnrollmentRowsForSection(courseCode, term, year) 
         SELECT TRIM(m.grade)
         FROM marks m
         WHERE TRIM(m.id) = TRIM(e.student_external_id)
-          AND m.code COLLATE utf8mb4_unicode_ci =
-              CONVERT(pc.course_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          AND TRIM(m.code) = TRIM(pc.course_code)
           AND LOWER(TRIM(m.term)) = LOWER(TRIM(e.term))
           AND m.year = e.year
         ORDER BY m.seqNumber DESC
@@ -267,12 +266,9 @@ export async function listAdminEnrollmentRowsForSection(courseCode, term, year) 
     FROM portal_enrollments e
     INNER JOIN portal_courses pc ON pc.course_id = e.course_id
     LEFT JOIN portal_students ps
-      ON CONVERT(ps.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-         CONVERT(e.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-    WHERE pc.course_code COLLATE utf8mb4_unicode_ci =
-          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
-      AND e.term COLLATE utf8mb4_unicode_ci =
-          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      ON TRIM(ps.student_external_id) = TRIM(e.student_external_id)
+    WHERE TRIM(pc.course_code) = TRIM(?)
+      AND TRIM(e.term) = TRIM(?)
       AND e.year = ?
     ORDER BY
       CASE WHEN ps.full_name IS NULL OR TRIM(ps.full_name) = '' THEN 1 ELSE 0 END,
