@@ -3,7 +3,6 @@ import { AccountProvider, useAccount } from './context/AccountContext'
 import { useAdminAuth } from './context/AdminAuthContext'
 import { AdminLayout } from './components/admin/AdminLayout'
 import { AdminLoginPage } from './pages/admin/AdminLoginPage'
-import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
 import { AdminStudentsPage } from './pages/admin/AdminStudentsPage'
 import { AdminClinicalPage } from './pages/admin/AdminClinicalPage'
 import { AdminClinicalStudentDetailPage } from './pages/admin/AdminClinicalStudentDetailPage'
@@ -85,7 +84,7 @@ export default function App() {
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route element={<RequireAdminAuth />}>
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminDashboardPage />} />
+          <Route index element={<Navigate to="students" replace />} />
           <Route path="students/:studentId/edit" element={<AdminStudentEditPage />} />
           <Route path="students/new" element={<AdminStudentCreatePage />} />
           <Route path="students/:studentId" element={<AdminStudentDetailPage />} />
