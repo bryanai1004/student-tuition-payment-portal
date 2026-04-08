@@ -112,6 +112,27 @@ export type ParsedMeeting = {
 }
 
 /**
+ * Split one `;`-delimited schedule segment into weekday text vs time range.
+ * Day lists may contain commas (`Mon, Wed` or `Monday,Wednesday`); the time part
+ * always starts with HH:MM, so we split at the last ", <time>" boundary — not the first comma.
+ */
+function splitScheduleSegmentDaysAndTime(
+  segment: string,
+): { dayPart: string; timePart: string } | null {
+  const trimmed = segment.trim()
+  const re = /,\s+(?=\d{1,2}:\d{2})/g
+  let lastIdx = -1
+  for (const m of trimmed.matchAll(re)) {
+    lastIdx = m.index ?? -1
+  }
+  if (lastIdx < 0) return null
+  const dayPart = trimmed.slice(0, lastIdx).trim()
+  const timePart = trimmed.slice(lastIdx + 1).trim()
+  if (!dayPart || !timePart) return null
+  return { dayPart, timePart }
+}
+
+/**
  * Parse one schedule string (same source as Courses tab) into concrete meeting slots.
  * Supports e.g. "Tuesday, 18:00:00–21:00:00; Saturday, 10:00:00–13:00:00"
  * and "Mon & Wed, 9:00 AM – 10:50 AM".
@@ -128,11 +149,9 @@ export function parseScheduleStringToMeetings(schedule: string): ParsedMeeting[]
   const meetings: ParsedMeeting[] = []
 
   for (const segment of segments) {
-    const comma = segment.indexOf(',')
-    if (comma < 0) continue
-    const dayPart = segment.slice(0, comma).trim()
-    const timePart = segment.slice(comma + 1).trim()
-    if (!dayPart || !timePart) continue
+    const split = splitScheduleSegmentDaysAndTime(segment)
+    if (!split) continue
+    const { dayPart, timePart } = split
 
     const range = parseTimeRange(timePart)
     if (!range) continue
