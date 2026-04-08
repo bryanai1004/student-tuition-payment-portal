@@ -1,10 +1,10 @@
 /**
- * **Clinical progress** domain: legacy `clinic` rows + `requirements.clinic_hours`. Independent of academic attempts
- * and transcript display rows — do not derive this from `marks` or merge clinic transcript lines into academic units.
+ * ClinicalProgress = clinic ladder + completed hours vs `requirements.clinic_hours`.
+ * Not an academic course attempt (marks/clinic grade rows); not transcript UI rows; do not merge into didactic unit totals.
  */
 
 import type { Pool, RowDataPacket } from "mysql2/promise";
-import type { ClinicalProgressDomain } from "../domain/studentDomainModels.js";
+import type { ClinicalProgress } from "../domain/studentDomainModels.js";
 
 /** When `requirements.clinic_hours` is missing, null, or non-positive, avoid implying 0 required / "ready". */
 const DEFAULT_CLINIC_REQUIRED_HOURS = 960;
@@ -84,11 +84,11 @@ function assembleClinicalProgress(
   completedCourses: string[],
   completedHours: number,
   requiredHours: number,
-): ClinicalProgressDomain {
+): ClinicalProgress {
   const level = clinicalLevelFromCodes(completedCourses);
   const has211 = hasClinicalPrefix(completedCourses, "CL211");
   const has311 = hasClinicalPrefix(completedCourses, "CL311");
-  const readiness: ClinicalProgressDomain["readiness"] =
+  const readiness: ClinicalProgress["readiness"] =
     requiredHours > 0 && completedHours >= requiredHours ? "ready" : "not_ready";
   const missing: string[] = [];
   if (!has211) missing.push("Complete CL211");
@@ -113,13 +113,13 @@ function assembleClinicalProgress(
 export async function batchBuildClinicalProgressForStudentIds(
   pool: Pool,
   studentIds: string[],
-): Promise<Map<string, ClinicalProgressDomain>> {
+): Promise<Map<string, ClinicalProgress>> {
   const normalized = [
     ...new Set(
       studentIds.map((s) => s.trim()).filter((s) => s.length > 0),
     ),
   ];
-  const out = new Map<string, ClinicalProgressDomain>();
+  const out = new Map<string, ClinicalProgress>();
   if (normalized.length === 0) return out;
 
   const placeholders = normalized.map(() => "?").join(",");
@@ -187,7 +187,7 @@ export async function batchBuildClinicalProgressForStudentIds(
 export async function buildClinicalProgress(
   pool: Pool,
   studentId: string,
-): Promise<ClinicalProgressDomain> {
+): Promise<ClinicalProgress> {
   const sid = studentId.trim();
 
   const [clinicRows] = await pool.query<RowDataPacket[]>(

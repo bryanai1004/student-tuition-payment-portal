@@ -1,7 +1,7 @@
 /**
- * Student account (billing + schedule + **merged** context): the layer where legacy **academic** schedule data and
- * **clinical** progress (`buildClinicalProgress`) may appear together for the dashboard. Keep domain separation
- * upstream — `computeDegreeAudit` is not wired here yet.
+ * Account / billing layer: may **merge** legacy academic schedule views and clinical progress (`buildClinicalProgress`)
+ * for the dashboard. Upstream services keep registration, attempts, transcript, and clinic progress separate.
+ * Degree audit: `computeDegreeAudit` in `domain/studentDomainModels.ts` when wired — not inside transcript services.
  */
 
 import { DEMO_STUDENT_ID } from "../config/constants.js";

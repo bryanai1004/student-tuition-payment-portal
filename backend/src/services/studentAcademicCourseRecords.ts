@@ -1,14 +1,12 @@
 /**
- * Mappers and sort helpers for **academic attempts** (legacy `marks` + transcript-only `clinic` rows) and
- * **portal registration** rows projected into `StudentAcademicCourseRecord`.
+ * AcademicAttempt = raw academic result row (`marks` + `clinic` when used for transcript-shaped data).
+ * NOT equal to transcript (display read model in `studentTranscriptService`).
+ * NOT equal to degree progress (`computeDegreeAudit` in `domain/studentDomainModels.ts`).
  *
- * - **AcademicAttempt** (domain): one graded or in-progress outcome; sources `marks` or `clinic` — see
- *   `domain/studentDomainModels.ts`. Clinic rows here feed transcript-style views; do not treat them as earned
- *   didactic units for degree audit.
- * - **TranscriptRecord** / transcript display: built in `studentTranscriptService` — not equivalent to raw attempts
- *   and not used as degree progress source of truth.
- * - **Degree progress**: belongs in `computeDegreeAudit` (skeleton in `domain/studentDomainModels.ts`); must not be
- *   inferred from transcript preview.
+ * **RegistrationRecord** (`source: "portal"` on {@link StudentAcademicCourseRecord}): `portal_enrollments` +
+ * `course_sections` — not a `marks` outcome; grades stay null until posted in legacy marks.
+ *
+ * Clinic-sourced rows: transcript display only — do not fold into earned didactic units for degree audit.
  */
 
 import type {

@@ -1,8 +1,9 @@
 /**
- * Student academics API: merges **portal registration** (`portal_enrollments` + `course_sections`) with **marks**
- * attempts. `transcript` in the response is marks-only; `enrollmentHistory` is the **combined** sorted timeline
- * (legacy JSON field name). This service does **not** compute degree audit or clinical progress — those belong in
- * `computeDegreeAudit` and `clinicalProgressService` respectively, merged only at the account layer when needed.
+ * Registration (portal) + academic attempts (`marks`) in one payload. `transcript` = marks-only slice for this API.
+ * `enrollmentHistory` (JSON key) = **combinedAcademicHistory**: sorted union of registration rows + attempts — not
+ * “registration-only” naming; see {@link CombinedAcademicHistoryItem}.
+ *
+ * Does not compute degree audit or clinical progress; merge those only at the account layer when needed.
  */
 
 import { DEMO_STUDENT_ID } from "../config/constants.js";
@@ -42,6 +43,7 @@ import {
   getFeedbackSubmittedAtMapForStudent,
 } from "./studentCourseFeedbackService.js";
 
+/** Attaches course feedback flags to the combined timeline; response field stays `enrollmentHistory` for clients. */
 function mergeEnrollmentFeedbackIntoPayload(
   payload: StudentAcademicsResponse,
   submittedAtByKey: Map<string, string>,

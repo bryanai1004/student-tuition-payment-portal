@@ -1,7 +1,9 @@
 /**
- * Transcript preview: merges **marks** + **clinic** into display-sorted `TranscriptRecord` rows (`StudentTranscriptRow`).
- * This is a **presentation** read model only — not registration, not degree audit, and not the place to compute
- * earned units or graduation status (`computeDegreeAudit` owns audit math; clinic hours stay in `clinicalProgressService`).
+ * TranscriptRecord = display-ready academic history (normalized titles, sorted). Derived from attempt-shaped rows;
+ * not the system source of truth for registration or degree progress.
+ *
+ * Sources: `marks` + `clinic` (clinic lines for transcript narrative only — not didactic earned units here).
+ * Do not compute degree audit or merge clinical hours into academic units in this service.
  */
 
 import { DEMO_STUDENT_ID } from "../config/constants.js";

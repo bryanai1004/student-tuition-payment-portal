@@ -1,6 +1,6 @@
 /**
- * **Registration** writes: enrolls into `portal_enrollments` / sections under an academic term. This is the portal
- * enrollment action — separate from `marks` outcomes, transcript display, and degree audit.
+ * Registration domain (writes): portal enrollment into `portal_enrollments` + `course_sections`.
+ * NOT `marks` (academic attempts), NOT transcript, NOT degree audit — those are read/computed elsewhere.
  */
 
 import { getAcademicTermById } from "../repositories/academicTermRepository.js";

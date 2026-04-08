@@ -1,28 +1,38 @@
 /**
- * Canonical domain shapes for student academics, registration, transcript display, degree audit, and clinical progress.
+ * Canonical domain shapes for student registration, academic attempts, transcript display, degree audit, and clinical progress.
  *
  * ## Source of truth (read path)
  *
  * - **AcademicAttempt** — legacy `marks` (primary didactic outcomes); legacy `clinic` rows may appear as
  *   attempts for **transcript display only**. Clinic rows must not be folded into **earned academic units**
  *   for degree audit (use `attemptsFromMarks` only in {@link computeDegreeAudit}).
- * - **RegistrationRecord** — `portal_enrollments` joined to catalog + one deterministic `course_sections` row
- *   per course/term/year (see `listPortalEnrollmentRowsForStudentAcademics`).
+ * - **RegistrationRecord** — `portal_enrollments` + `course_sections` (and catalog titles); not a `marks` grade outcome.
  * - **DegreeAudit** — program `requirements` (with fallbacks when null) plus **cleaned** marks-based attempts;
- *   clinic hours are tracked separately from academic units.
- * - **TranscriptRecord** — presentation-only history (sorted, normalized titles). Not authoritative for
- *   registration state or degree progress.
- * - **ClinicalProgressDomain** — `clinic` + `requirements.clinic_hours`; independent of {@link AcademicAttempt}.
+ *   clinic hours are tracked separately from academic units (never merge clinical hours into academic units here).
+ * - **TranscriptRecord** — presentation-only history (sorted, normalized titles). **Not** authoritative for
+ *   registration state or degree progress; transcript services must not compute degree progress.
+ * - **ClinicalProgress** — `clinic` + `requirements.clinic_hours`; independent of {@link AcademicAttempt}.
  */
 
 import type {
   StudentAcademicCourseRecord,
   StudentAcademicCourseStatus,
 } from "../types/studentAcademics.js";
-import type { ClinicalProgress } from "../types/studentAccount.js";
+import type { ClinicalProgress as AccountClinicalProgress } from "../types/studentAccount.js";
 import type { StudentTranscriptRow } from "../types/studentTranscript.js";
 
-/** Portal registration + section schedule metadata (sources: `portal_enrollments`, `portal_courses`, `course_sections`). */
+/**
+ * Clinic-related progress (hours, levels, readiness). Same shape as the account payload field; canonical domain name.
+ * Do not derive this from {@link AcademicAttempt} or transcript merge logic.
+ */
+export type ClinicalProgress = AccountClinicalProgress;
+
+/**
+ * @deprecated Use {@link ClinicalProgress}. Kept for existing imports.
+ */
+export type ClinicalProgressDomain = ClinicalProgress;
+
+/** Student enrollment action in the portal: `portal_enrollments` + `course_sections` (plus resolved title). */
 export type RegistrationRecord = {
   courseCode: string;
   courseTitle: string;
@@ -64,16 +74,17 @@ export type DegreeAuditComputedStatus =
   | "satisfied"
   | "deficient";
 
-/** Aggregated graduation progress (computed layer — not read directly from transcript rows). */
+/** Aggregated graduation progress (computed layer — not read from transcript rows or transcript services). */
 export type DegreeAudit = {
   requiredAcademicUnits: number;
-  /** Earned academic units from **cleaned** marks attempts only (see computeDegreeAudit TODO). */
+  /** CLEANED: earned academic units from eligible `marks` attempts only (see {@link computeDegreeAudit} TODO). */
   earnedAcademicUnits: number;
   requiredClinicHours: number;
-  /** Placeholder until clinic completion is unified with audit rules. */
+  /** Placeholder for now; wire from clinical completion rules separately from academic units. */
   earnedClinicHours: number;
-  /** From legacy `students.status`. */
+  /** Official row: legacy `students.status`. */
   officialStatus: string;
+  /** Derived from requirements + cleaned attempts + clinic placeholders — not `transcript` JSON. */
   computedStatus: DegreeAuditComputedStatus;
 };
 
@@ -86,11 +97,6 @@ export type ComputeDegreeAuditInput = {
   earnedClinicHours: number;
   officialStudentStatus: string;
 };
-
-/**
- * Clinic ladder + hours vs `requirements.clinic_hours`. Built from `clinic` — **not** from {@link AcademicAttempt}.
- */
-export type ClinicalProgressDomain = ClinicalProgress;
 
 export function isAcademicAttemptRow(
   r: StudentAcademicCourseRecord,
@@ -127,10 +133,12 @@ export function academicCourseRecordToAcademicAttempt(
  * Skeleton for future degree audit. Transcript and preview services must **not** embed this logic.
  *
  * TODO:
- * - Dedupe attempts by course code (pick best / latest per program rules).
+ * - Dedupe attempts by course code.
  * - Exclude AUD / NP / null grades from earned academic units.
  * - Sum earned units from eligible marks attempts only.
- * - Apply fallback requirements when `requirements` row is missing.
+ * - Fallback requirements when the `requirements` row is missing or incomplete.
+ *
+ * @remarks Hard rules: do not treat transcript as source of truth; do not merge clinical hours into academic units.
  */
 export function computeDegreeAudit(input: ComputeDegreeAuditInput): DegreeAudit {
   return {
