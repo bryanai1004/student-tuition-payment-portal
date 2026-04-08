@@ -48,7 +48,10 @@ export function QuizForm({
         className="portal-doc-quiz-expand-form__inner"
         onSubmit={(e) => {
           e.preventDefault()
-          if (canSubmit) onSubmit()
+          if (canSubmit) {
+            console.debug('[documents] quiz form: submitting', { quizId: quiz.id })
+            onSubmit()
+          }
         }}
         noValidate
       >

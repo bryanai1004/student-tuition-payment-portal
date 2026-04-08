@@ -28,9 +28,19 @@ export function DocumentsHomePage() {
   const refreshDocuments = useCallback(async () => {
     const sid = currentStudentId?.trim()
     const tid = termSnapshotRef.current.id.trim()
-    if (!sid || !tid) return
+    if (!sid || !tid) {
+      console.debug('[documents] refresh skipped: missing studentId or academicTermId snapshot', {
+        sid: Boolean(sid),
+        tid: tid || '(empty)',
+      })
+      return
+    }
     try {
       const payload = await fetchStudentDocuments(sid, tid)
+      termSnapshotRef.current = {
+        id: payload.academicTermId,
+        label: termSnapshotRef.current.label,
+      }
       setDocs((prev) => {
         if (prev.phase !== 'ready') return prev
         return {
@@ -39,8 +49,11 @@ export function DocumentsHomePage() {
           requirements: payload.requirements,
         }
       })
-    } catch {
-      /* keep existing rows; caller may surface errors */
+    } catch (e) {
+      console.debug(
+        '[documents] refresh failed after submit (requirements unchanged)',
+        e instanceof Error ? e.message : e,
+      )
     }
   }, [currentStudentId])
 
@@ -61,7 +74,8 @@ export function DocumentsHomePage() {
           signal: ac.signal,
         })
         if (ac.signal.aborted) return
-        termSnapshotRef.current = { id: term.id, label: term.term_label }
+        // Keep snapshot ID aligned with GET/POST document APIs (server canonical term id).
+        termSnapshotRef.current = { id: payload.academicTermId, label: term.term_label }
         setDocs({
           phase: 'ready',
           academicTermId: payload.academicTermId,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from '../../../context/AccountContext'
 import {
   fetchStudentProfile,
@@ -30,6 +30,7 @@ export function AgreementsSection({
   const [agreed, setAgreed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const submitInFlightRef = useRef(false)
 
   useEffect(() => {
     const id = studentId.trim()
@@ -57,11 +58,23 @@ export function AgreementsSection({
   }, [displayName])
 
   const handleSubmit = useCallback(async () => {
-    if (!agreed || completed || submitting) return
+    if (!agreed || completed || submitInFlightRef.current) return
+    const sid = studentId.trim()
+    const tid = academicTermId.trim()
+    if (!sid || !tid) {
+      setError('Missing student or term. Reload the page and try again.')
+      return
+    }
+    submitInFlightRef.current = true
     setError(null)
     setSubmitting(true)
     try {
-      await submitStudentDocumentAgreement(studentId, academicTermId)
+      console.debug('[documents] agreement submit → POST /documents/agreement/submit', {
+        studentId: sid,
+        academicTermId: tid,
+      })
+      const res = await submitStudentDocumentAgreement(sid, tid)
+      console.debug('[documents] agreement submit ← response', res)
       await onRefresh()
       setAgreed(false)
     } catch (e) {
@@ -69,9 +82,10 @@ export function AgreementsSection({
         e instanceof Error ? e.message : 'Could not submit the agreement. Try again.'
       setError(message)
     } finally {
+      submitInFlightRef.current = false
       setSubmitting(false)
     }
-  }, [academicTermId, agreed, completed, onRefresh, studentId, submitting])
+  }, [academicTermId, agreed, completed, onRefresh, studentId])
 
   const statusLabel =
     requirement == null

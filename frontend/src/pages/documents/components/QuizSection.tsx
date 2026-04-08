@@ -63,16 +63,30 @@ export function QuizSection({
     async (quizId: QuizId) => {
       if (requirementsByQuiz[quizId]?.status === 'completed') return
       if (submitInFlightRef.current) return
+      const sid = studentId.trim()
+      const tid = academicTermId.trim()
+      if (!sid || !tid) {
+        setErrorByQuiz((prev) => ({
+          ...prev,
+          [quizId]: 'Missing student or term. Reload the page and try again.',
+        }))
+        return
+      }
       const answers = answersByQuiz[quizId] ?? {}
       setErrorByQuiz((prev) => ({ ...prev, [quizId]: null }))
       submitInFlightRef.current = true
       setSubmittingQuizId(quizId)
       try {
-        await submitStudentDocumentQuiz(
-          studentId,
-          quizId as DocumentQuizRequirementType,
-          { academicTermId, answers },
+        console.debug(
+          '[documents] quiz submit → POST /documents/quizzes/:quizId/submit',
+          { studentId: sid, academicTermId: tid, quizId, answers },
         )
+        const res = await submitStudentDocumentQuiz(
+          sid,
+          quizId as DocumentQuizRequirementType,
+          { academicTermId: tid, answers },
+        )
+        console.debug('[documents] quiz submit ← response', res)
         await onRefresh()
       } catch (e) {
         const message =
