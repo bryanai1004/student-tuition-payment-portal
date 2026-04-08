@@ -9,6 +9,8 @@
   --border-gray: #e5e5e5;
   --text-dark: #333333;
   --amu-red-ring: rgba(140, 29, 44, 0.18);
+  /* Student internal modules + admin main column: same content island width */
+  --portal-internal-main-content-max-width: 1600px;
   /* Red module sidebar (student internal + admin): shared gutters; header inset matches nav label start */
   --portal-red-sidebar-pad-top: 0.4rem;
   --portal-red-sidebar-pad-bottom: 0.65rem;
@@ -535,7 +537,7 @@
 
 .portal-shell--internal-module .portal-main-content {
   width: 100%;
-  max-width: 1600px;
+  max-width: var(--portal-internal-main-content-max-width);
   margin-left: auto;
   margin-right: auto;
   padding-left: 24px;
@@ -6237,7 +6239,7 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 
 .admin-portal__main-content {
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--portal-internal-main-content-max-width);
   margin-left: auto;
   margin-right: auto;
   padding-left: 24px;
@@ -6254,7 +6256,8 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-dark);
+  /* Match student `.portal-page-title` brand heading (internal modules) */
+  color: #a6192e;
 }
 
 .admin-page__title--inline {
