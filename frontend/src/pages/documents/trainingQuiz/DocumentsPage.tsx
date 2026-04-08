@@ -1,6 +1,6 @@
-import { QuizSection } from '../components/QuizSection'
-
-/** @deprecated Prefer `QuizSection` from `../components/QuizSection`. Kept for any deep imports. */
+/**
+ * @deprecated Route entry is `DocumentsHomePage`; this module is not mounted by the router.
+ */
 export function DocumentsPage() {
-  return <QuizSection />
+  return null
 }

@@ -1,13 +1,13 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   DOCUMENT_QUIZZES,
   type QuizId,
 } from '../../../data/documentQuizzes'
-import { submitDocumentQuiz } from '../../../lib/documentQuizSubmit'
 import {
-  readAllQuizCompletedFromStorage,
-  writeQuizCompletedToStorage,
-} from '../../../lib/documentQuizStorage'
+  submitStudentDocumentQuiz,
+  type DocumentQuizRequirementType,
+  type StudentDocumentRequirement,
+} from '../../../lib/api'
 import { QuizEntrySection } from '../trainingQuiz/QuizEntrySection'
 
 const emptyAnswers = (): Record<QuizId, Record<string, string>> => ({
@@ -22,37 +22,68 @@ const initialCertified = (): Record<QuizId, boolean> => ({
   campus: false,
 })
 
-export function QuizSection() {
+type QuizSectionProps = {
+  studentId: string
+  academicTermId: string
+  requirementsByQuiz: Record<QuizId, StudentDocumentRequirement | undefined>
+  onRefresh: () => Promise<void>
+}
+
+export function QuizSection({
+  studentId,
+  academicTermId,
+  requirementsByQuiz,
+  onRefresh,
+}: QuizSectionProps) {
   const [expandedQuizId, setExpandedQuizId] = useState<QuizId | null>(null)
   const [answersByQuiz, setAnswersByQuiz] =
     useState<Record<QuizId, Record<string, string>>>(emptyAnswers)
   const [certifiedByQuiz, setCertifiedByQuiz] =
     useState<Record<QuizId, boolean>>(initialCertified)
-  const [completedByQuiz, setCompletedByQuiz] = useState<
-    Record<QuizId, boolean>
-  >(() => readAllQuizCompletedFromStorage())
+  const [submittingQuizId, setSubmittingQuizId] = useState<QuizId | null>(null)
+  const [errorByQuiz, setErrorByQuiz] = useState<Record<QuizId, string | null>>({
+    ferpa: null,
+    titleix: null,
+    campus: null,
+  })
+  const submitInFlightRef = useRef(false)
 
-  const handleToggleExpand = useCallback(
-    (qid: QuizId) => {
-      setExpandedQuizId((prev) => (prev === qid ? null : qid))
-    },
-    [],
-  )
+  const completedByQuiz: Record<QuizId, boolean> = {
+    ferpa: requirementsByQuiz.ferpa?.status === 'completed',
+    titleix: requirementsByQuiz.titleix?.status === 'completed',
+    campus: requirementsByQuiz.campus?.status === 'completed',
+  }
+
+  const handleToggleExpand = useCallback((qid: QuizId) => {
+    setExpandedQuizId((prev) => (prev === qid ? null : qid))
+    setErrorByQuiz((prev) => ({ ...prev, [qid]: null }))
+  }, [])
 
   const handleSubmit = useCallback(
     async (quizId: QuizId) => {
+      if (requirementsByQuiz[quizId]?.status === 'completed') return
+      if (submitInFlightRef.current) return
       const answers = answersByQuiz[quizId] ?? {}
-      const certified = certifiedByQuiz[quizId] ?? false
-      await submitDocumentQuiz({
-        quizId,
-        answers,
-        certified,
-        submittedAt: new Date().toISOString(),
-      })
-      writeQuizCompletedToStorage(quizId)
-      setCompletedByQuiz((prev) => ({ ...prev, [quizId]: true }))
+      setErrorByQuiz((prev) => ({ ...prev, [quizId]: null }))
+      submitInFlightRef.current = true
+      setSubmittingQuizId(quizId)
+      try {
+        await submitStudentDocumentQuiz(
+          studentId,
+          quizId as DocumentQuizRequirementType,
+          { academicTermId, answers },
+        )
+        await onRefresh()
+      } catch (e) {
+        const message =
+          e instanceof Error ? e.message : 'Could not submit the quiz. Try again.'
+        setErrorByQuiz((prev) => ({ ...prev, [quizId]: message }))
+      } finally {
+        submitInFlightRef.current = false
+        setSubmittingQuizId(null)
+      }
     },
-    [answersByQuiz, certifiedByQuiz],
+    [academicTermId, answersByQuiz, onRefresh, requirementsByQuiz, studentId],
   )
 
   return (
@@ -63,6 +94,9 @@ export function QuizSection() {
         completedByQuiz={completedByQuiz}
         answersByQuiz={answersByQuiz}
         certifiedByQuiz={certifiedByQuiz}
+        requirementsByQuiz={requirementsByQuiz}
+        submittingQuizId={submittingQuizId}
+        errorByQuiz={errorByQuiz}
         onToggleExpand={handleToggleExpand}
         onAnswerChange={(quizId, questionId, option) => {
           setAnswersByQuiz((prev) => ({
@@ -72,6 +106,7 @@ export function QuizSection() {
               [questionId]: option,
             },
           }))
+          setErrorByQuiz((p) => ({ ...p, [quizId]: null }))
         }}
         onCertifiedChange={(quizId, next) => {
           setCertifiedByQuiz((prev) => ({ ...prev, [quizId]: next }))

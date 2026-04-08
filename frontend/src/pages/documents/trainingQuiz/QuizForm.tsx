@@ -15,6 +15,8 @@ type QuizFormProps = {
   answers: Record<string, string>
   certificationChecked: boolean
   completed: boolean
+  submitting: boolean
+  scoreHint: string | null
   onAnswerChange: (questionId: string, option: string) => void
   onCertificationChange: (next: boolean) => void
   onSubmit: () => void
@@ -25,6 +27,8 @@ export function QuizForm({
   answers,
   certificationChecked,
   completed,
+  submitting,
+  scoreHint,
   onAnswerChange,
   onCertificationChange,
   onSubmit,
@@ -34,7 +38,8 @@ export function QuizForm({
     [quiz.questions, answers],
   )
 
-  const canSubmit = allAnswered && certificationChecked && !completed
+  const canSubmit =
+    allAnswered && certificationChecked && !completed && !submitting
   const checkboxId = `doc-quiz-cert-${quiz.id}`
 
   return (
@@ -47,6 +52,12 @@ export function QuizForm({
         }}
         noValidate
       >
+        {scoreHint ? (
+          <p className="portal-inline-note portal-inline-note--flush" role="status">
+            {scoreHint}
+          </p>
+        ) : null}
+
         <div className="portal-doc-quiz-questions">
           {quiz.questions.map((q, index) => (
             <QuizQuestion
@@ -56,7 +67,7 @@ export function QuizForm({
               index={index}
               value={answers[q.id]}
               onChange={onAnswerChange}
-              disabled={completed}
+              disabled={completed || submitting}
             />
           ))}
         </div>
@@ -66,7 +77,7 @@ export function QuizForm({
           checkboxLabel={CERT_CHECKBOX_LABEL}
           checked={certificationChecked}
           onChange={onCertificationChange}
-          disabled={completed}
+          disabled={completed || submitting}
           checkboxId={checkboxId}
         />
 
@@ -77,8 +88,8 @@ export function QuizForm({
         ) : null}
 
         <div className="portal-doc-quiz-actions">
-          <SubmitButton disabled={completed || !canSubmit}>
-            {completed ? 'Submitted' : 'Submit'}
+          <SubmitButton disabled={completed || !canSubmit} loading={submitting}>
+            {completed ? 'Submitted' : submitting ? 'Submitting…' : 'Submit'}
           </SubmitButton>
         </div>
       </form>

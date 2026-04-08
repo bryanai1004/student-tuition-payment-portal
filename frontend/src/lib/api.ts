@@ -2041,6 +2041,331 @@ export async function fetchStudentTranscriptPreview(
   return data as StudentTranscriptPreviewResponse
 }
 
+/** GET /api/students/:studentId/documents — portal document requirements for a term. */
+export const DOCUMENT_REQUIREMENT_TYPES = [
+  'ferpa',
+  'titleix',
+  'campus',
+  'copyright_release_agreement',
+] as const
+
+export type DocumentRequirementType = (typeof DOCUMENT_REQUIREMENT_TYPES)[number]
+
+export type DocumentRequirementStatus = 'assigned' | 'completed'
+
+export type DocumentQuizRequirementType = Extract<
+  DocumentRequirementType,
+  'ferpa' | 'titleix' | 'campus'
+>
+
+export type StudentDocumentRequirement = {
+  requirementType: DocumentRequirementType
+  status: DocumentRequirementStatus
+  isPassed: boolean
+  scoreCorrect: number | null
+  totalQuestions: number | null
+  submittedAt: string | null
+  lastReassignedAt: string | null
+}
+
+export type StudentDocumentsResponse = {
+  studentId: string
+  academicTermId: string
+  requirements: StudentDocumentRequirement[]
+}
+
+export type SubmitDocumentAgreementResponse = {
+  requirementType: 'copyright_release_agreement'
+  status: 'completed'
+  submittedAt: string
+}
+
+export type SubmitDocumentQuizResponse = {
+  requirementType: DocumentQuizRequirementType
+  scoreCorrect: number
+  totalQuestions: number
+  isPassed: boolean
+  status: DocumentRequirementStatus
+  submittedAt: string | null
+}
+
+function isDocumentRequirementType(v: string): v is DocumentRequirementType {
+  return (DOCUMENT_REQUIREMENT_TYPES as readonly string[]).includes(v)
+}
+
+function parseDocumentRequirementStatus(
+  v: unknown,
+): DocumentRequirementStatus | null {
+  if (v === 'assigned' || v === 'completed') return v
+  return null
+}
+
+function parseNullableIntField(v: unknown): number | null {
+  if (v === null || v === undefined) return null
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v)
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v)
+    if (Number.isFinite(n)) return Math.trunc(n)
+  }
+  return null
+}
+
+function parseNullableIsoTimestamp(v: unknown): string | null {
+  if (v === null || v === undefined) return null
+  if (typeof v !== 'string') return null
+  const t = v.trim()
+  return t === '' ? null : t
+}
+
+function parseStudentDocumentRequirement(row: unknown): StudentDocumentRequirement | null {
+  if (row == null || typeof row !== 'object') return null
+  const o = row as Record<string, unknown>
+  const rt = o.requirementType
+  if (typeof rt !== 'string' || !isDocumentRequirementType(rt)) return null
+  const status = parseDocumentRequirementStatus(o.status)
+  if (!status) return null
+  const isPassed = o.isPassed === true
+  return {
+    requirementType: rt,
+    status,
+    isPassed,
+    scoreCorrect: parseNullableIntField(o.scoreCorrect),
+    totalQuestions: parseNullableIntField(o.totalQuestions),
+    submittedAt: parseNullableIsoTimestamp(o.submittedAt),
+    lastReassignedAt: parseNullableIsoTimestamp(o.lastReassignedAt),
+  }
+}
+
+function parseStudentDocumentsResponse(data: unknown): StudentDocumentsResponse {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected student documents response')
+  }
+  const o = data as Record<string, unknown>
+  if (typeof o.studentId !== 'string' || typeof o.academicTermId !== 'string') {
+    throw new Error('Unexpected student documents response')
+  }
+  if (!Array.isArray(o.requirements)) {
+    throw new Error('Unexpected student documents response')
+  }
+  const requirements: StudentDocumentRequirement[] = []
+  for (const row of o.requirements) {
+    const req = parseStudentDocumentRequirement(row)
+    if (!req) {
+      throw new Error('Unexpected student documents response')
+    }
+    requirements.push(req)
+  }
+  return {
+    studentId: o.studentId.trim(),
+    academicTermId: o.academicTermId.trim(),
+    requirements,
+  }
+}
+
+function parseSubmitDocumentAgreementResponse(
+  data: unknown,
+): SubmitDocumentAgreementResponse {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected agreement submit response')
+  }
+  const o = data as Record<string, unknown>
+  if (o.requirementType !== 'copyright_release_agreement') {
+    throw new Error('Unexpected agreement submit response')
+  }
+  if (o.status !== 'completed') {
+    throw new Error('Unexpected agreement submit response')
+  }
+  if (typeof o.submittedAt !== 'string' || o.submittedAt.trim() === '') {
+    throw new Error('Unexpected agreement submit response')
+  }
+  return {
+    requirementType: 'copyright_release_agreement',
+    status: 'completed',
+    submittedAt: o.submittedAt.trim(),
+  }
+}
+
+function parseSubmitDocumentQuizResponse(data: unknown): SubmitDocumentQuizResponse {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected quiz submit response')
+  }
+  const o = data as Record<string, unknown>
+  const rt = o.requirementType
+  if (rt !== 'ferpa' && rt !== 'titleix' && rt !== 'campus') {
+    throw new Error('Unexpected quiz submit response')
+  }
+  const status = parseDocumentRequirementStatus(o.status)
+  if (!status) {
+    throw new Error('Unexpected quiz submit response')
+  }
+  const scoreCorrect = parseNullableIntField(o.scoreCorrect)
+  const totalQuestions = parseNullableIntField(o.totalQuestions)
+  if (scoreCorrect === null || totalQuestions === null) {
+    throw new Error('Unexpected quiz submit response')
+  }
+  if (o.isPassed !== true && o.isPassed !== false) {
+    throw new Error('Unexpected quiz submit response')
+  }
+  return {
+    requirementType: rt,
+    scoreCorrect,
+    totalQuestions,
+    isPassed: o.isPassed,
+    status,
+    submittedAt: parseNullableIsoTimestamp(o.submittedAt),
+  }
+}
+
+export async function fetchStudentDocuments(
+  studentId: string,
+  academicTermId: string,
+  options?: { signal?: AbortSignal },
+): Promise<StudentDocumentsResponse> {
+  const tid = academicTermId.trim()
+  const qs = new URLSearchParams()
+  qs.set('academicTermId', tid)
+  const path = `/api/students/${encodeURIComponent(studentId.trim())}/documents?${qs.toString()}`
+  const data = await fetchApiJson(path, { signal: options?.signal })
+  return parseStudentDocumentsResponse(data)
+}
+
+/** POST /api/admin/students/:studentId/documents/:requirementType/reset */
+export type AdminStudentDocumentRequirementResetResponse = {
+  ok: true
+  requirementType: DocumentRequirementType
+  status: 'assigned'
+}
+
+/** POST /api/admin/students/:studentId/documents/reset-all */
+export type AdminStudentDocumentsResetAllResponse = {
+  ok: true
+}
+
+function parseAdminStudentDocumentRequirementResetResponse(
+  data: unknown,
+): AdminStudentDocumentRequirementResetResponse {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected document requirement reset response')
+  }
+  const o = data as Record<string, unknown>
+  if (o.ok !== true || o.status !== 'assigned') {
+    throw new Error('Unexpected document requirement reset response')
+  }
+  const rt = o.requirementType
+  if (typeof rt !== 'string' || !isDocumentRequirementType(rt)) {
+    throw new Error('Unexpected document requirement reset response')
+  }
+  return { ok: true, requirementType: rt, status: 'assigned' }
+}
+
+function parseAdminStudentDocumentsResetAllResponse(
+  data: unknown,
+): AdminStudentDocumentsResetAllResponse {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected document requirements reset-all response')
+  }
+  const o = data as Record<string, unknown>
+  if (o.ok !== true) {
+    throw new Error('Unexpected document requirements reset-all response')
+  }
+  return { ok: true }
+}
+
+/** GET /api/admin/students/:studentId/documents — same payload shape as the student-facing list. */
+export async function fetchAdminStudentDocuments(
+  studentId: string,
+  academicTermId: string,
+  options?: { signal?: AbortSignal },
+): Promise<StudentDocumentsResponse> {
+  const tid = academicTermId.trim()
+  const qs = new URLSearchParams()
+  qs.set('academicTermId', tid)
+  const path = `/api/admin/students/${encodeURIComponent(studentId.trim())}/documents?${qs.toString()}`
+  const data = await fetchApiJson(path, { signal: options?.signal })
+  return parseStudentDocumentsResponse(data)
+}
+
+export async function resetAdminStudentDocumentRequirement(
+  studentId: string,
+  requirementType: DocumentRequirementType,
+  body: { academicTermId: string; reassignedBy?: string },
+  options?: { signal?: AbortSignal },
+): Promise<AdminStudentDocumentRequirementResetResponse> {
+  const payload: { academicTermId: string; reassignedBy?: string } = {
+    academicTermId: body.academicTermId.trim(),
+  }
+  if (body.reassignedBy != null && String(body.reassignedBy).trim() !== '') {
+    payload.reassignedBy = String(body.reassignedBy).trim()
+  }
+  const path = `/api/admin/students/${encodeURIComponent(studentId.trim())}/documents/${encodeURIComponent(requirementType)}/reset`
+  const data = await fetchApiJson(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: options?.signal,
+  })
+  return parseAdminStudentDocumentRequirementResetResponse(data)
+}
+
+export async function resetAllAdminStudentDocuments(
+  studentId: string,
+  body: { academicTermId: string; reassignedBy?: string },
+  options?: { signal?: AbortSignal },
+): Promise<AdminStudentDocumentsResetAllResponse> {
+  const payload: { academicTermId: string; reassignedBy?: string } = {
+    academicTermId: body.academicTermId.trim(),
+  }
+  if (body.reassignedBy != null && String(body.reassignedBy).trim() !== '') {
+    payload.reassignedBy = String(body.reassignedBy).trim()
+  }
+  const path = `/api/admin/students/${encodeURIComponent(studentId.trim())}/documents/reset-all`
+  const data = await fetchApiJson(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: options?.signal,
+  })
+  return parseAdminStudentDocumentsResetAllResponse(data)
+}
+
+export async function submitStudentDocumentAgreement(
+  studentId: string,
+  academicTermId: string,
+  options?: { signal?: AbortSignal },
+): Promise<SubmitDocumentAgreementResponse> {
+  const data = await fetchApiJson(
+    `/api/students/${encodeURIComponent(studentId.trim())}/documents/agreement/submit`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ academicTermId: academicTermId.trim() }),
+      signal: options?.signal,
+    },
+  )
+  return parseSubmitDocumentAgreementResponse(data)
+}
+
+export async function submitStudentDocumentQuiz(
+  studentId: string,
+  quizId: DocumentQuizRequirementType,
+  body: { academicTermId: string; answers: Record<string, string> },
+  options?: { signal?: AbortSignal },
+): Promise<SubmitDocumentQuizResponse> {
+  const data = await fetchApiJson(
+    `/api/students/${encodeURIComponent(studentId.trim())}/documents/quizzes/${encodeURIComponent(quizId)}/submit`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        academicTermId: body.academicTermId.trim(),
+        answers: body.answers,
+      }),
+      signal: options?.signal,
+    },
+  )
+  return parseSubmitDocumentQuizResponse(data)
+}
+
 /** GET /api/academic-terms — full list (intended for registrar/admin tooling). */
 export type AcademicTermName = 'Winter' | 'Spring' | 'Summer' | 'Fall'
 

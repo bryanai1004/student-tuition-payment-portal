@@ -10,5 +10,3 @@ export const COPYRIGHT_RELEASE_CLOSING_TEMPLATE =
 
 export const COPYRIGHT_RELEASE_SUBMIT_NOTE =
   'By clicking on the button “Submit”, I stated that I have read, understood and agreed the above statements, terms and conditions.'
-
-export const COPYRIGHT_AGREEMENT_STORAGE_KEY = 'portal_agreement_copyright_release_v1'

@@ -1,6 +1,10 @@
 /**
  * Applies portal_accounts_schema.sql then portal_accounts_seed.sql using backend/.env.
  * Usage (from backend/): npm run db:bootstrap-portal
+ *
+ * Note: `portal_accounts_schema.sql` includes document-requirement tables with FKs to
+ * `academic_terms`. Ensure that table exists first (e.g. registration_bootstrap / academic_terms_schema)
+ * or bootstrap will fail on those CREATEs.
  */
 import fs from "node:fs";
 import path from "node:path";

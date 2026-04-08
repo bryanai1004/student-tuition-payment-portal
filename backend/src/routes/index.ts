@@ -91,6 +91,14 @@ import {
   getStudentClinicalScheduleHandler,
   postAdminClinicalAssignHandler,
 } from "../controllers/clinicalScheduleController.js";
+import {
+  getAdminStudentDocumentRequirementsHandler,
+  getStudentDocumentRequirementsHandler,
+  postAdminStudentDocumentRequirementResetHandler,
+  postAdminStudentDocumentRequirementsResetAllHandler,
+  postStudentAgreementSubmitHandler,
+  postStudentQuizSubmitHandler,
+} from "../controllers/studentDocumentsController.js";
 
 export const apiRouter = Router();
 
@@ -169,8 +177,32 @@ adminRouter.post(
   "/clinical/requests/:id/reject",
   postRejectClinicalRequestHandler,
 );
+adminRouter.get(
+  "/students/:studentId/documents",
+  getAdminStudentDocumentRequirementsHandler,
+);
+adminRouter.post(
+  "/students/:studentId/documents/reset-all",
+  postAdminStudentDocumentRequirementsResetAllHandler,
+);
+adminRouter.post(
+  "/students/:studentId/documents/:requirementType/reset",
+  postAdminStudentDocumentRequirementResetHandler,
+);
 apiRouter.use("/admin", adminRouter);
 
+apiRouter.get(
+  "/students/:studentId/documents",
+  getStudentDocumentRequirementsHandler,
+);
+apiRouter.post(
+  "/students/:studentId/documents/agreement/submit",
+  postStudentAgreementSubmitHandler,
+);
+apiRouter.post(
+  "/students/:studentId/documents/quizzes/:quizId/submit",
+  postStudentQuizSubmitHandler,
+);
 apiRouter.get("/students/:studentId/profile", getStudentProfile);
 apiRouter.get("/students/:studentId/academics", getStudentAcademics);
 apiRouter.get(

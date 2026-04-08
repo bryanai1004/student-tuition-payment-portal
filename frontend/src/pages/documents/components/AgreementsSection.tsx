@@ -1,35 +1,38 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAccount } from '../../../context/AccountContext'
-import { fetchStudentProfile } from '../../../lib/api'
 import {
-  COPYRIGHT_AGREEMENT_STORAGE_KEY,
+  fetchStudentProfile,
+  submitStudentDocumentAgreement,
+  type StudentDocumentRequirement,
+} from '../../../lib/api'
+import {
   COPYRIGHT_RELEASE_CLOSING_TEMPLATE,
   COPYRIGHT_RELEASE_PARAGRAPHS,
   COPYRIGHT_RELEASE_SUBMIT_NOTE,
 } from '../../../data/copyrightReleaseAgreement'
 
-function readSigned(): boolean {
-  try {
-    return localStorage.getItem(COPYRIGHT_AGREEMENT_STORAGE_KEY) === 'signed'
-  } catch {
-    return false
-  }
+type AgreementsSectionProps = {
+  studentId: string
+  academicTermId: string
+  requirement: StudentDocumentRequirement | undefined
+  onRefresh: () => Promise<void>
 }
 
-function writeSigned() {
-  try {
-    localStorage.setItem(COPYRIGHT_AGREEMENT_STORAGE_KEY, 'signed')
-  } catch {
-    /* ignore */
-  }
-}
-
-export function AgreementsSection() {
-  const { account, currentStudentId } = useAccount()
+export function AgreementsSection({
+  studentId,
+  academicTermId,
+  requirement,
+  onRefresh,
+}: AgreementsSectionProps) {
+  const { account } = useAccount()
   const [profileName, setProfileName] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [agreed, setAgreed] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const id = currentStudentId?.trim()
+    const id = studentId.trim()
     if (!id) {
       setProfileName(null)
       return
@@ -39,30 +42,43 @@ export function AgreementsSection() {
       .then((p) => setProfileName(p.fullName?.trim() || null))
       .catch(() => setProfileName(null))
     return () => ac.abort()
-  }, [currentStudentId])
+  }, [studentId])
 
   const displayName = useMemo(() => {
     const n = profileName || account.student.name?.trim()
     return n && n.length > 0 ? n : 'the student'
   }, [profileName, account.student.name])
 
-  const [expanded, setExpanded] = useState(false)
-  const [agreed, setAgreed] = useState(false)
-  const [submitted, setSubmitted] = useState(() => readSigned())
-
-  useEffect(() => {
-    setSubmitted(readSigned())
-  }, [])
+  const completed = requirement?.status === 'completed'
+  const submittedAt = requirement?.submittedAt ?? null
 
   const closing = useMemo(() => {
     return COPYRIGHT_RELEASE_CLOSING_TEMPLATE.replace('{{NAME}}', displayName)
   }, [displayName])
 
-  const handleSubmit = useCallback(() => {
-    if (!agreed) return
-    writeSigned()
-    setSubmitted(true)
-  }, [agreed])
+  const handleSubmit = useCallback(async () => {
+    if (!agreed || completed || submitting) return
+    setError(null)
+    setSubmitting(true)
+    try {
+      await submitStudentDocumentAgreement(studentId, academicTermId)
+      await onRefresh()
+      setAgreed(false)
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : 'Could not submit the agreement. Try again.'
+      setError(message)
+    } finally {
+      setSubmitting(false)
+    }
+  }, [academicTermId, agreed, completed, onRefresh, studentId, submitting])
+
+  const statusLabel =
+    requirement == null
+      ? 'Unknown'
+      : requirement.status === 'completed'
+        ? 'Completed'
+        : 'Assigned'
 
   return (
     <div className="portal-documents-agreements">
@@ -73,8 +89,22 @@ export function AgreementsSection() {
             <p className="portal-doc-quiz-entry-card__desc">
               Review and submit the university copyright release for recordings and promotional use.
             </p>
+            <p className="portal-inline-note portal-inline-note--flush">
+              Status: <strong>{statusLabel}</strong>
+              {submittedAt ? (
+                <>
+                  {' '}
+                  · Submitted {new Date(submittedAt).toLocaleString()}
+                </>
+              ) : null}
+            </p>
           </div>
           <div className="portal-doc-quiz-entry-card__aside">
+            {completed ? (
+              <span className="portal-doc-quiz-entry-card__completed" aria-label="Completed">
+                Completed
+              </span>
+            ) : null}
             <button
               type="button"
               className="portal-tab portal-doc-quiz-tab"
@@ -84,6 +114,11 @@ export function AgreementsSection() {
             </button>
           </div>
         </div>
+        {error ? (
+          <p className="portal-inline-note portal-inline-note--flush" role="alert">
+            {error}
+          </p>
+        ) : null}
         {expanded ? (
           <div className="portal-doc-quiz-entry-card__expand">
             <div className="portal-doc-quiz-expand-form">
@@ -107,9 +142,10 @@ export function AgreementsSection() {
                 <p className="portal-documents-agreement-body__para">{closing}</p>
                 <p className="portal-documents-agreement-body__para">{COPYRIGHT_RELEASE_SUBMIT_NOTE}</p>
 
-                {submitted ? (
+                {completed ? (
                   <p className="portal-documents-agreement-body__success" role="status">
-                    Submitted. Thank you — your agreement has been recorded for this browser session.
+                    Submitted. This agreement is on file for this term.
+                    {submittedAt ? ` (${new Date(submittedAt).toLocaleString()})` : ''}
                   </p>
                 ) : (
                   <div className="portal-documents-agreement-body__actions">
@@ -117,6 +153,7 @@ export function AgreementsSection() {
                       <input
                         type="checkbox"
                         checked={agreed}
+                        disabled={submitting}
                         onChange={(e) => setAgreed(e.target.checked)}
                       />
                       <span>
@@ -127,10 +164,12 @@ export function AgreementsSection() {
                     <button
                       type="button"
                       className="portal-btn portal-btn--primary portal-documents-agreement-body__submit"
-                      disabled={!agreed}
-                      onClick={handleSubmit}
+                      disabled={!agreed || submitting}
+                      onClick={() => {
+                        void handleSubmit()
+                      }}
                     >
-                      Submit
+                      {submitting ? 'Submitting…' : 'Submit'}
                     </button>
                   </div>
                 )}
