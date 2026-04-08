@@ -202,6 +202,38 @@ export function resolveRegistrationAnchoredAcademicTerm(
   return { term: registrationTerm.term, year };
 }
 
+/**
+ * Same as {@link resolveRegistrationAnchoredAcademicTerm}, but if every `marks` row for the term is
+ * academically closed while the student still has at least one **active** portal enrollment in that
+ * term, keep the term active (timetable/dashboard use portal enrollments).
+ */
+export function resolveRegistrationAnchoredAcademicTermConsideringPortal(
+  registrationTerm: { term: string; year: number } | null,
+  marks: MarksRow[],
+  portalEnrollments: Pick<PortalEnrollmentAcademicRow, "term" | "year" | "status">[],
+): { term: string; year: number } | null {
+  const base = resolveRegistrationAnchoredAcademicTerm(registrationTerm, marks);
+  if (base != null) return base;
+  if (registrationTerm == null) return null;
+  const year = Math.trunc(Number(registrationTerm.year));
+  if (
+    !Number.isFinite(year) ||
+    year < MIN_TERM_YEAR ||
+    year > MAX_TERM_YEAR
+  ) {
+    return null;
+  }
+  const hasActivePortal = portalEnrollments.some(
+    (p) =>
+      p.year === year &&
+      termsMatch(p.term, registrationTerm.term) &&
+      p.status === "active",
+  );
+  return hasActivePortal
+    ? { term: registrationTerm.term, year: registrationTerm.year }
+    : null;
+}
+
 export function normalizeEnglishTitle(
   code: string,
   rawTitle: string,

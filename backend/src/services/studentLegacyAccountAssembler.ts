@@ -3,7 +3,9 @@ import type {
   LegacyAccountingRow,
   LegacyAccountSnapshot,
 } from "../repositories/studentLegacyAccountRepository.js";
+import type { PortalEnrollmentAcademicRow } from "../repositories/studentEnrollmentRepository.js";
 import type { CourseTranscriptLookupEntry } from "../repositories/studentTranscriptRepository.js";
+import type { StudentAcademicCourseRecord } from "../types/studentAcademics.js";
 import type {
   AccountScheduleTermOption,
   ClinicalProgress,
@@ -12,7 +14,10 @@ import type {
 } from "../types/studentAccount.js";
 import {
   buildAcademicCourseRecordsFromMarksWithLookup,
-  resolveRegistrationAnchoredAcademicTerm,
+  legacyCompletedBlocksPortalRow,
+  portalEnrollmentRowToAcademicCourseRecord,
+  resolveCourseDisplayTitle,
+  resolveRegistrationAnchoredAcademicTermConsideringPortal,
   scheduleRowsFromAcademicCourseRecords,
   termsMatch,
 } from "./studentAcademicCourseRecords.js";
@@ -47,11 +52,39 @@ function typeNorm(type: string): string {
  * Category splits are minimal; `lineItems` and portal-only fields stay empty until later steps.
  */
 export type AssembleLegacyStudentAccountOptions = {
-  /** True active enrollment term (latest open registration on marks); drives `currentTerm` on the payload. */
+  /** Active enrollment term from legacy+portal anchor and marks/portal open-enrollment rules; drives `currentTerm`. */
   portalActiveTerm: { term: string; year: number } | null;
   availableScheduleTerms: AccountScheduleTermOption[];
   clinicalProgress: ClinicalProgress;
+  /**
+   * When non-empty, browsed-term schedule rows merge **active** portal didactic enrollments with
+   * marks (portal wins on duplicate course code). Withdrawn portal rows stay out of the timetable.
+   */
+  portalEnrollmentRows?: PortalEnrollmentAcademicRow[];
 };
+
+function mergeBrowseTermScheduleRecords(
+  portalRecords: StudentAcademicCourseRecord[],
+  marksRecords: StudentAcademicCourseRecord[],
+): StudentAcademicCourseRecord[] {
+  const byCode = new Map<string, StudentAcademicCourseRecord>();
+  const key = (r: StudentAcademicCourseRecord) =>
+    r.courseCode.trim().toLowerCase();
+  for (const r of portalRecords) {
+    if (r.status === "withdrawn") continue;
+    byCode.set(key(r), r);
+  }
+  for (const r of marksRecords) {
+    if (r.status === "withdrawn") continue;
+    const k = key(r);
+    if (!byCode.has(k)) byCode.set(k, r);
+  }
+  return [...byCode.values()].sort((a, b) =>
+    a.courseCode.localeCompare(b.courseCode, undefined, {
+      sensitivity: "base",
+    }),
+  );
+}
 
 export function assembleLegacyStudentAccountPayload(
   snap: LegacyAccountSnapshot,
@@ -113,6 +146,7 @@ export function assembleLegacyStudentAccountPayload(
 
   const browseTerm = { term: snap.term, year: snap.year };
   const { portalActiveTerm, availableScheduleTerms, clinicalProgress } = options;
+  const portalRows = options.portalEnrollmentRows ?? [];
 
   const marksRowsForBrowse = allMarksRows.filter(
     (m) => m.year === browseTerm.year && termsMatch(m.term, browseTerm.term),
@@ -126,7 +160,38 @@ export function assembleLegacyStudentAccountPayload(
   const browseRecords = courseRecords.filter(
     (r) => r.year === browseTerm.year && termsMatch(r.term, browseTerm.term),
   );
-  const scheduleRows = scheduleRowsFromAcademicCourseRecords(browseRecords);
+
+  const portalBrowseRecords = portalRows
+    .filter(
+      (p) =>
+        p.year === browseTerm.year &&
+        termsMatch(p.term, browseTerm.term) &&
+        !legacyCompletedBlocksPortalRow(
+          courseRecords,
+          p.course_code,
+          p.term,
+          p.year,
+        ),
+    )
+    .map((p) =>
+      portalEnrollmentRowToAcademicCourseRecord(
+        snap.studentId,
+        p,
+        resolveCourseDisplayTitle(
+          p.course_code,
+          p.course_title_raw.length > 0 ? p.course_title_raw : p.course_code,
+          courseLookup,
+        ),
+        portalActiveTerm,
+      ),
+    );
+
+  const scheduleSourceRecords =
+    portalBrowseRecords.length > 0
+      ? mergeBrowseTermScheduleRecords(portalBrowseRecords, browseRecords)
+      : browseRecords.filter((r) => r.status !== "withdrawn");
+  const scheduleRows =
+    scheduleRowsFromAcademicCourseRecords(scheduleSourceRecords);
   const currentTerm =
     portalActiveTerm != null
       ? buildAccountCurrentTerm(portalActiveTerm.term, portalActiveTerm.year)
@@ -143,9 +208,10 @@ export function assembleLegacyStudentAccountPayload(
     ...(browseMatchesPortalActive
       ? {
           academicEnrollmentActive:
-            resolveRegistrationAnchoredAcademicTerm(
+            resolveRegistrationAnchoredAcademicTermConsideringPortal(
               browseTerm,
               allMarksRows,
+              portalRows,
             ) != null,
           marksRowsForRegistrationTerm: marksRowsForBrowse.length,
         }

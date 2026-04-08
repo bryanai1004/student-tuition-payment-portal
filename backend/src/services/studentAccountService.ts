@@ -18,6 +18,10 @@ import {
   listPortalScheduleTermsForStudent,
   loadAccountContext,
 } from "../repositories/studentAccountRepository.js";
+import {
+  findLatestPortalEnrollmentTermYear,
+  listPortalEnrollmentRowsForStudentAcademics,
+} from "../repositories/studentEnrollmentRepository.js";
 import { loadCoursesTranscriptLookup } from "../repositories/studentTranscriptRepository.js";
 import type {
   AccountScheduleTermOption,
@@ -25,7 +29,8 @@ import type {
 } from "../types/studentAccount.js";
 import { getCatalogDemoAccountPayload } from "./demoAccountService.js";
 import {
-  resolveRegistrationAnchoredAcademicTerm,
+  pickNewerRegistrationAnchor,
+  resolveRegistrationAnchoredAcademicTermConsideringPortal,
   termSortOrder,
 } from "./studentAcademicCourseRecords.js";
 import { buildClinicalProgress } from "./clinicalProgressService.js";
@@ -182,35 +187,57 @@ async function getRealStudentAccountPayload(
     JSON.stringify({ studentId, term, year, mode: termYear.mode }),
   );
 
-  const [snap, listedPairs] = await Promise.all([
+  const [
+    snap,
+    listedPairs,
+    portalEnrollmentRows,
+    latestPortalTermYear,
+    portalScheduleTermList,
+    latestLegacyTermYear,
+  ] = await Promise.all([
     loadLegacyAccountSnapshot(pool, studentId, term, year),
     listLegacyRegistrationTermsForStudent(pool, studentId),
+    listPortalEnrollmentRowsForStudentAcademics(studentId),
+    findLatestPortalEnrollmentTermYear(studentId),
+    listPortalScheduleTermsForStudent(pool, studentId).catch(
+      () => [] as { term: string; year: number }[],
+    ),
+    findLatestLegacyTermYear(pool, studentId),
   ]);
   if (!snap) {
     return null;
   }
-  const [accountingRows, allMarksRows, courseLookup, latestReg, clinicalProgress] =
+  const [accountingRows, allMarksRows, courseLookup, clinicalProgress] =
     await Promise.all([
       loadLegacyAccountingRows(pool, studentId, term, year),
       listMarksForStudent(pool, studentId),
       loadCoursesTranscriptLookup(pool),
-      findLatestLegacyTermYear(pool, studentId),
       buildClinicalProgress(pool, studentId),
     ]);
 
-  let portalActiveTerm: { term: string; year: number } | null = null;
-  if (latestReg != null) {
-    const anchor = resolveRegistrationAnchoredAcademicTerm(
-      latestReg,
-      allMarksRows,
-    );
-    if (anchor != null) {
-      portalActiveTerm = { term: anchor.term, year: anchor.year };
-    }
-  }
+  const latestRegistration = pickNewerRegistrationAnchor(
+    latestLegacyTermYear,
+    latestPortalTermYear,
+  );
+  const portalActiveTerm =
+    latestRegistration == null
+      ? null
+      : resolveRegistrationAnchoredAcademicTermConsideringPortal(
+          latestRegistration,
+          allMarksRows,
+          portalEnrollmentRows,
+        );
 
-  const availableScheduleTerms = mergeScheduleTermOptionLists(
-    toScheduleTermOptions(listedPairs),
+  let availableScheduleTerms = toScheduleTermOptions(listedPairs);
+  for (const p of portalScheduleTermList) {
+    availableScheduleTerms = mergeScheduleTermOptionLists(
+      availableScheduleTerms,
+      p.term,
+      p.year,
+    );
+  }
+  availableScheduleTerms = mergeScheduleTermOptionLists(
+    availableScheduleTerms,
     snap.term,
     snap.year,
   );
@@ -220,7 +247,12 @@ async function getRealStudentAccountPayload(
     accountingRows,
     allMarksRows,
     courseLookup,
-    { portalActiveTerm, availableScheduleTerms, clinicalProgress },
+    {
+      portalActiveTerm,
+      availableScheduleTerms,
+      clinicalProgress,
+      portalEnrollmentRows,
+    },
   );
 }
 
