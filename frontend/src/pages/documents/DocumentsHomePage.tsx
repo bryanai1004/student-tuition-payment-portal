@@ -36,6 +36,7 @@ export function DocumentsHomePage() {
       return
     }
     try {
+      console.debug('[documents] refreshDocuments → fetchStudentDocuments', { sid, tid })
       const payload = await fetchStudentDocuments(sid, tid)
       termSnapshotRef.current = {
         id: payload.academicTermId,
@@ -70,6 +71,10 @@ export function DocumentsHomePage() {
       try {
         const term = await resolveDocumentsAcademicTerm({ signal: ac.signal })
         if (ac.signal.aborted) return
+        console.debug('[documents] mount effect → fetchStudentDocuments', {
+          sid,
+          academicTermId: term.id,
+        })
         const payload = await fetchStudentDocuments(sid, term.id, {
           signal: ac.signal,
         })
