@@ -3081,6 +3081,63 @@ export async function fetchAdminCourseSections(params: {
   return parseAdminCourseSectionList(data)
 }
 
+/** GET /api/admin/course-sections/enrollments — portal roster (all statuses) for View students modal. */
+export type AdminCourseSectionEnrollmentRow = {
+  studentId: string
+  name: string | null
+  status: string
+  grade: string | null
+}
+
+function parseAdminCourseSectionEnrollmentList(
+  data: unknown,
+): AdminCourseSectionEnrollmentRow[] {
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected section enrollments response')
+  }
+  const out: AdminCourseSectionEnrollmentRow[] = []
+  for (const el of data) {
+    if (el == null || typeof el !== 'object') continue
+    const r = el as Record<string, unknown>
+    const sid = r.studentId ?? r.student_id
+    if (typeof sid !== 'string' || sid.trim() === '') continue
+    const nameRaw = r.name
+    const statusRaw = r.status
+    const gradeRaw = r.grade
+    out.push({
+      studentId: sid.trim(),
+      name:
+        nameRaw == null || String(nameRaw).trim() === ''
+          ? null
+          : String(nameRaw).trim(),
+      status:
+        typeof statusRaw === 'string' && statusRaw.trim() !== ''
+          ? statusRaw.trim()
+          : 'unknown',
+      grade:
+        gradeRaw == null || String(gradeRaw).trim() === ''
+          ? null
+          : String(gradeRaw).trim(),
+    })
+  }
+  return out
+}
+
+export async function fetchAdminCourseSectionEnrollments(params: {
+  academicTermId: string
+  courseCode: string
+  signal?: AbortSignal
+}): Promise<AdminCourseSectionEnrollmentRow[]> {
+  const qs = new URLSearchParams()
+  qs.set('academic_term_id', params.academicTermId.trim())
+  qs.set('course_code', params.courseCode.trim())
+  const data = (await fetchApiJson(
+    `/api/admin/course-sections/enrollments?${qs.toString()}`,
+    { signal: params.signal },
+  )) as unknown
+  return parseAdminCourseSectionEnrollmentList(data)
+}
+
 export type AdminCourseSectionCreatePayload = {
   academic_term_id: string
   course_code: string

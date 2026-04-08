@@ -1,7 +1,10 @@
-import { useState } from 'react'
-import { deleteAdminPortalEnrollment, type AdminCourseSection } from '../../lib/api'
-
-type EnrolledStudent = NonNullable<AdminCourseSection['enrolled_students']>[number]
+import { useEffect, useState } from 'react'
+import {
+  deleteAdminPortalEnrollment,
+  fetchAdminCourseSectionEnrollments,
+  type AdminCourseSection,
+  type AdminCourseSectionEnrollmentRow,
+} from '../../lib/api'
 
 type Props = {
   section: AdminCourseSection
@@ -11,9 +14,19 @@ type Props = {
   onClose: () => void
 }
 
+function academicStatusLabel(status: string): string {
+  const s = status.trim().toLowerCase()
+  if (s === 'withdrawn') return 'Withdrawn'
+  if (s === 'active') return 'Active'
+  if (s === 'completed') return 'Completed'
+  if (s === 'dropped') return 'Dropped'
+  if (s === 'unknown' || s === '') return '—'
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
 /**
- * Lists students enrolled via `portal_enrollments` for this course + term.
- * Enrollment is course-level (not tied to `section_code`); the same list appears on every section row for the course.
+ * Lists students enrolled via `portal_enrollments` for this course + term (all statuses),
+ * using the same enrollment source as student Academics.
  */
 export function AdminSectionEnrolledStudentsModal({
   section,
@@ -23,15 +36,43 @@ export function AdminSectionEnrolledStudentsModal({
 }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [students, setStudents] = useState<AdminCourseSectionEnrollmentRow[]>(
+    [],
+  )
 
-  const students: EnrolledStudent[] = section.enrolled_students ?? []
+  useEffect(() => {
+    const ac = new AbortController()
+    setLoading(true)
+    setLoadError(null)
+    void (async () => {
+      try {
+        const rows = await fetchAdminCourseSectionEnrollments({
+          academicTermId: academicTermId.trim(),
+          courseCode: section.course_code.trim(),
+          signal: ac.signal,
+        })
+        if (!ac.signal.aborted) setStudents(rows)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setLoadError(
+          e instanceof Error ? e.message : 'Could not load enrollments.',
+        )
+        setStudents([])
+      } finally {
+        if (!ac.signal.aborted) setLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [academicTermId, section.course_code])
 
-  const onRemove = async (student_external_id: string) => {
+  const onRemove = async (studentId: string) => {
     setError(null)
-    setBusyId(student_external_id)
+    setBusyId(studentId)
     try {
       const res = await deleteAdminPortalEnrollment({
-        studentId: student_external_id,
+        studentId,
         academic_term_id: academicTermId.trim(),
         course_code: section.course_code.trim(),
       })
@@ -79,33 +120,46 @@ export function AdminSectionEnrolledStudentsModal({
             {error}
           </p>
         )}
-        {students.length === 0 ? (
+        {loadError != null && (
+          <p className="admin-form-message" role="alert">
+            {loadError}
+          </p>
+        )}
+        {loading ? (
+          <p className="portal-text-muted">Loading enrollments…</p>
+        ) : students.length === 0 && loadError == null ? (
           <p className="portal-text-muted">No students listed for this course in this term.</p>
-        ) : (
+        ) : loadError == null ? (
           <div className="portal-table-wrap admin-table-wrap" style={{ marginTop: '0.75rem' }}>
             <table className="portal-table">
               <thead>
                 <tr>
                   <th scope="col">Name</th>
                   <th scope="col">Student ID</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Grade</th>
                   <th scope="col">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {students.map((s) => (
-                  <tr key={s.student_external_id}>
-                    <td>{s.full_name?.trim() ? s.full_name.trim() : '—'}</td>
+                  <tr key={s.studentId}>
+                    <td>{s.name?.trim() ? s.name.trim() : '—'}</td>
                     <td>
-                      <code className="admin-code">{s.student_external_id}</code>
+                      <code className="admin-code">{s.studentId}</code>
                     </td>
+                    <td>{academicStatusLabel(s.status)}</td>
+                    <td>{s.grade ?? '—'}</td>
                     <td>
                       <button
                         type="button"
                         className="portal-btn portal-btn--secondary portal-btn--compact"
-                        disabled={busyId != null}
-                        onClick={() => void onRemove(s.student_external_id)}
+                        disabled={
+                          busyId != null || s.status.trim().toLowerCase() === 'withdrawn'
+                        }
+                        onClick={() => void onRemove(s.studentId)}
                       >
-                        {busyId === s.student_external_id ? 'Removing…' : 'Remove registration'}
+                        {busyId === s.studentId ? 'Removing…' : 'Remove registration'}
                       </button>
                     </td>
                   </tr>
@@ -113,7 +167,7 @@ export function AdminSectionEnrolledStudentsModal({
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
         <div className="admin-section-detail-modal__actions">
           <button
             type="button"

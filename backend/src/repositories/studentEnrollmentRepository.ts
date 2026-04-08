@@ -270,7 +270,6 @@ export async function listStudentEnrolledSectionRows(
         AND e.term COLLATE utf8mb4_unicode_ci =
             cs_inner.term COLLATE utf8mb4_unicode_ci
         AND e.year = cs_inner.year
-        AND (e.status IS NULL OR e.status = 'active')
       WHERE cs_inner.term = ? AND cs_inner.year = ?
     ) cs
     WHERE cs.rn = 1
@@ -302,6 +301,67 @@ function normalizePortalEnrollmentAcademicStatus(
   if (s === "completed") return "completed";
   if (s === "dropped") return "dropped";
   return "unknown";
+}
+
+/** Admin section roster: same `portal_enrollments` + joins as student Academics, all statuses. */
+export type AdminSectionEnrollmentRepositoryRow = {
+  studentId: string;
+  name: string | null;
+  status: PortalEnrollmentAcademicStatus;
+  grade: string | null;
+  withdrawn_at: string | null;
+};
+
+export async function listAdminEnrollmentRowsForSection(
+  courseCode: string,
+  term: string,
+  year: number,
+): Promise<AdminSectionEnrollmentRepositoryRow[]> {
+  const code = courseCode.trim();
+  const t = term.trim();
+  const sql = `
+    SELECT
+      TRIM(e.student_external_id) AS student_external_id,
+      TRIM(ps.full_name) AS full_name,
+      e.status AS enrollment_status,
+      e.withdrawn_at AS withdrawn_at
+    FROM portal_enrollments e
+    INNER JOIN portal_courses pc ON pc.course_id = e.course_id
+    LEFT JOIN portal_students ps
+      ON CONVERT(ps.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+         CONVERT(e.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
+    WHERE pc.course_code COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.term COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.year = ?
+    ORDER BY
+      CASE WHEN ps.full_name IS NULL OR TRIM(ps.full_name) = '' THEN 1 ELSE 0 END,
+      TRIM(ps.full_name) ASC,
+      TRIM(e.student_external_id) ASC
+  `;
+  const [rows] = await pool.query<RowDataPacket[]>(sql, [code, t, year]);
+  return rows.map((r) => {
+    const w = r.withdrawn_at;
+    let withdrawnAt: string | null = null;
+    if (w != null && w !== "") {
+      withdrawnAt =
+        w instanceof Date ? w.toISOString() : String(w).trim() || null;
+    }
+    const status = normalizePortalEnrollmentAcademicStatus(r.enrollment_status);
+    return {
+      studentId: String(r.student_external_id ?? "").trim(),
+      name: (() => {
+        const fn = r.full_name;
+        if (fn == null) return null;
+        const s = String(fn).trim();
+        return s === "" ? null : s;
+      })(),
+      status,
+      grade: status === "withdrawn" ? "W" : null,
+      withdrawn_at: withdrawnAt,
+    };
+  });
 }
 
 export type PortalEnrollmentAcademicRow = {

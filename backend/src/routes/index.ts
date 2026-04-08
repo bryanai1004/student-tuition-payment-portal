@@ -9,6 +9,7 @@ import {
 } from "../controllers/adminStudentController.js";
 import {
   deleteAdminCourseSection,
+  getAdminCourseSectionEnrollments,
   getAdminCourseSections,
   patchAdminCourseSection,
   postAdminCourseSection,
@@ -140,6 +141,10 @@ adminRouter.put("/students/:studentId", putAdminStudent);
 adminRouter.get(
   "/courses/open-for-registration",
   getAdminCoursesOpenForRegistration,
+);
+adminRouter.get(
+  "/course-sections/enrollments",
+  getAdminCourseSectionEnrollments,
 );
 adminRouter.get("/course-sections", getAdminCourseSections);
 adminRouter.post("/course-sections", postAdminCourseSection);

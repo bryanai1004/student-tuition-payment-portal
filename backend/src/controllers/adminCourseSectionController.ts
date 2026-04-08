@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import { env } from "../config/env.js";
+import { getAcademicTermById } from "../repositories/academicTermRepository.js";
+import { listAdminEnrollmentRowsForSection } from "../repositories/studentEnrollmentRepository.js";
 import {
   createCourseSectionWithAcademicTermId,
   deleteCourseSection,
@@ -99,6 +101,57 @@ export async function getAdminCourseSections(
     console.error("[admin/course-sections] list failed:", e);
     const body: { error: string; message?: string } = {
       error: "Failed to load course sections",
+    };
+    if (env.nodeEnv === "development") body.message = devMessage(e);
+    res.status(500).json(body);
+  }
+}
+
+/**
+ * GET /api/admin/course-sections/enrollments?academic_term_id=&course_code=
+ * Portal enrollment roster for admin (all statuses; grade W when withdrawn), same source as student Academics.
+ */
+export async function getAdminCourseSectionEnrollments(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    const academicTermId = parseQueryString(req, "academic_term_id");
+    const courseCode = parseQueryString(req, "course_code");
+    if (!academicTermId || !courseCode) {
+      res.status(400).json({
+        error:
+          "academic_term_id and course_code query parameters are required.",
+      });
+      return;
+    }
+    const termRow = await getAcademicTermById(academicTermId);
+    if (!termRow) {
+      res.status(400).json({
+        error:
+          "The selected academic term is not valid or no longer exists. Choose another term.",
+      });
+      return;
+    }
+    const rows = await listAdminEnrollmentRowsForSection(
+      courseCode,
+      termRow.term_name,
+      termRow.year,
+    );
+    res.json(
+      rows
+        .filter((r) => r.studentId !== "")
+        .map((r) => ({
+          studentId: r.studentId,
+          name: r.name,
+          status: r.status,
+          grade: r.grade,
+        })),
+    );
+  } catch (e) {
+    console.error("[admin/course-sections/enrollments] list failed:", e);
+    const body: { error: string; message?: string } = {
+      error: "Failed to load section enrollments",
     };
     if (env.nodeEnv === "development") body.message = devMessage(e);
     res.status(500).json(body);
