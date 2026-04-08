@@ -11,6 +11,7 @@ import { AdminStudentCreatePage } from './pages/admin/AdminStudentCreatePage'
 import { AdminStudentEditPage } from './pages/admin/AdminStudentEditPage'
 import { AdminCoursesPage } from './pages/admin/AdminCoursesPage'
 import { AdminCourseSectionsPage } from './pages/admin/AdminCourseSectionsPage'
+import { AdminCourseSectionRosterPage } from './pages/admin/AdminCourseSectionRosterPage'
 import { AdminSchedulingTimetablePage } from './pages/admin/AdminSchedulingTimetablePage'
 import { AdminFinancePage } from './pages/admin/AdminFinancePage'
 import { AdminAcademicTermsPage } from './pages/admin/AdminAcademicTermsPage'
@@ -98,6 +99,10 @@ export default function App() {
           <Route path="courses" element={<AdminCoursesPage />} />
           <Route path="academic-terms" element={<AdminAcademicTermsPage />} />
           <Route path="course-sections" element={<AdminCourseSectionsPage />} />
+          <Route
+            path="course-sections/roster"
+            element={<AdminCourseSectionRosterPage />}
+          />
           <Route
             path="course-sections/timetable"
             element={<AdminSchedulingTimetablePage />}

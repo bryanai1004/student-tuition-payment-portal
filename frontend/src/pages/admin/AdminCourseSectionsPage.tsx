@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   adminSchedulingQueryString,
   applyAdminSchedulingToSearchParams,
@@ -33,7 +33,6 @@ import {
   WEEKDAYS_FULL_ORDERED,
   type WeekdayFull,
 } from '../../lib/weekdaySchedule'
-import { AdminSectionEnrolledStudentsModal } from '../../components/admin/AdminSectionEnrolledStudentsModal'
 import {
   formatCourseCatalogSelectLabel,
   getPreferredCourseTitle,
@@ -232,6 +231,7 @@ function AdminCourseSectionGroupTable({
 }
 
 export function AdminCourseSectionsPage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [terms, setTerms] = useState<AcademicTerm[] | null>(null)
   const [courses, setCourses] = useState<CourseCatalogItem[] | null>(null)
@@ -247,10 +247,6 @@ export function AdminCourseSectionsPage() {
   const [formMessage, setFormMessage] = useState<string | null>(null)
   /** Bumped after create/update/delete so the sections query re-runs without changing term/course. */
   const [listVersion, setListVersion] = useState(0)
-  /** `portal_enrollments` list is course-level; any section row for the course can open the same roster. */
-  const [enrolledModalSection, setEnrolledModalSection] =
-    useState<AdminCourseSection | null>(null)
-
   const resetForm = useCallback(() => {
     setForm(emptyForm())
     setEditingId(null)
@@ -632,6 +628,23 @@ export function AdminCourseSectionsPage() {
     }
   }
 
+  const openRosterForSection = useCallback(
+    (row: AdminCourseSection) => {
+      const tid = academicTermId.trim()
+      const code = courseCode.trim()
+      if (tid === '' || code === '') return
+      const p = new URLSearchParams()
+      p.set('term', tid)
+      p.set('course', code)
+      const q = courseSearch.trim()
+      if (q !== '') p.set('q', q)
+      p.set('section', row.section_code)
+      p.set('track', row.schedule_track)
+      navigate(`/admin/course-sections/roster?${p.toString()}`)
+    },
+    [academicTermId, courseCode, courseSearch, navigate],
+  )
+
   const onDeleteRow = async (row: AdminCourseSection) => {
     if (!window.confirm(`Delete section ${row.section_code}?`)) return
     setBusy(true)
@@ -652,14 +665,6 @@ export function AdminCourseSectionsPage() {
 
   return (
     <main className="admin-page">
-      {enrolledModalSection != null && academicTermId.trim() !== '' ? (
-        <AdminSectionEnrolledStudentsModal
-          section={enrolledModalSection}
-          academicTermId={academicTermId.trim()}
-          onEnrollmentRemoved={() => setListVersion((v) => v + 1)}
-          onClose={() => setEnrolledModalSection(null)}
-        />
-      ) : null}
       <div className="admin-page__toolbar admin-course-sections-toolbar">
         <div className="admin-course-sections-toolbar__row admin-course-sections-toolbar__row--title">
           <h1 className="admin-page__title admin-page__title--inline admin-course-sections-toolbar__title">
@@ -810,7 +815,7 @@ export function AdminCourseSectionsPage() {
             emptyMessage="None for this course in this term."
             catalog={selectedCourseCatalog}
             busy={busy}
-            onViewStudents={setEnrolledModalSection}
+            onViewStudents={openRosterForSection}
             onEdit={beginEdit}
             onDeleteRow={onDeleteRow}
           />
@@ -821,7 +826,7 @@ export function AdminCourseSectionsPage() {
             emptyMessage="None for this course in this term."
             catalog={selectedCourseCatalog}
             busy={busy}
-            onViewStudents={setEnrolledModalSection}
+            onViewStudents={openRosterForSection}
             onEdit={beginEdit}
             onDeleteRow={onDeleteRow}
           />
