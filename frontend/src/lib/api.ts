@@ -1,4 +1,6 @@
+import { parseScheduleRowsFromStudentAccountJson } from './parseStudentAccountScheduleRows'
 import { normalizeScheduleTrackValue } from './scheduleTrack'
+import type { ScheduleRow } from '../types/billing'
 
 export { formatMoney } from './formatMoney'
 
@@ -118,6 +120,27 @@ export async function fetchStudentAccount(
   const qs = params.toString()
   const path = `/api/students/${encodeURIComponent(studentId)}/account${qs ? `?${qs}` : ''}`
   return fetchApiJson(path, { signal })
+}
+
+/**
+ * Registered class schedule rows for one term — same payload shape as `scheduleRows` on the student
+ * account endpoint (`GET /api/students/:id/account?term=&year=`).
+ */
+export async function fetchStudentRegisteredScheduleRowsForTerm(
+  studentId: string,
+  term: string,
+  year: number,
+  options?: { signal?: AbortSignal },
+): Promise<ScheduleRow[]> {
+  const t = term.trim()
+  const y = Number(year)
+  if (!t || !Number.isFinite(y)) return []
+  const raw = await fetchStudentAccount(studentId, {
+    term: t,
+    year: y,
+    signal: options?.signal,
+  })
+  return parseScheduleRowsFromStudentAccountJson(raw)
 }
 
 /** GET /api/students/:studentId/profile — legacy `students` demographics. */

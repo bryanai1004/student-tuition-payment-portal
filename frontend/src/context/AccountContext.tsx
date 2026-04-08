@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { fetchStudentAccount, fetchStudentProfile } from '../lib/api'
+import { parseScheduleRowsFromStudentAccountJson } from '../lib/parseStudentAccountScheduleRows'
 import { mahmAccountMock } from '../mock/mahmAccountMock'
 import type {
   MahmAccountMock,
@@ -313,31 +314,7 @@ function normalizeApiStudentAccount(raw: unknown): MahmAccountMock {
     }
   })
 
-  const scheduleRowsRaw = Array.isArray(o.scheduleRows) ? o.scheduleRows : []
-  const scheduleRows = scheduleRowsRaw.map((row) => {
-    const r = row as Record<string, unknown>
-    const instructorRaw = r.instructor
-    return {
-      courseCode: String(r.courseCode ?? ''),
-      title: String(r.title ?? ''),
-      type: String(r.type ?? ''),
-      units: r.units == null ? null : Number(r.units),
-      hours: r.hours == null ? null : Number(r.hours),
-      charge: Number(r.charge ?? 0) || 0,
-      schedule:
-        r.schedule == null || String(r.schedule).trim() === ''
-          ? null
-          : String(r.schedule),
-      location:
-        r.location == null || String(r.location).trim() === ''
-          ? null
-          : String(r.location),
-      instructor:
-        instructorRaw == null || String(instructorRaw).trim() === ''
-          ? null
-          : String(instructorRaw),
-    }
-  })
+  const scheduleRows = parseScheduleRowsFromStudentAccountJson(o)
 
   const paymentsRaw = Array.isArray(o.payments) ? o.payments : []
   const recentActivity = paymentsRaw.map((p) => {
@@ -476,8 +453,6 @@ function authenticatedPlaceholderAccount(
   })
 }
 
-type ScheduleBrowseTerm = { term: string; year: number }
-
 type AccountContextValue = {
   /** Last successful API payload for the current student; null after logout or a failed fetch. */
   fetchedAccount: MahmAccountMock | null
@@ -494,12 +469,6 @@ type AccountContextValue = {
   login: (studentId: string) => void
   logout: () => void
   isAuthenticated: boolean
-  /**
-   * When null, the account API uses the server default term. When set, account (billing + schedule)
-   * is loaded for that term — independent of `account.currentTerm` (true active enrollment).
-   */
-  scheduleBrowseTerm: ScheduleBrowseTerm | null
-  setScheduleBrowseTerm: (term: ScheduleBrowseTerm | null) => void
 }
 
 const AccountContext = createContext<AccountContextValue | null>(null)
@@ -514,9 +483,6 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   )
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
-  const [scheduleBrowseTerm, setScheduleBrowseTerm] = useState<ScheduleBrowseTerm | null>(
-    null,
-  )
 
   const login = useCallback((studentId: string) => {
     const trimmed = studentId.trim()
@@ -530,7 +496,6 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     setCurrentStudentId(null)
-    setScheduleBrowseTerm(null)
     try {
       localStorage.removeItem(PORTAL_STUDENT_ID_KEY)
     } catch {
@@ -541,10 +506,6 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const reload = useCallback(() => {
     setReloadKey((k) => k + 1)
   }, [])
-
-  useEffect(() => {
-    setScheduleBrowseTerm(null)
-  }, [currentStudentId])
 
   useEffect(() => {
     if (!currentStudentId?.trim()) {
@@ -563,12 +524,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
     ;(async () => {
       try {
-        const raw = await fetchStudentAccount(id, {
-          ...(scheduleBrowseTerm
-            ? { term: scheduleBrowseTerm.term, year: scheduleBrowseTerm.year }
-            : {}),
-          signal: ac.signal,
-        })
+        const raw = await fetchStudentAccount(id, { signal: ac.signal })
         if (ac.signal.aborted) return
         let normalized = normalizeApiStudentAccount(raw)
         const accountName = normalized.student.name?.trim() ?? ''
@@ -611,7 +567,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     })()
 
     return () => ac.abort()
-  }, [currentStudentId, reloadKey, scheduleBrowseTerm])
+  }, [currentStudentId, reloadKey])
 
   const isAuthenticated =
     currentStudentId !== null && currentStudentId.trim().length > 0
@@ -643,8 +599,6 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       isAuthenticated,
-      scheduleBrowseTerm,
-      setScheduleBrowseTerm,
     }),
     [
       account,
@@ -655,7 +609,6 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       reload,
-      scheduleBrowseTerm,
     ],
   )
 
