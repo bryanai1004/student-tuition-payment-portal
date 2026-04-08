@@ -374,9 +374,28 @@ export function DashboardCoursesWidget() {
 
   const registration = account.registration
   const browseLabel = browseTermDisplayLabel(account)
-  const weekTermSelectOptions = accountHasScheduleTermOptions
-    ? accountScheduleTerms
-    : registrationMergedScheduleTerms
+  const weekTermSelectOptions: DashboardWeekTermOption[] = useMemo(() => {
+    if (accountHasScheduleTermOptions) {
+      return accountScheduleTerms.map((o) => ({ ...o }))
+    }
+    return registrationMergedScheduleTerms.map((o) => ({
+      term: o.term,
+      year: o.year,
+      label: o.label,
+      academicTermId: o.academicTermId,
+    }))
+  }, [accountHasScheduleTermOptions, accountScheduleTerms, registrationMergedScheduleTerms])
+
+  const weekTermSelectOptionsResolved = useMemo((): DashboardWeekTermOption[] => {
+    return weekTermSelectOptions.map((o) => ({
+      ...o,
+      academicTermId:
+        o.academicTermId?.trim() ||
+        resolveAcademicTermIdForPortalTerm(academicTerms, o.term, o.year) ||
+        undefined,
+    }))
+  }, [weekTermSelectOptions, academicTerms])
+
   const listScheduleRows = account.scheduleRows
 
   const isLoadingAccount = Boolean(loading && isAuthenticated)
