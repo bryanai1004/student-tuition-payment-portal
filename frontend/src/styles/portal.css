@@ -5122,6 +5122,39 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   min-width: 0;
 }
 
+.portal-dashboard-courses-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem 0.75rem;
+  min-width: 0;
+}
+
+.portal-dashboard-courses-head-term {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.portal-dashboard-courses-head-term-select {
+  min-width: 7.5rem;
+  max-width: 11rem;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.portal-dashboard-courses-week-panel {
+  padding: 0 0 0.75rem;
+}
+
+.portal-dashboard-courses-week-status,
+.portal-dashboard-courses-list-empty {
+  margin: 0.5rem 1rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
 .portal-dashboard-card-panel-divider {
   flex-shrink: 0;
   height: 0;

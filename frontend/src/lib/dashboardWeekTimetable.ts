@@ -184,8 +184,9 @@ function mergeBlocksForDay(blocks: WeekTimetableBlock[]): WeekTimetableBlock[] {
 
 /**
  * Build week grid data from account schedule rows (structured string only; same as list view).
+ * Always returns Mon–Sun columns; days without meetings stay empty.
  */
-export function buildWeekTimetableFromScheduleRows(rows: ScheduleRow[]): WeekTimetableModel | null {
+export function buildWeekTimetableFromScheduleRows(rows: ScheduleRow[]): WeekTimetableModel {
   const blocksByDay: Record<WeekdayKey, WeekTimetableBlock[]> = {
     monday: [],
     tuesday: [],
@@ -209,9 +210,6 @@ export function buildWeekTimetableFromScheduleRows(rows: ScheduleRow[]): WeekTim
       })
     }
   }
-
-  const usedDays = WEEK_ORDER.filter((d) => blocksByDay[d].length > 0)
-  if (usedDays.length === 0) return null
 
   const visibleDays: WeekdayKey[] = [...WEEK_ORDER]
 

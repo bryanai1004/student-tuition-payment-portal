@@ -1,6 +1,7 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { useAccount } from '../../context/AccountContext'
+import { fetchStudentRegisteredScheduleRowsForTerm } from '../../lib/api'
 import {
   currentTermLabel,
   formatPortalCourseInstructor,
@@ -8,6 +9,7 @@ import {
   noCurrentCoursesMessage,
 } from '../../lib/academicCourseRecordsDisplay'
 import {
+  accountScheduleRowsHaveWeekGridData,
   blockVerticalStyle,
   buildWeekTimetableFromScheduleRows,
   formatBlockTimeRange24,
@@ -21,6 +23,14 @@ import type { MahmAccountMock } from '../../mock/mahmAccountMock'
 import type { ScheduleRow } from '../../types/billing'
 
 type CalendarView = 'list' | 'week'
+
+type CalendarWeekTermKey = { term: string; year: number }
+
+function termKeysEqual(a: CalendarWeekTermKey, b: CalendarWeekTermKey): boolean {
+  return (
+    a.year === b.year && a.term.trim().toLowerCase() === b.term.trim().toLowerCase()
+  )
+}
 
 /**
  * Split free-text location into building/place (line 1) and room/suite/virtual detail (line 2).
@@ -256,42 +266,151 @@ function DashboardWeekTimetableGrid({ model }: { model: WeekTimetableModel }) {
 
 export function DashboardCoursesWidget() {
   const [view, setView] = useState<CalendarView>('week')
-  const {
-    account,
-    loading,
-    isAuthenticated,
-    scheduleBrowseTerm,
-    setScheduleBrowseTerm,
-  } = useAccount()
+  const [calendarWeekTerm, setCalendarWeekTerm] = useState<CalendarWeekTermKey | null>(null)
+  const [weekTermRows, setWeekTermRows] = useState<ScheduleRow[] | null>(null)
+  const [weekFetchLoading, setWeekFetchLoading] = useState(false)
+  const [weekFetchError, setWeekFetchError] = useState(false)
 
-  const scheduleRows = account.scheduleRows
+  const { account, fetchedAccount, loading, isAuthenticated, currentStudentId } = useAccount()
+
+  useEffect(() => {
+    setCalendarWeekTerm(null)
+    setWeekTermRows(null)
+    setWeekFetchLoading(false)
+    setWeekFetchError(false)
+  }, [currentStudentId])
+
   const registration = account.registration
   const browseLabel = browseTermDisplayLabel(account)
   const availableTerms = account.availableScheduleTerms ?? []
+  const listScheduleRows = account.scheduleRows
 
   const isLoadingAccount = Boolean(loading && isAuthenticated)
-  const showTermPicker =
-    isAuthenticated && !isLoadingAccount && availableTerms.length > 1
+
+  const schedulePayloadStudent = useMemo(() => {
+    if (!isAuthenticated) return account.student
+    if (fetchedAccount) return fetchedAccount.student
+    return account.student
+  }, [isAuthenticated, account.student, fetchedAccount])
+
+  const defaultTermFromAccount = useMemo((): CalendarWeekTermKey | null => {
+    const term = schedulePayloadStudent.term?.trim() ?? ''
+    const year = Number(schedulePayloadStudent.year)
+    if (!term || !Number.isFinite(year) || year <= 0) return null
+    return { term, year }
+  }, [schedulePayloadStudent.term, schedulePayloadStudent.year])
+
+  const resolvedWeekTerm = calendarWeekTerm ?? defaultTermFromAccount
+
+  const payloadScheduleRows = useMemo(() => {
+    if (!isAuthenticated) return account.scheduleRows
+    if (fetchedAccount) return fetchedAccount.scheduleRows
+    return []
+  }, [isAuthenticated, account.scheduleRows, fetchedAccount])
+
+  const usePayloadRowsForWeek = Boolean(
+    resolvedWeekTerm &&
+      defaultTermFromAccount &&
+      termKeysEqual(resolvedWeekTerm, defaultTermFromAccount),
+  )
+
+  useEffect(() => {
+    if (!isAuthenticated || !currentStudentId?.trim() || view !== 'week') {
+      setWeekTermRows(null)
+      setWeekFetchLoading(false)
+      setWeekFetchError(false)
+      return
+    }
+    if (resolvedWeekTerm == null || defaultTermFromAccount == null) {
+      setWeekTermRows(null)
+      setWeekFetchLoading(false)
+      return
+    }
+    if (termKeysEqual(resolvedWeekTerm, defaultTermFromAccount)) {
+      setWeekTermRows(null)
+      setWeekFetchLoading(false)
+      setWeekFetchError(false)
+      return
+    }
+
+    const ac = new AbortController()
+    setWeekFetchLoading(true)
+    setWeekFetchError(false)
+    setWeekTermRows(null)
+
+    ;(async () => {
+      try {
+        const rows = await fetchStudentRegisteredScheduleRowsForTerm(
+          currentStudentId.trim(),
+          resolvedWeekTerm.term,
+          resolvedWeekTerm.year,
+          { signal: ac.signal },
+        )
+        if (ac.signal.aborted) return
+        setWeekTermRows(rows)
+      } catch {
+        if (ac.signal.aborted) return
+        setWeekTermRows([])
+        setWeekFetchError(true)
+      } finally {
+        if (!ac.signal.aborted) setWeekFetchLoading(false)
+      }
+    })()
+
+    return () => ac.abort()
+  }, [
+    currentStudentId,
+    defaultTermFromAccount?.term,
+    defaultTermFromAccount?.year,
+    isAuthenticated,
+    resolvedWeekTerm?.term,
+    resolvedWeekTerm?.year,
+    view,
+  ])
+
+  const weekScheduleLoading =
+    isAuthenticated &&
+    view === 'week' &&
+    resolvedWeekTerm != null &&
+    defaultTermFromAccount != null &&
+    !termKeysEqual(resolvedWeekTerm, defaultTermFromAccount) &&
+    weekFetchLoading
+
+  const effectiveWeekRows: ScheduleRow[] = weekScheduleLoading
+    ? []
+    : usePayloadRowsForWeek
+      ? payloadScheduleRows
+      : (weekTermRows ?? [])
+
+  const weekTermDisplayLabel =
+    resolvedWeekTerm != null
+      ? availableTerms.find((x) => termKeysEqual(x, resolvedWeekTerm))?.label?.trim() ||
+        currentTermLabel({ term: resolvedWeekTerm.term, year: resolvedWeekTerm.year })
+      : ''
+
+  const weekGridSourceRows =
+    resolvedWeekTerm == null ? [] : weekScheduleLoading ? [] : effectiveWeekRows
+  const weekTimetableModel = buildWeekTimetableFromScheduleRows(weekGridSourceRows)
+  const weekHasParsableMeetings = accountScheduleRowsHaveWeekGridData(effectiveWeekRows)
 
   const selectValue =
-    scheduleBrowseTerm != null
-      ? scheduleTermOptionValue(scheduleBrowseTerm.term, scheduleBrowseTerm.year)
-      : scheduleTermOptionValue(account.student.term, account.student.year)
+    resolvedWeekTerm != null
+      ? scheduleTermOptionValue(resolvedWeekTerm.term, resolvedWeekTerm.year)
+      : ''
 
-  const showCourseTable =
+  const showWeekTermSelect =
+    !isLoadingAccount && view === 'week' && registration.status === 'registered' && availableTerms.length > 0
+
+  const showListCourseTable =
     !isLoadingAccount &&
     registration.status === 'registered' &&
-    scheduleRows.length > 0
-
-  const weekTimetableModel = showCourseTable
-    ? buildWeekTimetableFromScheduleRows(scheduleRows)
-    : null
+    view === 'list' &&
+    listScheduleRows.length > 0
 
   const showWeekPanel =
-    !isLoadingAccount && showCourseTable && view === 'week'
+    !isLoadingAccount && registration.status === 'registered' && view === 'week'
 
-  const showEmptyState =
-    !isLoadingAccount && (registration.status !== 'registered' || scheduleRows.length === 0)
+  const showGlobalEmptyState = !isLoadingAccount && registration.status !== 'registered'
 
   return (
     <section className="portal-dashboard-courses" aria-labelledby="portal-dashboard-courses-heading">
@@ -299,70 +418,70 @@ export function DashboardCoursesWidget() {
         <h2 id="portal-dashboard-courses-heading" className="portal-dashboard-card-panel-title">
           My Calendar
         </h2>
-        <div
-          className="portal-dashboard-courses-view-tabs"
-          role="tablist"
-          aria-label="Calendar view"
-        >
-          <button
-            type="button"
-            role="tab"
-            className="portal-dashboard-courses-view-tab"
-            aria-selected={view === 'list'}
-            id="portal-dashboard-calendar-tab-courses"
-            onClick={() => setView('list')}
+        <div className="portal-dashboard-courses-head-actions">
+          {showWeekTermSelect ? (
+            <div className="portal-dashboard-courses-head-term">
+              <label htmlFor="portal-dashboard-courses-week-term-select" className="visually-hidden">
+                Term for week view
+              </label>
+              <select
+                id="portal-dashboard-courses-week-term-select"
+                className="portal-account-ledger__select portal-dashboard-courses-head-term-select"
+                value={selectValue}
+                aria-label="Academic term for week timetable"
+                onChange={(e) => {
+                  const raw = e.target.value
+                  const pipe = raw.indexOf('|')
+                  if (pipe < 0) return
+                  const term = raw.slice(0, pipe).trim()
+                  const year = Number(raw.slice(pipe + 1))
+                  if (!term || !Number.isFinite(year)) return
+                  setCalendarWeekTerm({ term, year })
+                }}
+              >
+                {availableTerms.map((opt) => (
+                  <option
+                    key={scheduleTermOptionValue(opt.term, opt.year)}
+                    value={scheduleTermOptionValue(opt.term, opt.year)}
+                  >
+                    {opt.label?.trim() ||
+                      currentTermLabel({ term: opt.term, year: opt.year })}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          <div
+            className="portal-dashboard-courses-view-tabs"
+            role="tablist"
+            aria-label="Calendar view"
           >
-            <ListIcon className="portal-dashboard-courses-view-tab-icon" />
-            <span>Courses</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            className="portal-dashboard-courses-view-tab"
-            aria-selected={view === 'week'}
-            id="portal-dashboard-calendar-tab-week"
-            onClick={() => setView('week')}
-          >
-            <WeekGridIcon className="portal-dashboard-courses-view-tab-icon" />
-            <span>Week</span>
-          </button>
+            <button
+              type="button"
+              role="tab"
+              className="portal-dashboard-courses-view-tab"
+              aria-selected={view === 'list'}
+              id="portal-dashboard-calendar-tab-courses"
+              onClick={() => setView('list')}
+            >
+              <ListIcon className="portal-dashboard-courses-view-tab-icon" />
+              <span>Courses</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className="portal-dashboard-courses-view-tab"
+              aria-selected={view === 'week'}
+              id="portal-dashboard-calendar-tab-week"
+              onClick={() => setView('week')}
+            >
+              <WeekGridIcon className="portal-dashboard-courses-view-tab-icon" />
+              <span>Week</span>
+            </button>
+          </div>
         </div>
       </header>
       <div className="portal-dashboard-card-panel-divider" aria-hidden />
-      {showTermPicker ? (
-        <div className="portal-dashboard-courses-term-bar">
-          <div className="portal-dashboard-courses-term-select-wrap">
-            <label htmlFor="portal-dashboard-courses-term-select" className="visually-hidden">
-              Term
-            </label>
-            <select
-              id="portal-dashboard-courses-term-select"
-              className="portal-account-ledger__select portal-dashboard-courses-term-select"
-              value={selectValue}
-              aria-label="Academic term for calendar and schedule"
-              onChange={(e) => {
-                const raw = e.target.value
-                const pipe = raw.indexOf('|')
-                if (pipe < 0) return
-                const term = raw.slice(0, pipe).trim()
-                const year = Number(raw.slice(pipe + 1))
-                if (!term || !Number.isFinite(year)) return
-                setScheduleBrowseTerm({ term, year })
-              }}
-            >
-              {availableTerms.map((opt) => (
-                <option
-                  key={scheduleTermOptionValue(opt.term, opt.year)}
-                  value={scheduleTermOptionValue(opt.term, opt.year)}
-                >
-                  {opt.label?.trim() ||
-                    currentTermLabel({ term: opt.term, year: opt.year })}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      ) : null}
 
       {isLoadingAccount ? (
         <div className="portal-dashboard-courses-loading" role="status">
@@ -370,7 +489,7 @@ export function DashboardCoursesWidget() {
         </div>
       ) : null}
 
-      {!isLoadingAccount && showEmptyState ? (
+      {!isLoadingAccount && showGlobalEmptyState ? (
         <div className="portal-dashboard-courses-empty" aria-live="polite">
           <h3 className="portal-dashboard-courses-empty-title">No courses registered</h3>
           <p className="portal-dashboard-courses-empty-text">
@@ -384,7 +503,16 @@ export function DashboardCoursesWidget() {
         </div>
       ) : null}
 
-      {!isLoadingAccount && showCourseTable && view === 'list' ? (
+      {!isLoadingAccount &&
+      registration.status === 'registered' &&
+      view === 'list' &&
+      listScheduleRows.length === 0 ? (
+        <p className="portal-text-muted portal-dashboard-courses-list-empty" role="status">
+          No courses in your schedule for the current term.
+        </p>
+      ) : null}
+
+      {!isLoadingAccount && showListCourseTable ? (
         <div className="portal-dashboard-courses-table-wrap">
           <table className="portal-dashboard-courses-table">
             <colgroup>
@@ -404,7 +532,7 @@ export function DashboardCoursesWidget() {
               </tr>
             </thead>
             <tbody>
-              {scheduleRows.map((c, i) => {
+              {listScheduleRows.map((c, i) => {
                 const sched =
                   c.schedule != null && String(c.schedule).trim() !== ''
                     ? String(c.schedule)
@@ -437,31 +565,56 @@ export function DashboardCoursesWidget() {
       ) : null}
 
       {showWeekPanel ? (
-        weekTimetableModel ? (
-          <div
-            className="portal-dashboard-courses-timetable-wrap"
-            role="region"
-            aria-label={`Weekly timetable for ${browseLabel}`}
-          >
-            <DashboardWeekTimetableMobileList model={weekTimetableModel} />
-            <DashboardWeekTimetableGrid model={weekTimetableModel} />
-          </div>
-        ) : (
-          <div
-            className="portal-dashboard-courses-week-empty portal-card"
-            role="status"
-            aria-label="Weekly timetable"
-          >
-            <h3 className="portal-dashboard-courses-week-empty-title">
-              No weekly timetable for this term
-            </h3>
-            <p className="portal-dashboard-courses-week-empty-text">
-              Sections for {browseLabel} do not include times of day that can be placed on a week
-              grid. Open the Courses tab for any meeting pattern on file, or contact the registrar if
-              something looks wrong.
+        <div
+          className="portal-dashboard-courses-week-panel"
+          role="region"
+          aria-label={
+            weekTermDisplayLabel
+              ? `Weekly timetable for ${weekTermDisplayLabel}`
+              : 'Weekly timetable'
+          }
+        >
+          {resolvedWeekTerm == null ? (
+            <p className="portal-text-muted portal-dashboard-courses-week-status" role="status">
+              No academic term is available for your week schedule.
             </p>
-          </div>
-        )
+          ) : null}
+
+          {resolvedWeekTerm != null && weekScheduleLoading ? (
+            <p className="portal-text-muted portal-dashboard-courses-week-status" role="status">
+              Loading timetable…
+            </p>
+          ) : null}
+
+          {resolvedWeekTerm != null && weekFetchError && !weekScheduleLoading ? (
+            <p className="portal-text-muted portal-dashboard-courses-week-status" role="status">
+              Could not load this term’s timetable.
+            </p>
+          ) : null}
+
+          {!weekScheduleLoading ? (
+            <>
+              {resolvedWeekTerm != null && effectiveWeekRows.length === 0 && !weekFetchError ? (
+                <p className="portal-text-muted portal-dashboard-courses-week-status" role="status">
+                  No scheduled classes for this term.
+                </p>
+              ) : null}
+              {resolvedWeekTerm != null &&
+              effectiveWeekRows.length > 0 &&
+              !weekHasParsableMeetings &&
+              !weekFetchError ? (
+                <p className="portal-text-muted portal-dashboard-courses-week-status" role="status">
+                  Some courses do not include weekly times on this grid. Use the Courses tab for full
+                  meeting details.
+                </p>
+              ) : null}
+              <div className="portal-dashboard-courses-timetable-wrap">
+                <DashboardWeekTimetableMobileList model={weekTimetableModel} />
+                <DashboardWeekTimetableGrid model={weekTimetableModel} />
+              </div>
+            </>
+          ) : null}
+        </div>
       ) : null}
 
     </section>
