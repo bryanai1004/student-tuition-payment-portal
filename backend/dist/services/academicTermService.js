@@ -96,6 +96,7 @@ export async function createAcademicTerm(input) {
         end_date: input.end_date ?? null,
         registration_open: input.registration_open ?? null,
         registration_close: input.registration_close ?? null,
+        withdraw_deadline: input.withdraw_deadline ?? null,
         payment_due_date: input.payment_due_date ?? null,
         lock_registration_if_overdue: input.lock_registration_if_overdue === true,
         status: input.status,
@@ -160,6 +161,9 @@ export async function updateAcademicTerm(id, patch) {
         registration_close: patch.registration_close !== undefined
             ? patch.registration_close
             : existing.registration_close,
+        withdraw_deadline: patch.withdraw_deadline !== undefined
+            ? patch.withdraw_deadline
+            : existing.withdraw_deadline,
         payment_due_date: patch.payment_due_date !== undefined
             ? patch.payment_due_date
             : existing.payment_due_date,

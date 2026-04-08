@@ -77,11 +77,13 @@ function parseCreateBody(body) {
     const end = parseOptionalDate(o.end_date);
     const ro = parseOptionalDate(o.registration_open);
     const rc = parseOptionalDate(o.registration_close);
+    const wd = parseOptionalDate(o.withdraw_deadline);
     const pdd = parseOptionalDate(o.payment_due_date);
     if (start === "invalid" ||
         end === "invalid" ||
         ro === "invalid" ||
         rc === "invalid" ||
+        wd === "invalid" ||
         pdd === "invalid") {
         return null;
     }
@@ -102,6 +104,7 @@ function parseCreateBody(body) {
         end_date: end,
         registration_open: ro,
         registration_close: rc,
+        withdraw_deadline: wd,
         payment_due_date: pdd,
         ...(lockReg !== undefined ? { lock_registration_if_overdue: lockReg } : {}),
         status: status,
@@ -145,6 +148,7 @@ function parsePatchBody(body) {
         "end_date",
         "registration_open",
         "registration_close",
+        "withdraw_deadline",
         "payment_due_date",
     ]) {
         if (o[key] !== undefined) {
