@@ -12,6 +12,8 @@ const ADMIN_SESSION_KEY = 'amu_admin_session'
 const ADMIN_EMAILS = [
   'wanpanelami@gmail.com',
   'bingchen.li@wanpanel.ai',
+  'clinic@amu.edu',
+  'clinicdean@amu.edu',
 ] as const
 const ADMIN_PASSWORD = 'amuadmin123'
 
