@@ -64,6 +64,7 @@ function normalizeRow(row: RowDataPacket): AcademicTermDetail {
     end_date: nullableDateString(row.end_date),
     registration_open: nullableDateString(row.registration_open),
     registration_close: nullableDateString(row.registration_close),
+    withdraw_deadline: nullableDateString(row.withdraw_deadline),
     payment_due_date: paymentDue,
     lock_registration_if_overdue: lockReg,
     status: row.status as AcademicTermStatus,
@@ -84,6 +85,7 @@ const TERM_SELECT_BASE = `
     end_date,
     registration_open,
     registration_close,
+    withdraw_deadline,
     status,
     is_visible
   FROM academic_terms
@@ -101,6 +103,7 @@ const TERM_SELECT_WITH_PAYMENT_COLUMNS = `
     end_date,
     registration_open,
     registration_close,
+    withdraw_deadline,
     payment_due_date,
     lock_registration_if_overdue,
     status,
@@ -227,11 +230,12 @@ export async function insertAcademicTerm(
       end_date,
       registration_open,
       registration_close,
+      withdraw_deadline,
       payment_due_date,
       lock_registration_if_overdue,
       status,
       is_visible
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
     const params = [
       row.id,
@@ -244,6 +248,7 @@ export async function insertAcademicTerm(
       row.end_date,
       row.registration_open,
       row.registration_close,
+      row.withdraw_deadline,
       row.payment_due_date,
       row.lock_registration_if_overdue ? 1 : 0,
       row.status,
@@ -263,9 +268,10 @@ export async function insertAcademicTerm(
       end_date,
       registration_open,
       registration_close,
+      withdraw_deadline,
       status,
       is_visible
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
     const params = [
       row.id,
@@ -278,6 +284,7 @@ export async function insertAcademicTerm(
       row.end_date,
       row.registration_open,
       row.registration_close,
+      row.withdraw_deadline,
       row.status,
       row.is_visible ? 1 : 0,
     ];
@@ -314,6 +321,7 @@ export async function updateAcademicTermRow(
       end_date = ?,
       registration_open = ?,
       registration_close = ?,
+      withdraw_deadline = ?,
       payment_due_date = ?,
       lock_registration_if_overdue = ?,
       status = ?,
@@ -331,6 +339,7 @@ export async function updateAcademicTermRow(
       row.end_date,
       row.registration_open,
       row.registration_close,
+      row.withdraw_deadline,
       row.payment_due_date,
       row.lock_registration_if_overdue ? 1 : 0,
       row.status,
@@ -351,6 +360,7 @@ export async function updateAcademicTermRow(
       end_date = ?,
       registration_open = ?,
       registration_close = ?,
+      withdraw_deadline = ?,
       status = ?,
       is_visible = ?
     WHERE id = ?
@@ -366,6 +376,7 @@ export async function updateAcademicTermRow(
       row.end_date,
       row.registration_open,
       row.registration_close,
+      row.withdraw_deadline,
       row.status,
       row.is_visible ? 1 : 0,
       currentId,
