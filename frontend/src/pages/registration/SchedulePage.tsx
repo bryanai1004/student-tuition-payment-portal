@@ -10,7 +10,7 @@ import {
   TIMETABLE_ROW_HEIGHT_PX,
   timetableBodyHeightPx,
 } from '../../lib/timetableBlockLayout'
-import type { WeekdayFull } from '../../lib/weekdaySchedule'
+import { WEEKDAYS_FULL_ORDERED, type WeekdayFull } from '../../lib/weekdaySchedule'
 import { courseBinSectionKey, useCourseBin, type CourseBinItem } from './CourseBinContext'
 import { partitionCourseBinItemsForTimetable } from './courseBinSchedule'
 import { useRegistrationTermSearchParam } from './registrationTermSearch'
@@ -18,13 +18,9 @@ import { adminSectionToCourseBinItem } from './sectionToCourseBinItem'
 
 const MY_GRID = STUDENT_REGISTRATION_TIMETABLE_GRID
 
-const DAY_HEADERS: { full: WeekdayFull; label: string }[] = [
-  { full: 'Monday', label: 'Monday' },
-  { full: 'Tuesday', label: 'Tuesday' },
-  { full: 'Wednesday', label: 'Wednesday' },
-  { full: 'Thursday', label: 'Thursday' },
-  { full: 'Friday', label: 'Friday' },
-]
+const DAY_HEADERS: { full: WeekdayFull; label: string }[] = WEEKDAYS_FULL_ORDERED.map(
+  (full) => ({ full, label: full }),
+)
 
 export function SchedulePage() {
   const registrationTermId = useRegistrationTermSearchParam()
@@ -133,7 +129,7 @@ export function SchedulePage() {
           My Timetable
         </h2>
         <p className="portal-text-muted" style={{ marginTop: 0 }}>
-          Your registered courses for this term and anything still in your CourseBin (Monday–Friday,
+          Your registered courses for this term and anything still in your CourseBin (Monday–Sunday,
           8:00 a.m.–9:00 p.m.). CourseBin entries override the server view when both refer to the same
           section.
         </p>

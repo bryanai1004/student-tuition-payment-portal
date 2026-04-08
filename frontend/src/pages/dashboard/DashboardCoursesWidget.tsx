@@ -467,8 +467,7 @@ export function DashboardCoursesWidget() {
     view === 'list' &&
     listScheduleRows.length > 0
 
-  const showWeekPanel =
-    !isLoadingAccount && registration.status === 'registered' && view === 'week'
+  const showWeekPanel = !isLoadingAccount && view === 'week'
 
   const showGlobalEmptyState = !isLoadingAccount && registration.status !== 'registered'
 
