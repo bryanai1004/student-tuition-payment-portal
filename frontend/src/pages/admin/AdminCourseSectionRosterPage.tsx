@@ -215,12 +215,14 @@ export function AdminCourseSectionRosterPage() {
 
   return (
     <main className="admin-page admin-course-section-roster">
-      {feedbackStudentId != null && !missingContext ? (
+      {feedbackStudentId != null &&
+      !missingContext &&
+      rosterTermYear != null ? (
         <AdminCourseFeedbackModal
           studentId={feedbackStudentId}
           courseCode={courseCode}
-          termId={termId}
-          termYear={rosterTermYear}
+          term={termId}
+          year={rosterTermYear}
           onClose={() => setFeedbackStudentId(null)}
         />
       ) : null}
@@ -433,7 +435,11 @@ export function AdminCourseSectionRosterPage() {
                             <button
                               type="button"
                               className="portal-btn portal-btn--secondary portal-btn--compact"
-                              disabled={busyId != null || busyGradeId != null}
+                              disabled={
+                                busyId != null ||
+                                busyGradeId != null ||
+                                rosterTermYear == null
+                              }
                               onClick={() => setFeedbackStudentId(s.studentId)}
                             >
                               View Feedback

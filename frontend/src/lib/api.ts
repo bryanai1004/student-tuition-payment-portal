@@ -1996,6 +1996,40 @@ export async function fetchStudentCourseFeedback(
   return data as CourseFeedbackListResponse
 }
 
+/** GET /api/admin/students/:studentId/course-feedback?courseCode=&term=&year= */
+export async function fetchAdminCourseFeedback(
+  params: {
+    studentId: string
+    courseCode: string
+    term: string
+    year: number
+  },
+  options?: { signal?: AbortSignal },
+): Promise<CourseFeedbackApiItem | null> {
+  const qs = new URLSearchParams()
+  qs.set('courseCode', params.courseCode)
+  qs.set('term', params.term)
+  qs.set('year', String(params.year))
+
+  const path = `/api/admin/students/${encodeURIComponent(params.studentId)}/course-feedback?${qs.toString()}`
+
+  const data = await fetchApiJson(path, { signal: options?.signal })
+  if (data == null) return null
+  if (typeof data !== 'object') {
+    throw new Error('Unexpected admin course feedback response')
+  }
+  const o = data as Record<string, unknown>
+  if (
+    typeof o.id !== 'number' ||
+    typeof o.courseCode !== 'string' ||
+    typeof o.term !== 'string' ||
+    typeof o.year !== 'number'
+  ) {
+    throw new Error('Unexpected admin course feedback response')
+  }
+  return data as CourseFeedbackApiItem
+}
+
 export type PostCourseFeedbackBody = {
   courseCode: string
   term: string

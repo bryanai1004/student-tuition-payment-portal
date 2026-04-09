@@ -45,6 +45,7 @@ import {
 } from "../controllers/studentLedgerController.js";
 import { getStudentAcademics } from "../controllers/studentAcademicsController.js";
 import {
+  getAdminStudentCourseFeedback,
   getStudentCourseFeedback,
   postStudentCourseFeedback,
 } from "../controllers/studentCourseFeedbackController.js";
@@ -139,6 +140,10 @@ adminRouter.post("/students", postAdminStudent);
 adminRouter.post("/students/delete-selected", postDeleteSelectedAdminStudents);
 adminRouter.get("/students/:studentId", getAdminStudent);
 adminRouter.put("/students/:studentId", putAdminStudent);
+adminRouter.get(
+  "/students/:studentId/course-feedback",
+  getAdminStudentCourseFeedback,
+);
 adminRouter.get(
   "/courses/open-for-registration",
   getAdminCoursesOpenForRegistration,

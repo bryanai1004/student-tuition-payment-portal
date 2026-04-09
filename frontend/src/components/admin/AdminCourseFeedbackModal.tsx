@@ -1,6 +1,6 @@
 import { useEffect, useState, type MouseEvent } from 'react'
 import {
-  fetchStudentCourseFeedback,
+  fetchAdminCourseFeedback,
   type CourseFeedbackApiItem,
 } from '../../lib/api'
 
@@ -11,35 +11,17 @@ function backdropMouseDown(
   if (e.target === e.currentTarget) onClose()
 }
 
-function pickFeedbackForCourse(
-  items: CourseFeedbackApiItem[],
-  courseCode: string,
-  termId: string | null,
-  termYear: number | null,
-): CourseFeedbackApiItem | null {
-  const code = courseCode.trim()
-  let list = items.filter((f) => f.courseCode.trim() === code)
-  if (termId && termYear != null) {
-    list = list.filter((f) => f.term === termId && f.year === termYear)
-  }
-  if (list.length === 0) return null
-  return [...list].sort(
-    (a, b) =>
-      new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
-  )[0]
-}
-
 export function AdminCourseFeedbackModal({
   studentId,
   courseCode,
-  termId,
-  termYear,
+  term,
+  year,
   onClose,
 }: {
   studentId: string
   courseCode: string
-  termId: string | null
-  termYear: number | null
+  term: string
+  year: number
   onClose: () => void
 }) {
   const [loading, setLoading] = useState(true)
@@ -50,11 +32,17 @@ export function AdminCourseFeedbackModal({
     const ac = new AbortController()
     ;(async () => {
       try {
-        const data = await fetchStudentCourseFeedback(studentId, {
-          signal: ac.signal,
-        })
+        const data = await fetchAdminCourseFeedback(
+          {
+            studentId,
+            courseCode: courseCode.trim(),
+            term: term.trim(),
+            year,
+          },
+          { signal: ac.signal },
+        )
         if (ac.signal.aborted) return
-        setItem(pickFeedbackForCourse(data.items, courseCode, termId, termYear))
+        setItem(data)
         setError(null)
       } catch (e) {
         if (ac.signal.aborted) return
@@ -65,7 +53,7 @@ export function AdminCourseFeedbackModal({
       }
     })()
     return () => ac.abort()
-  }, [studentId, courseCode, termId, termYear])
+  }, [studentId, courseCode, term, year])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
