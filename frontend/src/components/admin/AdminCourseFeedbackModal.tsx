@@ -4,6 +4,14 @@ import {
   type CourseFeedbackApiItem,
 } from '../../lib/api'
 
+const COURSE_FEEDBACK_QUESTIONS = [
+  'Course content was clear and well organized.',
+  'The instructor explained concepts effectively.',
+  'The pace of the course was appropriate.',
+  'Assignments and learning activities supported my learning.',
+  'I would recommend this course to other students.',
+] as const
+
 function backdropMouseDown(
   e: MouseEvent<HTMLDivElement>,
   onClose: () => void,
@@ -101,23 +109,23 @@ export function AdminCourseFeedbackModal({
         ) : (
           <dl className="portal-course-feedback-modal__readonly-dl">
             <div>
-              <dt>Q1 rating</dt>
+              <dt>{COURSE_FEEDBACK_QUESTIONS[0]}</dt>
               <dd>{f.q1Rating}</dd>
             </div>
             <div>
-              <dt>Q2 rating</dt>
+              <dt>{COURSE_FEEDBACK_QUESTIONS[1]}</dt>
               <dd>{f.q2Rating}</dd>
             </div>
             <div>
-              <dt>Q3 rating</dt>
+              <dt>{COURSE_FEEDBACK_QUESTIONS[2]}</dt>
               <dd>{f.q3Rating}</dd>
             </div>
             <div>
-              <dt>Q4 rating</dt>
+              <dt>{COURSE_FEEDBACK_QUESTIONS[3]}</dt>
               <dd>{f.q4Rating}</dd>
             </div>
             <div>
-              <dt>Q5 rating</dt>
+              <dt>{COURSE_FEEDBACK_QUESTIONS[4]}</dt>
               <dd>{f.q5Rating}</dd>
             </div>
             <div>
@@ -125,7 +133,7 @@ export function AdminCourseFeedbackModal({
               <dd>{f.overallRating}</dd>
             </div>
             <div>
-              <dt>Comment</dt>
+              <dt>Additional comments</dt>
               <dd>
                 {f.comment != null && f.comment.trim() !== '' ? f.comment : '—'}
               </dd>

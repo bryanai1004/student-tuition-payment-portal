@@ -9,14 +9,26 @@ import { courseRowDisplayTitle } from '../../lib/academicsTranscriptDisplay'
 
 export type EnrollmentHistoryRow = StudentAcademicsResponse['enrollmentHistory'][number]
 
+const COURSE_FEEDBACK_QUESTIONS = [
+  'Course content was clear and well organized.',
+  'The instructor explained concepts effectively.',
+  'The pace of the course was appropriate.',
+  'Assignments and learning activities supported my learning.',
+  'I would recommend this course to other students.',
+] as const
+
 function ratingSelectField(
   id: string,
   label: string,
   value: number,
   onChange: (n: number) => void,
+  questionText?: string,
 ) {
   return (
     <div className="portal-course-feedback-modal__field">
+      {questionText ? (
+        <p className="portal-course-feedback-modal__question">{questionText}</p>
+      ) : null}
       <label htmlFor={id}>{label}</label>
       <select id={id} value={value} onChange={(e) => onChange(Number(e.target.value))}>
         {[1, 2, 3, 4, 5].map((n) => (
@@ -164,14 +176,17 @@ export function CourseFeedbackModal({
               {row.term} {row.year}
             </p>
             <form onSubmit={handleSubmit}>
-              {ratingSelectField('cfb-q1', 'Q1 (1–5)', q1, setQ1)}
-              {ratingSelectField('cfb-q2', 'Q2 (1–5)', q2, setQ2)}
-              {ratingSelectField('cfb-q3', 'Q3 (1–5)', q3, setQ3)}
-              {ratingSelectField('cfb-q4', 'Q4 (1–5)', q4, setQ4)}
-              {ratingSelectField('cfb-q5', 'Q5 (1–5)', q5, setQ5)}
-              {ratingSelectField('cfb-overall', 'Overall (1–5)', overall, setOverall)}
+              <p className="portal-card-note portal-course-feedback-modal__rating-hint">
+                Please rate each item from 1 to 5.
+              </p>
+              {ratingSelectField('cfb-q1', 'Rating (1–5)', q1, setQ1, COURSE_FEEDBACK_QUESTIONS[0])}
+              {ratingSelectField('cfb-q2', 'Rating (1–5)', q2, setQ2, COURSE_FEEDBACK_QUESTIONS[1])}
+              {ratingSelectField('cfb-q3', 'Rating (1–5)', q3, setQ3, COURSE_FEEDBACK_QUESTIONS[2])}
+              {ratingSelectField('cfb-q4', 'Rating (1–5)', q4, setQ4, COURSE_FEEDBACK_QUESTIONS[3])}
+              {ratingSelectField('cfb-q5', 'Rating (1–5)', q5, setQ5, COURSE_FEEDBACK_QUESTIONS[4])}
+              {ratingSelectField('cfb-overall', 'Overall rating (1–5)', overall, setOverall)}
               <div className="portal-course-feedback-modal__field">
-                <label htmlFor="cfb-comment">Comment</label>
+                <label htmlFor="cfb-comment">Additional comments</label>
                 <textarea
                   id="cfb-comment"
                   value={comment}
@@ -228,31 +243,31 @@ export function CourseFeedbackModal({
               <>
                 <dl className="portal-course-feedback-modal__readonly-dl">
                   <div>
-                    <dt>Q1 rating</dt>
+                    <dt>{COURSE_FEEDBACK_QUESTIONS[0]}</dt>
                     <dd>{view.q1Rating}</dd>
                   </div>
                   <div>
-                    <dt>Q2 rating</dt>
+                    <dt>{COURSE_FEEDBACK_QUESTIONS[1]}</dt>
                     <dd>{view.q2Rating}</dd>
                   </div>
                   <div>
-                    <dt>Q3 rating</dt>
+                    <dt>{COURSE_FEEDBACK_QUESTIONS[2]}</dt>
                     <dd>{view.q3Rating}</dd>
                   </div>
                   <div>
-                    <dt>Q4 rating</dt>
+                    <dt>{COURSE_FEEDBACK_QUESTIONS[3]}</dt>
                     <dd>{view.q4Rating}</dd>
                   </div>
                   <div>
-                    <dt>Q5 rating</dt>
+                    <dt>{COURSE_FEEDBACK_QUESTIONS[4]}</dt>
                     <dd>{view.q5Rating}</dd>
                   </div>
                   <div>
-                    <dt>Overall Rating</dt>
+                    <dt>Overall rating</dt>
                     <dd>{view.overallRating}</dd>
                   </div>
                   <div>
-                    <dt>Comment</dt>
+                    <dt>Additional comments</dt>
                     <dd>
                       {view.comment != null && view.comment.trim() !== '' ? view.comment : '—'}
                     </dd>

@@ -3074,6 +3074,17 @@ table.portal-academics-registration-history-table.portal-academics-portal-grades
   line-height: 1.4;
 }
 
+.portal-course-feedback-modal__rating-hint {
+  margin: 0 0 0.75rem;
+}
+
+.portal-course-feedback-modal__question {
+  margin: 0 0 0.35rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--portal-text);
+}
+
 .portal-course-feedback-modal__field {
   margin-bottom: 0.85rem;
 }
@@ -3119,9 +3130,10 @@ table.portal-academics-registration-history-table.portal-academics-portal-grades
 
 .portal-course-feedback-modal__readonly-dl > div {
   display: grid;
-  grid-template-columns: 8rem 1fr;
+  grid-template-columns: minmax(0, 1fr) min-content;
   gap: 0.35rem 0.75rem;
   margin-bottom: 0.4rem;
+  align-items: start;
 }
 
 .portal-course-feedback-modal__readonly-dl dt {
