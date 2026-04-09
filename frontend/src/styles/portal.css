@@ -2975,8 +2975,8 @@ table.portal-academics-portal-grades-table.portal-table--grades td {
 }
 
 /*
- * Academics portal — Registration History: fixed column geometry across term tables;
- * title/instructor left-aligned; other columns centered (inherits portal-academics-portal-grades-table).
+ * Academics portal — Registration History: seven equal columns; fixed layout; wrap long text.
+ * (Transcript uses portal-academics-transcript-sheet__table, not this block.)
  */
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table {
   table-layout: fixed;
@@ -2985,60 +2985,47 @@ table.portal-academics-registration-history-table.portal-academics-portal-grades
 }
 
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table th:nth-child(1),
-table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(1) {
-  width: 12%;
-}
-
+table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(1),
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table th:nth-child(2),
-table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(2) {
-  width: 31%;
-  max-width: none;
-  text-align: left;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  hyphens: manual;
-}
-
+table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(2),
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table th:nth-child(3),
-table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(3) {
-  width: 8%;
-}
-
+table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(3),
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table th:nth-child(4),
-table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(4) {
-  width: 13%;
-}
-
+table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(4),
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table th:nth-child(5),
-table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(5) {
-  width: 8%;
-}
-
+table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(5),
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table th:nth-child(6),
-table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(6) {
-  width: 16%;
-  text-align: left;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  hyphens: manual;
-}
-
+table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(6),
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table th:nth-child(7),
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table td:nth-child(7) {
-  width: 12%;
+  width: calc(100% / 7);
+  box-sizing: border-box;
   text-align: center;
+  vertical-align: middle;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: manual;
 }
 
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table
   td:nth-child(7)
   .portal-academics-feedback-actions {
   justify-content: center;
+  max-width: 100%;
+}
+
+table.portal-academics-registration-history-table.portal-academics-portal-grades-table
+  td:nth-child(7)
+  .portal-btn {
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
 }
 
 table.portal-academics-registration-history-table.portal-academics-portal-grades-table
   .portal-academics-course-title-cell {
-  max-width: none;
-  text-align: left;
+  max-width: 100%;
+  text-align: center;
 }
 
 .portal-academics-feedback-placeholder {
