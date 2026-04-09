@@ -35,8 +35,8 @@ export function AdminCourseFeedbackModal({
         const data = await fetchAdminCourseFeedback(
           {
             studentId,
-            courseCode: courseCode.trim(),
-            term: term.trim(),
+            courseCode,
+            term,
             year,
           },
           { signal: ac.signal },
@@ -66,17 +66,6 @@ export function AdminCourseFeedbackModal({
   const titleId = 'admin-course-feedback-modal-title'
   const f = item
 
-  const q1 = f ? (f.q1Rating ?? f.rating) : null
-  const q2 = f ? (f.q2Rating ?? f.workloadRating) : null
-  const q3 = f ? (f.q3Rating ?? f.difficultyRating) : null
-  const q4 = f ? (f.q4Rating ?? f.rating) : null
-  const q5 = f ? (f.q5Rating ?? f.rating) : null
-  const overall = f ? (f.overallRating ?? f.rating) : null
-  const commentRaw = f ? (f.comment ?? f.comments) : null
-  const comment =
-    typeof commentRaw === 'string' && commentRaw.trim() !== ''
-      ? commentRaw
-      : null
   const submittedAt = f?.submittedAt
 
   return (
@@ -108,36 +97,38 @@ export function AdminCourseFeedbackModal({
             {error}
           </p>
         ) : !f ? (
-          <p className="portal-card-note">No feedback submitted</p>
+          <p className="portal-card-note">No feedback submitted yet</p>
         ) : (
           <dl className="portal-course-feedback-modal__readonly-dl">
             <div>
               <dt>Q1 rating</dt>
-              <dd>{q1 ?? '—'}</dd>
+              <dd>{f.q1Rating}</dd>
             </div>
             <div>
               <dt>Q2 rating</dt>
-              <dd>{q2 ?? '—'}</dd>
+              <dd>{f.q2Rating}</dd>
             </div>
             <div>
               <dt>Q3 rating</dt>
-              <dd>{q3 ?? '—'}</dd>
+              <dd>{f.q3Rating}</dd>
             </div>
             <div>
               <dt>Q4 rating</dt>
-              <dd>{q4 ?? '—'}</dd>
+              <dd>{f.q4Rating}</dd>
             </div>
             <div>
               <dt>Q5 rating</dt>
-              <dd>{q5 ?? '—'}</dd>
+              <dd>{f.q5Rating}</dd>
             </div>
             <div>
               <dt>Overall rating</dt>
-              <dd>{overall ?? '—'}</dd>
+              <dd>{f.overallRating}</dd>
             </div>
             <div>
               <dt>Comment</dt>
-              <dd>{comment ?? '—'}</dd>
+              <dd>
+                {f.comment != null && f.comment.trim() !== '' ? f.comment : '—'}
+              </dd>
             </div>
             <div>
               <dt>Submitted</dt>

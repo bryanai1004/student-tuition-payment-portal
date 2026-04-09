@@ -1967,7 +1967,7 @@ export type CourseFeedbackApiItem = {
   overallRating: number
   comment: string | null
   submittedAt: string
-  /** Legacy responses only; used for read fallbacks in the UI. */
+  /** Legacy responses only; optional for older API payloads. */
   rating?: number
   workloadRating?: number
   difficultyRating?: number
@@ -1976,8 +1976,8 @@ export type CourseFeedbackApiItem = {
 
 /** GET /api/students/:studentId/course-feedback?courseCode=&term=&year= */
 export async function fetchStudentCourseFeedback(
-  studentId: string,
   params: {
+    studentId: string
     courseCode: string
     term: string
     year: number
@@ -1989,12 +1989,14 @@ export async function fetchStudentCourseFeedback(
   qs.set('term', params.term.trim())
   qs.set('year', String(params.year))
 
-  const path = `/api/students/${encodeURIComponent(studentId)}/course-feedback?${qs.toString()}`
+  const path = `/api/students/${encodeURIComponent(params.studentId)}/course-feedback?${qs.toString()}`
   const data = await fetchApiJson(path, { signal: options?.signal })
+
   if (data == null) return null
   if (typeof data !== 'object') {
-    throw new Error('Unexpected course feedback response')
+    throw new Error('Unexpected student course feedback response')
   }
+
   const o = data as Record<string, unknown>
   if (
     typeof o.id !== 'number' ||
@@ -2002,8 +2004,9 @@ export async function fetchStudentCourseFeedback(
     typeof o.term !== 'string' ||
     typeof o.year !== 'number'
   ) {
-    throw new Error('Unexpected course feedback response')
+    throw new Error('Unexpected student course feedback response')
   }
+
   return data as CourseFeedbackApiItem
 }
 
@@ -2018,8 +2021,8 @@ export async function fetchAdminCourseFeedback(
   options?: { signal?: AbortSignal },
 ): Promise<CourseFeedbackApiItem | null> {
   const qs = new URLSearchParams()
-  qs.set('courseCode', params.courseCode)
-  qs.set('term', params.term)
+  qs.set('courseCode', params.courseCode.trim())
+  qs.set('term', params.term.trim())
   qs.set('year', String(params.year))
 
   const path = `/api/admin/students/${encodeURIComponent(params.studentId)}/course-feedback?${qs.toString()}`

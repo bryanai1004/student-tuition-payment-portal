@@ -29,6 +29,10 @@ function ratingSelectField(
   )
 }
 
+function isRating(n: unknown): n is number {
+  return typeof n === 'number' && n >= 1 && n <= 5 && Number.isInteger(n)
+}
+
 export function CourseFeedbackModal({
   mode,
   row,
@@ -42,9 +46,12 @@ export function CourseFeedbackModal({
   onClose: () => void
   onSubmitted: () => void
 }) {
-  const [overallRating, setOverallRating] = useState<number>(3)
-  const [workload, setWorkload] = useState<number>(3)
-  const [difficulty, setDifficulty] = useState<number>(3)
+  const [q1, setQ1] = useState<number>(3)
+  const [q2, setQ2] = useState<number>(3)
+  const [q3, setQ3] = useState<number>(3)
+  const [q4, setQ4] = useState<number>(3)
+  const [q5, setQ5] = useState<number>(3)
+  const [overall, setOverall] = useState<number>(3)
   const [comment, setComment] = useState<string>('')
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -57,21 +64,21 @@ export function CourseFeedbackModal({
     const ac = new AbortController()
     ;(async () => {
       try {
-        const res = await fetchStudentCourseFeedback(
-          studentId,
+        const item = await fetchStudentCourseFeedback(
           {
-            courseCode: row.courseCode.trim(),
-            term: row.term.trim(),
+            studentId,
+            courseCode: row.courseCode,
+            term: row.term,
             year: row.year,
           },
           { signal: ac.signal },
         )
         if (ac.signal.aborted) return
-        if (!res) {
+        if (!item) {
           setViewItem(null)
           setViewError('Could not find submitted feedback for this course.')
         } else {
-          setViewItem(res)
+          setViewItem(item)
           setViewError(null)
         }
       } catch (e) {
@@ -104,17 +111,20 @@ export function CourseFeedbackModal({
       if (!row.courseCode?.trim() || !row.term?.trim() || row.year == null) {
         throw new Error('Missing course metadata')
       }
+      if (!isRating(q1) || !isRating(q2) || !isRating(q3) || !isRating(q4) || !isRating(q5) || !isRating(overall)) {
+        throw new Error('Please rate all questions and overall (1–5).')
+      }
       const payload = {
-        courseCode: row.courseCode.trim(),
-        term: row.term.trim(),
+        courseCode: row.courseCode,
+        term: row.term,
         year: row.year,
-        q1Rating: overallRating,
-        q2Rating: workload,
-        q3Rating: difficulty,
-        q4Rating: overallRating,
-        q5Rating: overallRating,
-        overallRating,
-        comment: comment?.trim() || null,
+        q1Rating: q1,
+        q2Rating: q2,
+        q3Rating: q3,
+        q4Rating: q4,
+        q5Rating: q5,
+        overallRating: overall,
+        comment: comment.trim() || null,
       }
       await postStudentCourseFeedback(studentId, payload)
       onClose()
@@ -130,12 +140,6 @@ export function CourseFeedbackModal({
   const courseLabel = `${row.courseCode.trim()} — ${courseRowDisplayTitle(row)}`
 
   const view = viewItem
-  const vQ1 = view ? (view.q1Rating ?? view.rating) : null
-  const vQ2 = view ? (view.q2Rating ?? view.workloadRating) : null
-  const vQ3 = view ? (view.q3Rating ?? view.difficultyRating) : null
-  const vQ4 = view ? (view.q4Rating ?? view.rating) : null
-  const vQ5 = view ? (view.q5Rating ?? view.rating) : null
-  const vOverall = view ? (view.overallRating ?? view.rating) : null
 
   return (
     <div
@@ -160,19 +164,12 @@ export function CourseFeedbackModal({
               {row.term} {row.year}
             </p>
             <form onSubmit={handleSubmit}>
-              {ratingSelectField(
-                'cfb-overall',
-                'Overall Rating (1–5)',
-                overallRating,
-                setOverallRating,
-              )}
-              {ratingSelectField('cfb-workload', 'Workload (1–5)', workload, setWorkload)}
-              {ratingSelectField(
-                'cfb-difficulty',
-                'Difficulty (1–5)',
-                difficulty,
-                setDifficulty,
-              )}
+              {ratingSelectField('cfb-q1', 'Q1 (1–5)', q1, setQ1)}
+              {ratingSelectField('cfb-q2', 'Q2 (1–5)', q2, setQ2)}
+              {ratingSelectField('cfb-q3', 'Q3 (1–5)', q3, setQ3)}
+              {ratingSelectField('cfb-q4', 'Q4 (1–5)', q4, setQ4)}
+              {ratingSelectField('cfb-q5', 'Q5 (1–5)', q5, setQ5)}
+              {ratingSelectField('cfb-overall', 'Overall (1–5)', overall, setOverall)}
               <div className="portal-course-feedback-modal__field">
                 <label htmlFor="cfb-comment">Comment</label>
                 <textarea
@@ -227,46 +224,44 @@ export function CourseFeedbackModal({
                 {viewError}
               </p>
             ) : null}
-            {viewItem && !viewLoading ? (
+            {view && !viewLoading ? (
               <>
                 <dl className="portal-course-feedback-modal__readonly-dl">
                   <div>
                     <dt>Q1 rating</dt>
-                    <dd>{vQ1 ?? '—'}</dd>
+                    <dd>{view.q1Rating}</dd>
                   </div>
                   <div>
                     <dt>Q2 rating</dt>
-                    <dd>{vQ2 ?? '—'}</dd>
+                    <dd>{view.q2Rating}</dd>
                   </div>
                   <div>
                     <dt>Q3 rating</dt>
-                    <dd>{vQ3 ?? '—'}</dd>
+                    <dd>{view.q3Rating}</dd>
                   </div>
                   <div>
                     <dt>Q4 rating</dt>
-                    <dd>{vQ4 ?? '—'}</dd>
+                    <dd>{view.q4Rating}</dd>
                   </div>
                   <div>
                     <dt>Q5 rating</dt>
-                    <dd>{vQ5 ?? '—'}</dd>
+                    <dd>{view.q5Rating}</dd>
                   </div>
                   <div>
                     <dt>Overall Rating</dt>
-                    <dd>{vOverall ?? '—'}</dd>
+                    <dd>{view.overallRating}</dd>
                   </div>
                   <div>
                     <dt>Comment</dt>
                     <dd>
-                      {(viewItem.comment ?? viewItem.comments)?.trim()
-                        ? (viewItem.comment ?? viewItem.comments)
-                        : '—'}
+                      {view.comment != null && view.comment.trim() !== '' ? view.comment : '—'}
                     </dd>
                   </div>
                   <div>
                     <dt>Submitted</dt>
                     <dd>
-                      {viewItem.submittedAt
-                        ? new Date(viewItem.submittedAt).toLocaleString(undefined, {
+                      {view.submittedAt
+                        ? new Date(view.submittedAt).toLocaleString(undefined, {
                             dateStyle: 'medium',
                             timeStyle: 'short',
                           })

@@ -445,7 +445,8 @@ export function AdminCourseSectionRosterPage() {
                               disabled={
                                 busyId != null ||
                                 busyGradeId != null ||
-                                rosterTermYear == null
+                                rosterTermYear == null ||
+                                rosterTermName == null
                               }
                               onClick={() => setFeedbackStudentId(s.studentId)}
                             >
