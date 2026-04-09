@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Vary: Origin
+Content-Type: text/csv; charset=utf-8
+Content-Disposition: attachment; filename="registeredstudent_AC102_2026fall.csv"
+X-Portal-Roster-Csv-Schema: course-feedback-per-question-v1
+Content-Length: 408
+ETag: W/"198-weo3PNJCPumlUZSdsXNzR2GcHmY"
+Date: Thu, 09 Apr 2026 22:14:46 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
