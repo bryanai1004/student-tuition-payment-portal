@@ -9,6 +9,6 @@ export const COURSE_FEEDBACK_CSV_QUESTION_RATING_HEADERS = [
   "Course Content & Organization Rating",
   "Instructor Explanation Rating",
   "Course Pace Rating",
-  "Assignments & Learning Activities Rating",
+  "Assignments & Activities Rating",
   "Recommend Course Rating",
 ] as const;
