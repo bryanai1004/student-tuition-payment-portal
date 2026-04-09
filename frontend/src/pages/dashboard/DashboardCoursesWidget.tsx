@@ -10,6 +10,10 @@ import {
   type StudentEnrolledSectionsScheduleMeta,
 } from '../../lib/api'
 import { enrolledSectionsToScheduleRows } from '../../lib/enrolledSectionsToScheduleRows'
+import {
+  buildDashboardGoogleCalendarExportModel,
+  dashboardBlockGoogleCalendarPatternKey,
+} from '../../lib/dashboardGoogleCalendarExport'
 import { resolveAcademicTermIdForPortalTerm } from '../../lib/resolveAcademicTermIdForPortalTerm'
 import { mergeTermOptions } from '../registration/registrationTermSearch'
 import { currentTermLabel } from '../../lib/academicCourseRecordsDisplay'
@@ -25,6 +29,7 @@ import {
   WEEKDAY_SHORT_LABEL,
 } from '../../lib/dashboardWeekTimetable'
 import type { ScheduleRow } from '../../types/billing'
+import { DashboardGoogleCalendarModal } from './DashboardGoogleCalendarModal'
 
 type CalendarWeekTermKey = { term: string; year: number }
 
@@ -32,6 +37,9 @@ type DashboardWeekTermOption = CalendarWeekTermKey & {
   label: string
   /** When known (registration term list or resolved from academic terms), drives enrolled-sections fetch. */
   academicTermId?: string
+  /** From academic term API when available; used for Google Calendar recurrence end. */
+  start_date?: string | null
+  end_date?: string | null
 }
 
 function termKeysEqual(a: CalendarWeekTermKey, b: CalendarWeekTermKey): boolean {
@@ -60,7 +68,13 @@ function scheduleTermOptionValue(term: string, year: number): string {
   return `${term.trim()}|${year}`
 }
 
-function DashboardWeekTimetableMobileList({ model }: { model: WeekTimetableModel }) {
+function DashboardWeekTimetableMobileList({
+  model,
+  gcalHrefByPattern,
+}: {
+  model: WeekTimetableModel
+  gcalHrefByPattern?: Map<string, string>
+}) {
   const { visibleDays, blocksByDay } = model
 
   return (
@@ -74,27 +88,41 @@ function DashboardWeekTimetableMobileList({ model }: { model: WeekTimetableModel
             <p className="portal-dashboard-courses-timetable-mobile-empty">No classes</p>
           ) : (
             <ul className="portal-dashboard-courses-timetable-mobile-slots">
-              {blocksByDay[day].map((block, bi) => (
-                <li
-                  key={`${day}-${block.courseCode}-${block.startMinutes}-${bi}`}
-                  className="portal-dashboard-courses-timetable-mobile-slot"
-                >
-                  <span className="portal-dashboard-courses-timetable-mobile-time">
-                    {formatBlockTimeRange24(block)}
-                  </span>
-                  <span className="portal-dashboard-courses-timetable-mobile-course">
-                    <strong className="portal-dashboard-courses-timetable-mobile-code">
-                      {block.courseCode}
-                    </strong>
-                    {block.subtitle ? (
-                      <span className="portal-dashboard-courses-timetable-mobile-title">
-                        {' '}
-                        {block.subtitle}
-                      </span>
+              {blocksByDay[day].map((block, bi) => {
+                const pk = dashboardBlockGoogleCalendarPatternKey(block)
+                const gcalHref = gcalHrefByPattern?.get(pk)
+                return (
+                  <li
+                    key={`${day}-${block.courseCode}-${block.startMinutes}-${bi}`}
+                    className="portal-dashboard-courses-timetable-mobile-slot"
+                  >
+                    <span className="portal-dashboard-courses-timetable-mobile-time">
+                      {formatBlockTimeRange24(block)}
+                    </span>
+                    <span className="portal-dashboard-courses-timetable-mobile-course">
+                      <strong className="portal-dashboard-courses-timetable-mobile-code">
+                        {block.courseCode}
+                      </strong>
+                      {block.subtitle ? (
+                        <span className="portal-dashboard-courses-timetable-mobile-title">
+                          {' '}
+                          {block.subtitle}
+                        </span>
+                      ) : null}
+                    </span>
+                    {gcalHref ? (
+                      <a
+                        className="portal-text-link portal-dashboard-gcal-block-link portal-dashboard-gcal-block-link--mobile"
+                        href={gcalHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Add to Google Calendar
+                      </a>
                     ) : null}
-                  </span>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>
@@ -103,7 +131,13 @@ function DashboardWeekTimetableMobileList({ model }: { model: WeekTimetableModel
   )
 }
 
-function DashboardWeekTimetableGrid({ model }: { model: WeekTimetableModel }) {
+function DashboardWeekTimetableGrid({
+  model,
+  gcalHrefByPattern,
+}: {
+  model: WeekTimetableModel
+  gcalHrefByPattern?: Map<string, string>
+}) {
   const { visibleDays, gridStartMinutes, gridEndMinutes, blocksByDay } = model
   const colCount = visibleDays.length
   const ticks = hourTickMinutes(gridStartMinutes, gridEndMinutes)
@@ -152,6 +186,8 @@ function DashboardWeekTimetableGrid({ model }: { model: WeekTimetableModel }) {
           <div className="portal-dashboard-courses-timetable-track">
             {blocksByDay[day].map((block, bi) => {
               const pos = blockVerticalStyle(block, gridStartMinutes, gridEndMinutes)
+              const pk = dashboardBlockGoogleCalendarPatternKey(block)
+              const gcalHref = gcalHrefByPattern?.get(pk)
               return (
                 <div
                   key={`${day}-${block.courseCode}-${block.startMinutes}-${bi}`}
@@ -167,6 +203,17 @@ function DashboardWeekTimetableGrid({ model }: { model: WeekTimetableModel }) {
                       <div className="portal-timetable-block-title">{block.subtitle}</div>
                     ) : null}
                     <div className="portal-timetable-block-time">{formatBlockTimeRange24(block)}</div>
+                    {gcalHref ? (
+                      <a
+                        className="portal-text-link portal-dashboard-gcal-block-link"
+                        href={gcalHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Add to Google Calendar"
+                      >
+                        Add to Google Calendar
+                      </a>
+                    ) : null}
                   </div>
                 </div>
               )
@@ -179,6 +226,7 @@ function DashboardWeekTimetableGrid({ model }: { model: WeekTimetableModel }) {
 }
 
 export function DashboardCoursesWidget() {
+  const [gcalModalOpen, setGcalModalOpen] = useState(false)
   const [calendarWeekTerm, setCalendarWeekTerm] = useState<CalendarWeekTermKey | null>(null)
   const [weekTermRows, setWeekTermRows] = useState<ScheduleRow[] | null>(null)
   const [weekFetchLoading, setWeekFetchLoading] = useState(false)
@@ -188,7 +236,14 @@ export function DashboardCoursesWidget() {
   const weekTermRowsCacheRef = useRef<Map<string, WeekTimetableCacheEntry>>(new Map())
   /** Same merge as registration layout when account `availableScheduleTerms` is empty. */
   const [registrationMergedScheduleTerms, setRegistrationMergedScheduleTerms] = useState<
-    Array<{ term: string; year: number; label: string; academicTermId: string }>
+    Array<{
+      term: string
+      year: number
+      label: string
+      academicTermId: string
+      start_date: string | null
+      end_date: string | null
+    }>
   >([])
   const [academicTerms, setAcademicTerms] = useState<AcademicTerm[]>([])
   const [academicTermsLoading, setAcademicTermsLoading] = useState(false)
@@ -238,6 +293,8 @@ export function DashboardCoursesWidget() {
             t.term_label?.trim() ||
             currentTermLabel({ term: t.term_name, year: t.year }),
           academicTermId: t.id,
+          start_date: t.start_date,
+          end_date: t.end_date,
         })),
       )
     })()
@@ -286,13 +343,19 @@ export function DashboardCoursesWidget() {
   }, [accountHasScheduleTermOptions, accountScheduleTerms, registrationMergedScheduleTerms])
 
   const weekTermSelectOptionsResolved = useMemo((): DashboardWeekTermOption[] => {
-    return weekTermSelectOptions.map((o) => ({
-      ...o,
-      academicTermId:
+    return weekTermSelectOptions.map((o) => {
+      const resolvedId =
         o.academicTermId?.trim() ||
         resolveAcademicTermIdForPortalTerm(academicTerms, o.term, o.year) ||
-        undefined,
-    }))
+        undefined
+      const at = resolvedId ? academicTerms.find((x) => x.id === resolvedId) : undefined
+      return {
+        ...o,
+        academicTermId: resolvedId,
+        start_date: o.start_date ?? at?.start_date ?? null,
+        end_date: o.end_date ?? at?.end_date ?? null,
+      }
+    })
   }, [weekTermSelectOptions, academicTerms])
 
   const isLoadingAccount = Boolean(loading && isAuthenticated)
@@ -311,6 +374,10 @@ export function DashboardCoursesWidget() {
   }, [schedulePayloadStudent.term, schedulePayloadStudent.year])
 
   const resolvedWeekTerm = calendarWeekTerm ?? defaultTermFromAccount
+
+  useEffect(() => {
+    setGcalModalOpen(false)
+  }, [resolvedWeekTerm?.term, resolvedWeekTerm?.year])
 
   const resolvedAcademicTermId = useMemo((): string | null => {
     if (!resolvedWeekTerm) return null
@@ -529,6 +596,43 @@ export function DashboardCoursesWidget() {
         ? account.scheduleRows
         : (weekTermRows ?? [])
 
+  const resolvedTermDateBounds = useMemo((): { start: string | null; end: string | null } => {
+    if (resolvedWeekTerm == null) return { start: null, end: null }
+    const opt = weekTermSelectOptionsResolved.find((x) => termKeysEqual(x, resolvedWeekTerm))
+    const s = opt?.start_date?.trim() || null
+    const e = opt?.end_date?.trim() || null
+    if (s && e && /^\d{4}-\d{2}-\d{2}$/.test(s) && /^\d{4}-\d{2}-\d{2}$/.test(e)) {
+      return { start: s, end: e }
+    }
+    return { start: null, end: null }
+  }, [resolvedWeekTerm, weekTermSelectOptionsResolved])
+
+  const gcalExport = useMemo(() => {
+    if (resolvedWeekTerm == null) {
+      return { batchItems: [], hrefByBlockPatternKey: new Map<string, string>() }
+    }
+    return buildDashboardGoogleCalendarExportModel(effectiveWeekRows, {
+      term: resolvedWeekTerm.term,
+      year: resolvedWeekTerm.year,
+      start: resolvedTermDateBounds.start,
+      end: resolvedTermDateBounds.end,
+    })
+  }, [
+    effectiveWeekRows,
+    resolvedWeekTerm,
+    resolvedTermDateBounds.start,
+    resolvedTermDateBounds.end,
+  ])
+
+  const gcalAddAllDisabled =
+    isLoadingAccount ||
+    resolvedWeekTerm == null ||
+    weekScheduleLoading ||
+    weekFetchError ||
+    resolvedTermDateBounds.start == null ||
+    resolvedTermDateBounds.end == null ||
+    gcalExport.batchItems.length === 0
+
   const weekTermDisplayLabel =
     resolvedWeekTerm != null
       ? weekTermSelectOptionsResolved
@@ -582,38 +686,48 @@ export function DashboardCoursesWidget() {
         <h2 id="portal-dashboard-courses-heading" className="portal-dashboard-card-panel-title">
           My Calendar
         </h2>
-        {showWeekTermSelect ? (
+        {!isLoadingAccount ? (
           <div className="portal-dashboard-courses-head-actions">
-            <div className="portal-dashboard-courses-head-term">
-              <label htmlFor="portal-dashboard-courses-week-term-select" className="visually-hidden">
-                Term for week view
-              </label>
-              <select
-                id="portal-dashboard-courses-week-term-select"
-                className="portal-account-ledger__select portal-dashboard-courses-head-term-select"
-                value={selectValue}
-                aria-label="Academic term for week timetable"
-                onChange={(e) => {
-                  const raw = e.target.value
-                  const pipe = raw.indexOf('|')
-                  if (pipe < 0) return
-                  const term = raw.slice(0, pipe).trim()
-                  const year = Number(raw.slice(pipe + 1))
-                  if (!term || !Number.isFinite(year)) return
-                  setCalendarWeekTerm({ term, year })
-                }}
-              >
-                {weekTermSelectOptionsResolved.map((opt) => (
-                  <option
-                    key={scheduleTermOptionValue(opt.term, opt.year)}
-                    value={scheduleTermOptionValue(opt.term, opt.year)}
-                  >
-                    {opt.label?.trim() ||
-                      currentTermLabel({ term: opt.term, year: opt.year })}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {showWeekTermSelect ? (
+              <div className="portal-dashboard-courses-head-term">
+                <label htmlFor="portal-dashboard-courses-week-term-select" className="visually-hidden">
+                  Term for week view
+                </label>
+                <select
+                  id="portal-dashboard-courses-week-term-select"
+                  className="portal-account-ledger__select portal-dashboard-courses-head-term-select"
+                  value={selectValue}
+                  aria-label="Academic term for week timetable"
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    const pipe = raw.indexOf('|')
+                    if (pipe < 0) return
+                    const term = raw.slice(0, pipe).trim()
+                    const year = Number(raw.slice(pipe + 1))
+                    if (!term || !Number.isFinite(year)) return
+                    setCalendarWeekTerm({ term, year })
+                  }}
+                >
+                  {weekTermSelectOptionsResolved.map((opt) => (
+                    <option
+                      key={scheduleTermOptionValue(opt.term, opt.year)}
+                      value={scheduleTermOptionValue(opt.term, opt.year)}
+                    >
+                      {opt.label?.trim() ||
+                        currentTermLabel({ term: opt.term, year: opt.year })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="portal-dashboard-gcal-add-all"
+              disabled={gcalAddAllDisabled}
+              onClick={() => setGcalModalOpen(true)}
+            >
+              Add all to Google Calendar
+            </button>
           </div>
         ) : null}
       </header>
@@ -687,10 +801,24 @@ export function DashboardCoursesWidget() {
           ) : null}
 
           <div className="portal-dashboard-courses-timetable-wrap">
-            <DashboardWeekTimetableMobileList model={weekTimetableModel} />
-            <DashboardWeekTimetableGrid model={weekTimetableModel} />
+            <DashboardWeekTimetableMobileList
+              model={weekTimetableModel}
+              gcalHrefByPattern={gcalExport.hrefByBlockPatternKey}
+            />
+            <DashboardWeekTimetableGrid
+              model={weekTimetableModel}
+              gcalHrefByPattern={gcalExport.hrefByBlockPatternKey}
+            />
           </div>
         </div>
+      ) : null}
+
+      {gcalModalOpen && gcalExport.batchItems.length > 0 ? (
+        <DashboardGoogleCalendarModal
+          title={`Add to Google Calendar${weekTermDisplayLabel ? ` — ${weekTermDisplayLabel}` : ''}`}
+          items={gcalExport.batchItems}
+          onClose={() => setGcalModalOpen(false)}
+        />
       ) : null}
 
     </section>

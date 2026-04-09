@@ -5528,6 +5528,175 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   line-height: 1.3;
 }
 
+.portal-dashboard-gcal-add-all {
+  margin: 0;
+  padding: 0.15rem 0;
+  flex-shrink: 0;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--portal-text-muted);
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.portal-dashboard-gcal-add-all:hover:not(:disabled) {
+  color: var(--portal-accent);
+  border-bottom-color: color-mix(in srgb, var(--portal-accent) 38%, transparent);
+}
+
+.portal-dashboard-gcal-add-all:focus-visible {
+  outline: 2px solid var(--amu-red-dark);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.portal-dashboard-gcal-add-all:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.portal-dashboard-gcal-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.portal-dashboard-gcal-modal {
+  box-sizing: border-box;
+  width: min(420px, calc(100vw - 2.5rem));
+  max-height: min(85vh, 32rem);
+  overflow: auto;
+  padding: 1.15rem 1.25rem 1.25rem;
+  border-radius: var(--portal-radius);
+  border: 1px solid var(--portal-border-subtle);
+  background: var(--portal-surface);
+  box-shadow:
+    var(--portal-shadow),
+    0 12px 32px rgba(15, 23, 42, 0.1);
+}
+
+.portal-dashboard-gcal-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.portal-dashboard-gcal-modal__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--portal-text);
+  letter-spacing: -0.01em;
+}
+
+.portal-dashboard-gcal-modal__close {
+  flex-shrink: 0;
+  margin: -0.2rem -0.15rem 0 0;
+  padding: 0.15rem 0.45rem;
+  font: inherit;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--portal-text-muted);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.portal-dashboard-gcal-modal__close:hover {
+  color: var(--portal-text);
+}
+
+.portal-dashboard-gcal-modal__close:focus-visible {
+  outline: 2px solid var(--amu-red-dark);
+  outline-offset: 2px;
+}
+
+.portal-dashboard-gcal-modal__lede {
+  margin: 0 0 0.85rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--portal-text-muted);
+}
+
+.portal-dashboard-gcal-modal__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portal-dashboard-gcal-modal__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--portal-border-subtle) 80%, transparent);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.portal-dashboard-gcal-modal__row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.portal-dashboard-gcal-modal__course {
+  flex: 1 1 10rem;
+  min-width: 0;
+  color: var(--portal-text);
+}
+
+.portal-dashboard-gcal-modal__action {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.portal-dashboard-gcal-block-link.portal-text-link {
+  margin-top: 0.125rem;
+  max-width: 100%;
+  font-size: 0.5625rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  opacity: 0.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-dashboard-courses-timetable-block:has(.portal-dashboard-gcal-block-link):hover .portal-dashboard-gcal-block-link {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.portal-dashboard-gcal-block-link--mobile.portal-text-link {
+  flex-basis: 100%;
+  margin-top: 0.125rem;
+  font-size: 0.6875rem;
+  opacity: 0.85;
+  white-space: normal;
+}
+
 .portal-dashboard-courses-week-panel {
   padding: 0 0 0.75rem;
 }

@@ -10,8 +10,8 @@ import { mapLegacyStudentProfileExportRowsById } from "../repositories/studentLe
  * There is no `course_sections.id` (or section_code) on enrollment rows. The admin UI therefore shows
  * the same enrolled roster on every scheduled section row for that course in the term; this export
  * uses the same student list as GET /api/admin/course-sections/enrollments for that course/term/year.
- * The requested `sectionId` is used to resolve course_code / term / year / section metadata for the
- * filename and to anchor the admin action to a concrete timetable row.
+ * The requested `sectionId` is used to resolve course_code / term / year for the download filename
+ * (`registeredstudent_<code>_<year><termlower>.csv`) and to anchor the admin action to a concrete timetable row.
  *
  * Course feedback (`course_feedback`) is keyed by **course_code + term + year only** (not section).
  * There is no section_id on `course_feedback`; the same feedback row applies to every scheduled
@@ -30,18 +30,25 @@ function divisionFromStudentId(id) {
         return "English";
     return "Unknown";
 }
-function sanitizeFilenamePart(raw) {
-    const t = raw.trim();
-    if (t === "")
+/** Course code in download name: trim, strip whitespace, keep A–Z / a–z / 0–9 only (case preserved). */
+function courseCodeForRegisteredStudentFilename(raw) {
+    const compact = raw.trim().replace(/\s+/g, "");
+    if (compact === "")
         return "unknown";
-    return t.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
+    const safe = compact.replace(/[^a-zA-Z0-9]/g, "");
+    return safe !== "" ? safe : "unknown";
 }
+/** Term in download name: trim, remove spaces, lowercase (filename only). */
+function termLowerCompactForFilename(raw) {
+    return raw.trim().replace(/\s+/g, "").toLowerCase();
+}
+/** `registeredstudent_<COURSECODE>_<YEAR><termlower>.csv` (e.g. registeredstudent_AC102_2026fall.csv). */
 function buildAttachmentFilename(args) {
-    const course = sanitizeFilenamePart(args.courseCode);
-    const section = sanitizeFilenamePart(args.sectionCode);
-    const term = sanitizeFilenamePart(args.term);
-    const year = sanitizeFilenamePart(String(Math.trunc(args.year)));
-    return `registered-students-${course}-${section}-${term}-${year}.csv`;
+    const code = courseCodeForRegisteredStudentFilename(args.courseCode);
+    const year = String(Math.trunc(args.year));
+    const termPart = termLowerCompactForFilename(args.term);
+    const suffix = termPart !== "" ? `${year}${termPart}` : `${year}unknown`;
+    return `registeredstudent_${code}_${suffix}.csv`;
 }
 /** RFC 4180-style escaping; newlines normalized to `\n` inside quoted fields; rows joined with `\r\n`. */
 function csvEscapeCell(value) {
@@ -157,7 +164,6 @@ export async function buildRegisteredStudentsCsvForSection(sectionId) {
     }
     const filename = buildAttachmentFilename({
         courseCode: section.course_code,
-        sectionCode: section.section_code,
         term: section.term,
         year: section.year,
     });
