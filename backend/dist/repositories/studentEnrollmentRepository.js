@@ -377,7 +377,11 @@ export async function findLatestPortalEnrollmentTermYear(studentExternalId) {
 }
 /**
  * All `portal_enrollments` for a student with catalog title/units and one deterministic section row
- * per course+term+year (lowest `course_sections.id`) for schedule display.
+ * per enrollment (lowest `course_sections.id` for matching `course_code` + `term` + `year`).
+ *
+ * Join mirrors `listStudentEnrolledSectionsForTerm`: `portal_courses.course_code` ↔
+ * `course_sections` on trimmed codes and calendar term/year so dashboard / account `scheduleRows`
+ * get weekday and times when marks are absent (e.g. current term before grades post).
  */
 export async function listPortalEnrollmentRowsForStudentAcademics(studentExternalId) {
     const sid = studentExternalId.trim();
@@ -398,31 +402,25 @@ export async function listPortalEnrollmentRowsForStudentAcademics(studentExterna
     INNER JOIN portal_courses pc
       ON pc.course_id COLLATE utf8mb4_unicode_ci =
          e.course_id COLLATE utf8mb4_unicode_ci
-    LEFT JOIN (
-      SELECT
-        cs_a.course_code AS pick_course_code,
-        cs_a.term AS pick_term,
-        cs_a.year AS pick_year,
-        cs_a.weekday,
-        cs_a.start_time,
-        cs_a.end_time,
-        cs_a.instructor
-      FROM course_sections cs_a
-      INNER JOIN (
-        SELECT
-          cs_b.course_code,
-          cs_b.term,
-          cs_b.year,
-          MIN(cs_b.id) AS pick_id
-        FROM course_sections cs_b
-        GROUP BY cs_b.course_code, cs_b.term, cs_b.year
-      ) picks ON picks.pick_id = cs_a.id
-    ) cs_pick
-      ON cs_pick.pick_course_code COLLATE utf8mb4_unicode_ci =
-         pc.course_code COLLATE utf8mb4_unicode_ci
-      AND cs_pick.pick_term COLLATE utf8mb4_unicode_ci =
-          e.term COLLATE utf8mb4_unicode_ci
-      AND cs_pick.pick_year = e.year
+    LEFT JOIN course_sections cs_pick
+      ON TRIM(cs_pick.course_code) COLLATE utf8mb4_unicode_ci =
+         TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+      AND TRIM(cs_pick.term) COLLATE utf8mb4_unicode_ci =
+          TRIM(e.term) COLLATE utf8mb4_unicode_ci
+      AND cs_pick.year = e.year
+      AND cs_pick.id = (
+        SELECT cs2.id
+        FROM course_sections cs2
+        WHERE TRIM(cs2.course_code) COLLATE utf8mb4_unicode_ci =
+              TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+          AND TRIM(cs2.term) COLLATE utf8mb4_unicode_ci =
+              TRIM(e.term) COLLATE utf8mb4_unicode_ci
+          AND cs2.year = e.year
+        ORDER BY
+          (cs2.weekday IS NULL OR TRIM(cs2.weekday) = '' OR cs2.start_time IS NULL OR cs2.end_time IS NULL) ASC,
+          cs2.id ASC
+        LIMIT 1
+      )
     WHERE e.student_external_id COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
     ORDER BY e.year DESC,

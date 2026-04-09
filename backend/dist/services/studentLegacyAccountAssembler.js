@@ -1,4 +1,4 @@
-import { buildAcademicCourseRecordsFromMarksWithLookup, legacyCompletedBlocksPortalRow, portalEnrollmentRowToAcademicCourseRecord, resolveCourseDisplayTitle, resolveRegistrationAnchoredAcademicTermConsideringPortal, scheduleRowsFromAcademicCourseRecords, termsMatch, } from "./studentAcademicCourseRecords.js";
+import { buildAcademicCourseRecordsFromMarksWithLookup, portalEnrollmentRowToAcademicCourseRecord, resolveCourseDisplayTitle, resolveRegistrationAnchoredAcademicTermConsideringPortal, scheduleRowsFromAcademicCourseRecords, termsMatch, } from "./studentAcademicCourseRecords.js";
 import { buildAccountCurrentTerm, deriveAccountRegistration, } from "./studentAccountDashboard.js";
 function roundMoney(n) {
     return Math.round(n * 100) / 100;
@@ -91,11 +91,22 @@ allMarksRows, courseLookup, options) {
     const marksRowsForBrowse = allMarksRows.filter((m) => m.year === browseTerm.year && termsMatch(m.term, browseTerm.term));
     const courseRecords = buildAcademicCourseRecordsFromMarksWithLookup(snap.studentId, allMarksRows, courseLookup, portalActiveTerm);
     const browseRecords = courseRecords.filter((r) => r.year === browseTerm.year && termsMatch(r.term, browseTerm.term));
-    const portalRowsForBrowseTerm = portalRows.filter((p) => p.year === browseTerm.year &&
-        termsMatch(p.term, browseTerm.term) &&
-        !legacyCompletedBlocksPortalRow(courseRecords, p.course_code, p.term, p.year));
-    const activePortalEnrollmentCountForBrowseTerm = portalRowsForBrowseTerm.filter((p) => p.status !== "withdrawn").length;
-    const portalBrowseRecords = portalRowsForBrowseTerm.map((p) => portalEnrollmentRowToAcademicCourseRecord(snap.studentId, p, resolveCourseDisplayTitle(p.course_code, p.course_title_raw.length > 0 ? p.course_title_raw : p.course_code, courseLookup), portalActiveTerm));
+    /**
+     * Schedule merge uses **all** non-withdrawn portal rows for the browse term. Do not apply
+     * `legacyCompletedBlocksPortalRow` here: marks may already carry final grades while still lacking
+     * `days` / `time_from` / `time_to`; excluding portal rows then yields empty or unparsable schedules.
+     * (Enrollment/transcript merge in `/academics` keeps the stricter portal filter.)
+     */
+    const portalRowsInBrowseTerm = portalRows.filter((p) => p.year === browseTerm.year && termsMatch(p.term, browseTerm.term));
+    const activePortalEnrollmentCountForBrowseTerm = portalRowsInBrowseTerm.filter((p) => p.status !== "withdrawn").length;
+    const portalRowsForScheduleMerge = portalRowsInBrowseTerm.filter((p) => p.status !== "withdrawn");
+    /**
+     * Portal rows from `listPortalEnrollmentRowsForStudentAcademics` include `weekday`,
+     * `start_time`, `end_time`, and optional `instructor` via `course_sections` joined on
+     * catalog `course_code` + enrollment `term` + `year`, so `scheduleRowsFromAcademicCourseRecords`
+     * can render timetables for terms without marks.
+     */
+    const portalBrowseRecords = portalRowsForScheduleMerge.map((p) => portalEnrollmentRowToAcademicCourseRecord(snap.studentId, p, resolveCourseDisplayTitle(p.course_code, p.course_title_raw.length > 0 ? p.course_title_raw : p.course_code, courseLookup), portalActiveTerm));
     const scheduleSourceRecords = portalBrowseRecords.length > 0
         ? mergeBrowseTermScheduleRecords(portalBrowseRecords, browseRecords)
         : browseRecords.filter((r) => r.status !== "withdrawn");

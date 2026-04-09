@@ -69,7 +69,11 @@ export declare function findLatestPortalEnrollmentTermYear(studentExternalId: st
 } | null>;
 /**
  * All `portal_enrollments` for a student with catalog title/units and one deterministic section row
- * per course+term+year (lowest `course_sections.id`) for schedule display.
+ * per enrollment (lowest `course_sections.id` for matching `course_code` + `term` + `year`).
+ *
+ * Join mirrors `listStudentEnrolledSectionsForTerm`: `portal_courses.course_code` ↔
+ * `course_sections` on trimmed codes and calendar term/year so dashboard / account `scheduleRows`
+ * get weekday and times when marks are absent (e.g. current term before grades post).
  */
 export declare function listPortalEnrollmentRowsForStudentAcademics(studentExternalId: string): Promise<PortalEnrollmentAcademicRow[]>;
 /**
