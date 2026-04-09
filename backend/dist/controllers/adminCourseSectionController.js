@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import { getAcademicTermById } from "../repositories/academicTermRepository.js";
 import { listAdminEnrollmentRowsForSection } from "../repositories/studentEnrollmentRepository.js";
+import { buildRegisteredStudentsCsvForSection } from "../services/adminExportRegisteredStudentsCsvService.js";
 import { createCourseSectionWithAcademicTermId, deleteCourseSection, InvalidAcademicTermError, listAllCourseSectionsByAcademicTermId, listCourseSectionsByAcademicTermId, updateCourseSectionWithAcademicTermId, } from "../services/courseSectionService.js";
 function devMessage(e) {
     return e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
@@ -125,6 +126,37 @@ export async function getAdminCourseSectionEnrollments(req, res) {
         console.error("[admin/course-sections/enrollments] list failed:", e);
         const body = {
             error: "Failed to load section enrollments",
+        };
+        if (env.nodeEnv === "development")
+            body.message = devMessage(e);
+        res.status(500).json(body);
+    }
+}
+/**
+ * GET /api/admin/course-sections/:id/export-registered-students.csv
+ * UTF-8 CSV with BOM for Excel; roster is course+term+year (see adminExportRegisteredStudentsCsvService).
+ */
+export async function getAdminExportRegisteredStudentsCsv(req, res) {
+    try {
+        const id = pathSectionId(req);
+        if (id === null) {
+            res.status(400).json({ error: "Invalid section id." });
+            return;
+        }
+        const built = await buildRegisteredStudentsCsvForSection(id);
+        if (!built.ok) {
+            res.status(404).json({ error: "Course section not found." });
+            return;
+        }
+        const asciiName = built.filename.replace(/"/g, "");
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${asciiName}"`);
+        res.send(Buffer.from(`\uFEFF${built.csvBody}`, "utf8"));
+    }
+    catch (e) {
+        console.error("[admin/course-sections/export-registered-students] failed:", e);
+        const body = {
+            error: "Failed to export registered students CSV.",
         };
         if (env.nodeEnv === "development")
             body.message = devMessage(e);

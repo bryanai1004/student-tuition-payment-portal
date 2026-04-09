@@ -78,6 +78,20 @@ export type LegacyStudentProfileRow = RowDataPacket;
  * Load one legacy `students` row by primary key `id` (e.g. C17310).
  */
 export declare function loadLegacyStudentProfileRow(pool: Pool, studentId: string): Promise<LegacyStudentProfileRow | null>;
+/** Columns aligned with admin student profile (`getAdminStudentDetail` / `students` table). */
+export type LegacyStudentProfileExportRow = {
+    id: string;
+    name: string | null;
+    gender: string | null;
+    email: string | null;
+    program: string | null;
+    highestDegree: string | null;
+    backgroundSchool: string | null;
+};
+/**
+ * Batch-load legacy `students` rows for CSV export (same source as admin profile).
+ */
+export declare function mapLegacyStudentProfileExportRowsById(pool: Pool, studentIds: string[]): Promise<Map<string, LegacyStudentProfileExportRow>>;
 export declare function loadLegacyAccountingRows(pool: Pool, studentId: string, term: string, year: number): Promise<LegacyAccountingRow[]>;
 /**
  * Per-student net balance from legacy `accounting` for one quarter:

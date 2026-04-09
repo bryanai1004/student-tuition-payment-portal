@@ -1,3 +1,4 @@
+import { COURSE_FEEDBACK_CSV_QUESTION_RATING_HEADERS } from "../constants/courseFeedbackCsvColumns.js";
 import { pool } from "../lib/db.js";
 import { mapCourseFeedbackByStudentForCourseTermYear } from "../repositories/courseFeedbackRepository.js";
 import { getCourseSectionById } from "../repositories/courseSectionRepository.js";
@@ -12,9 +13,11 @@ import { mapLegacyStudentProfileExportRowsById } from "../repositories/studentLe
  * The requested `sectionId` is used to resolve course_code / term / year / section metadata for the
  * filename and to anchor the admin action to a concrete timetable row.
  *
- * Course feedback (`course_feedback`) is also keyed by course_code + term + year (not section), with
- * at most one row per student per course/term/year (`uniq_feedback`). We export `overall_rating` and
- * `comment` for that same key — matching the admin “Course feedback” modal.
+ * Course feedback (`course_feedback`) is keyed by **course_code + term + year only** (not section).
+ * There is no section_id on `course_feedback`; the same feedback row applies to every scheduled
+ * section of that course in the term. We match enrollments and feedback on that shared key.
+ * Columns mirror the stored form: `q1_rating`–`q5_rating`, separately stored `overall_rating`
+ * (student “Overall rating” in the modal — not computed in the API), and `comment`.
  *
  * Grades use the same subquery as `listAdminEnrollmentRowsForSection`: latest legacy `marks` row by
  * `seqNumber` for student id + course code + term + year; withdrawn enrollments show `W`.
@@ -60,6 +63,11 @@ function cell(v: string | null | undefined): string {
   return String(v);
 }
 
+function ratingCsvCell(n: number | null | undefined): string {
+  if (n == null) return "";
+  return String(n);
+}
+
 const CSV_HEADERS = [
   "Student ID",
   "Division",
@@ -69,7 +77,8 @@ const CSV_HEADERS = [
   "Program",
   "Highest Degree",
   "Background School",
-  "Feedback Rating",
+  ...COURSE_FEEDBACK_CSV_QUESTION_RATING_HEADERS,
+  "Overall Feedback Rating",
   "Feedback Comment",
   "Grade",
 ] as const;
@@ -137,12 +146,21 @@ export async function buildRegisteredStudentsCsvForSection(
         ? String(row.grade).trim()
         : "";
 
-    const ratingCell =
-      fb != null && Number.isFinite(fb.overall_rating)
-        ? String(fb.overall_rating)
-        : "";
+    const commentCell =
+      fb != null && fb.comment != null ? fb.comment : "";
 
-    const commentCell = fb?.comment != null ? fb.comment : "";
+    const qCells =
+      fb == null
+        ? (["", "", "", "", ""] as const)
+        : ([
+            ratingCsvCell(fb.q1_rating),
+            ratingCsvCell(fb.q2_rating),
+            ratingCsvCell(fb.q3_rating),
+            ratingCsvCell(fb.q4_rating),
+            ratingCsvCell(fb.q5_rating),
+          ] as const);
+
+    const overallCell = fb == null ? "" : ratingCsvCell(fb.overall_rating);
 
     const values: string[] = [
       sid,
@@ -153,7 +171,8 @@ export async function buildRegisteredStudentsCsvForSection(
       cell(legacy?.program),
       cell(legacy?.highestDegree),
       cell(legacy?.backgroundSchool),
-      ratingCell,
+      ...qCells,
+      overallCell,
       commentCell,
       gradeCell,
     ];

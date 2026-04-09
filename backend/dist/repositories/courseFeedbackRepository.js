@@ -77,4 +77,56 @@ export async function listCourseFeedbackSubmittedKeysForStudent(pool, studentExt
      ORDER BY year DESC, submitted_at DESC`, [studentExternalId.trim()]);
     return rows.map(mapKeyRow);
 }
+/** Integer 1–5 only; anything else becomes null (empty CSV cell). */
+export function parseStoredFeedbackRating1to5(raw) {
+    if (raw == null)
+        return null;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1 || n > 5)
+        return null;
+    return n;
+}
+/**
+ * Batch-load `course_feedback` for many students in one course + term + year.
+ * Map key: trimmed `student_id` (legacy login id, same as `portal_enrollments.student_external_id`).
+ */
+export async function mapCourseFeedbackByStudentForCourseTermYear(pool, args) {
+    const code = args.courseCode.trim();
+    const term = args.term.trim();
+    const year = Math.trunc(args.year);
+    const ids = [
+        ...new Set(args.studentIds.map((s) => String(s ?? "").trim()).filter((s) => s !== "")),
+    ];
+    const out = new Map();
+    if (ids.length === 0 || code === "" || term === "" || !Number.isFinite(year)) {
+        return out;
+    }
+    const ph = ids.map(() => "?").join(", ");
+    const [rows] = await pool.query(`SELECT student_id,
+            q1_rating, q2_rating, q3_rating, q4_rating, q5_rating,
+            overall_rating, comment
+     FROM course_feedback
+     WHERE course_code = ?
+       AND term = ?
+       AND year = ?
+       AND student_id IN (${ph})`, [code, term, year, ...ids]);
+    for (const r of rows) {
+        const sid = String(r.student_id ?? "").trim();
+        if (sid === "")
+            continue;
+        const commentRaw = r.comment;
+        const comment = commentRaw == null ? null : String(commentRaw).trim() || null;
+        out.set(sid, {
+            student_id: sid,
+            q1_rating: parseStoredFeedbackRating1to5(r.q1_rating),
+            q2_rating: parseStoredFeedbackRating1to5(r.q2_rating),
+            q3_rating: parseStoredFeedbackRating1to5(r.q3_rating),
+            q4_rating: parseStoredFeedbackRating1to5(r.q4_rating),
+            q5_rating: parseStoredFeedbackRating1to5(r.q5_rating),
+            overall_rating: parseStoredFeedbackRating1to5(r.overall_rating),
+            comment,
+        });
+    }
+    return out;
+}
 //# sourceMappingURL=courseFeedbackRepository.js.map

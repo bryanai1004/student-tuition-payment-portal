@@ -146,6 +146,55 @@ export async function loadLegacyStudentProfileRow(pool, studentId) {
     }
     return rows[0];
 }
+function strCell(v) {
+    if (v == null)
+        return null;
+    const s = String(v).trim();
+    return s === "" ? null : s;
+}
+/**
+ * Batch-load legacy `students` rows for CSV export (same source as admin profile).
+ */
+export async function mapLegacyStudentProfileExportRowsById(pool, studentIds) {
+    const ids = [
+        ...new Set(studentIds.map((s) => String(s ?? "").trim()).filter((s) => s !== "")),
+    ];
+    const out = new Map();
+    if (ids.length === 0)
+        return out;
+    const ph = ids.map(() => "?").join(", ");
+    const [rows] = await pool.query(`SELECT
+       TRIM(id) AS id,
+       name,
+       gender,
+       email,
+       requirements_id,
+       tertiary,
+       background
+     FROM students
+     WHERE TRIM(id) IN (${ph})`, ids);
+    for (const r of rows) {
+        const id = strCell(r.id);
+        if (id == null)
+            continue;
+        const name = strCell(r.name);
+        const gender = strCell(r.gender);
+        const email = strCell(r.email);
+        const req = strCell(r.requirements_id);
+        const tertiary = strCell(r.tertiary);
+        const bg = strCell(r.background);
+        out.set(id, {
+            id,
+            name,
+            gender,
+            email,
+            program: req,
+            highestDegree: tertiary,
+            backgroundSchool: bg,
+        });
+    }
+    return out;
+}
 export async function loadLegacyAccountingRows(pool, studentId, term, year) {
     const [rows] = await pool.query(`SELECT seqNumber, year, TRIM(term) AS term, date, type, code, debit, credit, memo
      FROM accounting

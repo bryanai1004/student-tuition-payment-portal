@@ -148,9 +148,22 @@ export async function listCourseFeedbackSubmittedKeysForStudent(
 /** One row per student for a course / calendar term / year (matches UNIQUE uniq_feedback). */
 export type CourseFeedbackExportSlice = {
   student_id: string;
-  overall_rating: number;
+  q1_rating: number | null;
+  q2_rating: number | null;
+  q3_rating: number | null;
+  q4_rating: number | null;
+  q5_rating: number | null;
+  overall_rating: number | null;
   comment: string | null;
 };
+
+/** Integer 1–5 only; anything else becomes null (empty CSV cell). */
+export function parseStoredFeedbackRating1to5(raw: unknown): number | null {
+  if (raw == null) return null;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 5) return null;
+  return n;
+}
 
 /**
  * Batch-load `course_feedback` for many students in one course + term + year.
@@ -179,7 +192,9 @@ export async function mapCourseFeedbackByStudentForCourseTermYear(
   }
   const ph = ids.map(() => "?").join(", ");
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT student_id, overall_rating, comment
+    `SELECT student_id,
+            q1_rating, q2_rating, q3_rating, q4_rating, q5_rating,
+            overall_rating, comment
      FROM course_feedback
      WHERE course_code = ?
        AND term = ?
@@ -190,13 +205,17 @@ export async function mapCourseFeedbackByStudentForCourseTermYear(
   for (const r of rows) {
     const sid = String(r.student_id ?? "").trim();
     if (sid === "") continue;
-    const overall = Number(r.overall_rating);
     const commentRaw = r.comment;
     const comment =
       commentRaw == null ? null : String(commentRaw).trim() || null;
     out.set(sid, {
       student_id: sid,
-      overall_rating: Number.isFinite(overall) ? overall : 0,
+      q1_rating: parseStoredFeedbackRating1to5(r.q1_rating),
+      q2_rating: parseStoredFeedbackRating1to5(r.q2_rating),
+      q3_rating: parseStoredFeedbackRating1to5(r.q3_rating),
+      q4_rating: parseStoredFeedbackRating1to5(r.q4_rating),
+      q5_rating: parseStoredFeedbackRating1to5(r.q5_rating),
+      overall_rating: parseStoredFeedbackRating1to5(r.overall_rating),
       comment,
     });
   }

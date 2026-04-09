@@ -38,4 +38,27 @@ export declare function findCourseFeedbackByStudentCourseTerm(pool: Pool, args: 
 }): Promise<CourseFeedbackDbRow | null>;
 /** For merging feedback flags into GET /academics. */
 export declare function listCourseFeedbackSubmittedKeysForStudent(pool: Pool, studentExternalId: string): Promise<CourseFeedbackSubmittedKeyRow[]>;
+/** One row per student for a course / calendar term / year (matches UNIQUE uniq_feedback). */
+export type CourseFeedbackExportSlice = {
+    student_id: string;
+    q1_rating: number | null;
+    q2_rating: number | null;
+    q3_rating: number | null;
+    q4_rating: number | null;
+    q5_rating: number | null;
+    overall_rating: number | null;
+    comment: string | null;
+};
+/** Integer 1–5 only; anything else becomes null (empty CSV cell). */
+export declare function parseStoredFeedbackRating1to5(raw: unknown): number | null;
+/**
+ * Batch-load `course_feedback` for many students in one course + term + year.
+ * Map key: trimmed `student_id` (legacy login id, same as `portal_enrollments.student_external_id`).
+ */
+export declare function mapCourseFeedbackByStudentForCourseTermYear(pool: Pool, args: {
+    courseCode: string;
+    term: string;
+    year: number;
+    studentIds: string[];
+}): Promise<Map<string, CourseFeedbackExportSlice>>;
 //# sourceMappingURL=courseFeedbackRepository.d.ts.map

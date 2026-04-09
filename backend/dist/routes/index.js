@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getAdminStudent, getAdminStudents, getNextAdminStudentId, postAdminStudent, postDeleteSelectedAdminStudents, putAdminStudent, } from "../controllers/adminStudentController.js";
-import { deleteAdminCourseSection, getAdminCourseSectionEnrollments, getAdminCourseSections, patchAdminCourseSection, postAdminCourseSection, } from "../controllers/adminCourseSectionController.js";
+import { deleteAdminCourseSection, getAdminCourseSectionEnrollments, getAdminCourseSections, getAdminExportRegisteredStudentsCsv, patchAdminCourseSection, postAdminCourseSection, } from "../controllers/adminCourseSectionController.js";
 import { deleteAdminPortalEnrollmentHandler } from "../controllers/adminEnrollmentController.js";
 import { setStudentGrade } from "../controllers/adminMarksController.js";
 import { deleteAdminFinanceChargeByIdHandler, deleteAdminFinancePaymentByIdHandler, getAdminFinanceLedgerHandler, getAdminFinanceQuartersHandler, getAdminFinanceStudents, getFinanceQuarterSettings, getGlobalFinanceQuarters, postAdminFinanceChargeHandler, postAdminFinancePaymentHandler, postRunLateFeeCheck, putAdminFinanceChargeByIdHandler, putAdminFinancePaymentByIdHandler, putFinanceQuarterSettings, } from "../controllers/adminFinanceController.js";
@@ -50,6 +50,7 @@ adminRouter.put("/students/:studentId", putAdminStudent);
 adminRouter.get("/students/:studentId/course-feedback", getAdminStudentCourseFeedback);
 adminRouter.get("/courses/open-for-registration", getAdminCoursesOpenForRegistration);
 adminRouter.get("/course-sections/enrollments", getAdminCourseSectionEnrollments);
+adminRouter.get("/course-sections/:id/export-registered-students.csv", getAdminExportRegisteredStudentsCsv);
 adminRouter.get("/course-sections", getAdminCourseSections);
 adminRouter.post("/course-sections", postAdminCourseSection);
 adminRouter.patch("/course-sections/:id", patchAdminCourseSection);

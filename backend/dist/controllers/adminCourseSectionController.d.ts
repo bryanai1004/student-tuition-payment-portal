@@ -5,6 +5,11 @@ export declare function getAdminCourseSections(req: Request, res: Response): Pro
  * Portal enrollment roster for admin (all statuses; grade W when withdrawn), same source as student Academics.
  */
 export declare function getAdminCourseSectionEnrollments(req: Request, res: Response): Promise<void>;
+/**
+ * GET /api/admin/course-sections/:id/export-registered-students.csv
+ * UTF-8 CSV with BOM for Excel; roster is course+term+year (see adminExportRegisteredStudentsCsvService).
+ */
+export declare function getAdminExportRegisteredStudentsCsv(req: Request, res: Response): Promise<void>;
 export declare function postAdminCourseSection(req: Request, res: Response): Promise<void>;
 export declare function patchAdminCourseSection(req: Request, res: Response): Promise<void>;
 export declare function deleteAdminCourseSection(req: Request, res: Response): Promise<void>;

@@ -9,6 +9,10 @@ import { courseRowDisplayTitle } from '../../lib/academicsTranscriptDisplay'
 
 export type EnrollmentHistoryRow = StudentAcademicsResponse['enrollmentHistory'][number]
 
+/**
+ * Ordered list for the evaluation form; DB columns `q1_rating`–`q5_rating` follow this order.
+ * Admin CSV headers for these ratings: `backend/src/constants/courseFeedbackCsvColumns.ts` — keep aligned if questions change.
+ */
 const COURSE_FEEDBACK_QUESTIONS = [
   'Course content was clear and well organized.',
   'The instructor explained concepts effectively.',
