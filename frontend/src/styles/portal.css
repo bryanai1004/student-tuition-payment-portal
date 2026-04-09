@@ -6914,12 +6914,25 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 }
 
 .admin-course-sections-toolbar__row--filters {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   justify-items: start;
+  column-gap: 0.75rem;
 }
 
 .admin-course-sections-toolbar__row--filters > .admin-course-sections-toolbar__course {
   justify-self: end;
+}
+
+.admin-course-sections-toolbar__row--filters > .admin-course-sections-toolbar__credits {
+  justify-self: end;
+}
+
+.admin-course-sections-toolbar__credits .admin-course-sections-toolbar__credits-input {
+  box-sizing: border-box;
+  min-width: 3.25rem;
+  width: 4.25rem;
+  max-width: 100%;
+  cursor: default;
 }
 
 .admin-course-sections-toolbar__search .admin-input.admin-input--search {
@@ -6956,7 +6969,8 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
     min-height: 0;
   }
 
-  .admin-course-sections-toolbar__row--filters > .admin-course-sections-toolbar__course {
+  .admin-course-sections-toolbar__row--filters > .admin-course-sections-toolbar__course,
+  .admin-course-sections-toolbar__row--filters > .admin-course-sections-toolbar__credits {
     justify-self: stretch;
   }
 

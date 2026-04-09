@@ -2910,6 +2910,8 @@ export type AdminCourseSection = {
   room: string | null
   instructor: string | null
   notes: string | null
+  /** Catalog units from `courses.units` (admin list query); null when unknown. */
+  units: number | null
   /** Distinct students in `portal_enrollments` for this course + term/year. */
   enrolled_count: number
   enrolled_students?: Array<{
@@ -2984,10 +2986,19 @@ function parseAdminCourseSectionRow(
     ctRaw == null || String(ctRaw).trim() === ''
       ? null
       : String(ctRaw).trim()
+  const unitsRaw = row.units
+  let units: number | null = null
+  if (typeof unitsRaw === 'number' && Number.isFinite(unitsRaw)) {
+    units = unitsRaw
+  } else if (typeof unitsRaw === 'string' && unitsRaw.trim() !== '') {
+    const n = Number(unitsRaw.trim())
+    if (Number.isFinite(n)) units = n
+  }
   return {
     id,
     course_code: course_code.trim(),
     course_title,
+    units,
     term: term.trim(),
     year: Math.trunc(year),
     section_code: section_code.trim(),

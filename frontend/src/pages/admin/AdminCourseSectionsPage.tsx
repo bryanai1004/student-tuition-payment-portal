@@ -39,6 +39,7 @@ import {
   getPreferredCourseTitle,
 } from '../../lib/courseDisplayName'
 import { scheduleTrackTableLabel } from '../../lib/scheduleTrack'
+import { formatCatalogCredits } from './courses/courseCatalogDisplay'
 
 function displayCell(value: string | null | undefined): string {
   if (value == null || String(value).trim() === '') return '—'
@@ -86,6 +87,7 @@ function AdminCourseSectionsTableHead() {
       <tr>
         <th scope="col">Section</th>
         <th scope="col">Course title</th>
+        <th scope="col">CREDITS</th>
         <th scope="col">Track</th>
         <th scope="col">Weekday</th>
         <th scope="col">Start</th>
@@ -144,7 +146,7 @@ function AdminCourseSectionGroupTable({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={13}
+                  colSpan={14}
                   className="admin-course-sections-table__empty-row"
                 >
                   {emptyMessage}
@@ -163,6 +165,9 @@ function AdminCourseSectionGroupTable({
                       },
                       row.schedule_track,
                     )}
+                  </td>
+                  <td className="admin-course-sections-table__numeric">
+                    {formatCatalogCredits(row.units)}
                   </td>
                   <td>{scheduleTrackTableLabel(row.schedule_track)}</td>
                   <td>{formatWeekdaysShortFromStored(row.weekday)}</td>
@@ -816,6 +821,19 @@ export function AdminCourseSectionsPage() {
               )}
             </select>
           </label>
+          <div className="admin-field admin-field--inline admin-course-sections-toolbar__field admin-course-sections-toolbar__credits">
+            <span className="admin-field__label admin-course-sections-toolbar__label">
+              Credits
+            </span>
+            <input
+              type="text"
+              className="admin-input admin-course-sections-toolbar__credits-input"
+              readOnly
+              aria-readonly="true"
+              value={formatCatalogCredits(selectedCourseCatalog?.units)}
+              title="Catalog credits for the selected course"
+            />
+          </div>
         </div>
       </div>
 
