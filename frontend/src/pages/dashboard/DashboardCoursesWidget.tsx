@@ -520,6 +520,28 @@ export function DashboardCoursesWidget() {
           scheduleMeta = meta
           rows = enrolledSectionsToScheduleRows(sections)
           loadFailed = meta.scheduleQueryFailed === true
+          if (loadFailed) {
+            console.debug(
+              '[dashboard My Calendar] enrolled-sections scheduleQueryFailed; trying legacy account schedule',
+              { portalTerm: resolvedWeekTerm.term, portalYear: resolvedWeekTerm.year, academicTermId: termId },
+            )
+            try {
+              rows = await fetchStudentRegisteredScheduleRowsForTerm(
+                sid,
+                resolvedWeekTerm.term,
+                resolvedWeekTerm.year,
+                { signal: ac.signal },
+              )
+              if (ac.signal.aborted) return
+              scheduleMeta = null
+              loadFailed = false
+            } catch {
+              if (ac.signal.aborted) return
+              loadFailed = true
+              rows = []
+              scheduleMeta = null
+            }
+          }
         } catch {
           if (ac.signal.aborted) return
           console.debug(
