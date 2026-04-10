@@ -1,4 +1,9 @@
 import type { Request, Response } from "express";
+/**
+ * GET /api/admin/course-sections/course-meta?course_code=
+ * Chinese-first title from `courses` + optional single-confidence instructor hint from timetables/marks.
+ */
+export declare function getAdminCourseSectionCourseMeta(req: Request, res: Response): Promise<void>;
 export declare function getAdminCourseSections(req: Request, res: Response): Promise<void>;
 /**
  * GET /api/admin/course-sections/enrollments?academic_term_id=&course_code=

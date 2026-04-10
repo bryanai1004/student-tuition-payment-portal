@@ -8,6 +8,24 @@ function nullableString(v) {
         return v.toISOString();
     return String(v);
 }
+function nullableUnits(v) {
+    if (v === undefined || v === null)
+        return null;
+    if (typeof v === "bigint") {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+    }
+    if (typeof v === "number")
+        return Number.isFinite(v) ? v : null;
+    if (typeof v === "string") {
+        const t = v.trim();
+        if (t === "")
+            return null;
+        const n = Number(t);
+        return Number.isFinite(n) ? n : null;
+    }
+    return null;
+}
 /** Shared by section rows and course-level open-registration rollups. */
 export function parseEnrolledStudentsJson(raw) {
     if (raw == null || raw === "")
@@ -67,6 +85,7 @@ export function mapCourseSectionRow(row) {
         instructor: nullableString(row.instructor),
         notes: nullableString(row.notes),
         course_title: nullableString(row.course_title),
+        units: nullableUnits(row.units),
         enrolled_count: Number(row.enrolled_count ?? 0),
         enrolled_students: parseEnrolledStudentsJson(row.enrolled_students_json),
     };
@@ -156,9 +175,13 @@ export async function listCourseSectionsWithEnrollmentAggregates(term, year, opt
       cs.room,
       cs.instructor,
       cs.notes,
+      crs.units AS units,
       COALESCE(agg.enrolled_count, 0) AS enrolled_count,
       agg.enrolled_students_json
     FROM course_sections cs
+    LEFT JOIN courses crs
+      ON CONVERT(TRIM(crs.code) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+         CONVERT(TRIM(cs.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci
     LEFT JOIN (
       SELECT
         pc.course_code AS agg_course_code,

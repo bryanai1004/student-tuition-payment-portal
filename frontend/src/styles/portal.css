@@ -7018,8 +7018,8 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 .admin-course-sections-page .admin-course-sections-table {
   table-layout: fixed;
   width: 100%;
-  /* With .portal-table-wrap { overflow-x: auto }, a floor width avoids over-compressing 14 columns */
-  min-width: 52rem;
+  /* With .portal-table-wrap { overflow-x: auto }, a higher floor keeps % columns from over-compressing */
+  min-width: 58rem;
 }
 
 .admin-course-sections-page .admin-course-sections-table th,
@@ -7027,7 +7027,12 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   text-align: center;
   vertical-align: middle;
   /* Slightly tighter than default .portal-table (0.8125rem 1rem) so 14 columns + Actions fit */
-  padding: 0.75rem 0.65rem;
+  padding: 0.75rem 0.68rem;
+}
+
+.admin-course-sections-page .admin-course-sections-table thead th {
+  line-height: 1.2;
+  hyphens: none;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:last-child,
@@ -7035,16 +7040,16 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   text-align: center;
 }
 
-/* 14 columns — percentages must sum to 100% under table-layout: fixed (Credits added as col 3). */
+/* 14 columns — proportional % under table-layout: fixed (sum 100%); EN/CN tables share this template. */
 .admin-course-sections-page .admin-course-sections-table th:nth-child(1),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(1) {
-  width: 6%;
+  width: 5.5%;
   white-space: nowrap;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(2),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(2) {
-  width: 13%;
+  width: 14%;
   word-break: break-word;
   overflow-wrap: break-word;
   hyphens: auto;
@@ -7052,18 +7057,18 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(3),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(3) {
-  width: 4%;
+  width: 3.5%;
   font-variant-numeric: tabular-nums;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(4),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(4) {
-  width: 4%;
+  width: 3.5%;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(5),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(5) {
-  width: 5.5%;
+  width: 6.5%;
   white-space: normal;
   line-height: 1.25;
 }
@@ -7077,18 +7082,28 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   font-variant-numeric: tabular-nums;
 }
 
+/* Delivery: compact column; header stays one line; body wraps only when needed */
 .admin-course-sections-page .admin-course-sections-table th:nth-child(8),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(8) {
   width: 5%;
+}
+
+.admin-course-sections-page .admin-course-sections-table th:nth-child(8) {
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.admin-course-sections-page .admin-course-sections-table td:nth-child(8) {
   white-space: normal;
   line-height: 1.25;
-  word-break: break-word;
+  word-break: normal;
   overflow-wrap: break-word;
+  min-width: 5.25rem;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(9),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(9) {
-  width: 5%;
+  width: 4.5%;
   white-space: normal;
   line-height: 1.25;
   word-break: break-word;
@@ -7097,31 +7112,39 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(10),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(10) {
-  width: 12%;
+  width: 13%;
   word-break: break-word;
   overflow-wrap: break-word;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(11),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(11) {
-  width: 4%;
+  width: 5.5%;
   font-variant-numeric: tabular-nums;
+}
+
+.admin-course-sections-page .admin-course-sections-table th:nth-child(11) {
+  white-space: nowrap;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(12),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(12) {
-  width: 5.5%;
+  width: 7%;
+}
+
+.admin-course-sections-page .admin-course-sections-table th:nth-child(12) {
+  white-space: nowrap;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(13),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(13) {
-  width: 13%;
+  width: 10%;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(14),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(14) {
-  width: 16%;
-  min-width: 9.75rem;
+  width: 15%;
+  min-width: 10.5rem;
 }
 
 .admin-course-sections-page .admin-course-sections-table td.admin-course-sections-table__notes {
@@ -7161,7 +7184,7 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   flex-direction: column;
   align-items: stretch;
   gap: 0.35rem;
-  min-width: 7.85rem;
+  min-width: 8.25rem;
   width: fit-content;
   max-width: 100%;
   margin-inline: auto;

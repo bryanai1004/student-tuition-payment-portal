@@ -19,6 +19,8 @@ export type CourseSectionDetail = {
     course_title: string | null;
     /** Distinct students enrolled in this course (same term/year) via `portal_enrollments`. */
     enrolled_count: number;
+    /** Catalog units from `courses.units` (joined by `course_code`); null when no catalog row. */
+    units: number | null;
     /** Present when at least one enrollment exists for the course in this term/year. */
     enrolled_students?: Array<{
         student_external_id: string;
