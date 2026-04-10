@@ -1,5 +1,6 @@
 import { forwardRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useLanguage } from '@/LanguageContext'
 import { useAccount } from '../context/AccountContext'
 import { PORTAL_BRANDING_TITLE } from '../branding'
 import { PORTAL_MOBILE_NAV_DRAWER_ID } from './PortalSidebar'
@@ -21,6 +22,7 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
   ref,
 ) {
   const navigate = useNavigate()
+  const { locale, toggleLanguage } = useLanguage()
   const { account, loading, isAuthenticated, logout } = useAccount()
   const displayName = !isAuthenticated
     ? 'Student'
@@ -67,16 +69,28 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
           </div>
           <div className="portal-branding-bar-end">
             <div className="portal-branding-bar-actions portal-user-actions">
-              <Link
-                to="/my-account"
-                className="portal-user-button"
-                title="My account"
-              >
-                <span className="portal-user-icon" aria-hidden>
-                  <IconUserCircle width={17} height={17} />
-                </span>
-                <span className="portal-user-button__label">{displayName}</span>
-              </Link>
+              <div className="portal-branding-bar-user-cluster">
+                <button
+                  type="button"
+                  className="portal-lang-toggle"
+                  onClick={toggleLanguage}
+                  aria-label={
+                    locale === 'en' ? 'Switch language to 中文' : 'Switch language to English'
+                  }
+                >
+                  <img src="/language.svg" alt="Language" width={18} height={18} decoding="async" />
+                </button>
+                <Link
+                  to="/my-account"
+                  className="portal-user-button"
+                  title="My account"
+                >
+                  <span className="portal-user-icon" aria-hidden>
+                    <IconUserCircle width={17} height={17} />
+                  </span>
+                  <span className="portal-user-button__label">{displayName}</span>
+                </Link>
+              </div>
               <button
                 type="button"
                 className="portal-logout-button"

@@ -240,6 +240,50 @@
   min-width: 0;
 }
 
+.portal-branding-bar-user-cluster {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.portal-lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 32px;
+  height: 32px;
+
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  margin-right: 8px;
+}
+
+.portal-lang-toggle img {
+  display: block;
+  width: 18px;
+  height: 18px;
+
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+.portal-lang-toggle:hover img {
+  opacity: 1;
+}
+
+.portal-lang-toggle:focus-visible {
+  outline: 2px solid var(--amu-red-dark);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
 /* Mobile AI dock when the myAMU strip is hidden (internal module pages). */
 .portal-branding-bar__ai-dock-anchor {
   flex-shrink: 0;

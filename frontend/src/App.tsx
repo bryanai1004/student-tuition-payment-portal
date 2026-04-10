@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { LanguageProvider } from '@/LanguageContext'
 import { AccountProvider, useAccount } from './context/AccountContext'
 import { useAdminAuth } from './context/AdminAuthContext'
 import { AdminLayout } from './components/admin/AdminLayout'
@@ -75,7 +76,9 @@ function RegistrationIndexRedirect() {
 function StudentAccountScope() {
   return (
     <AccountProvider>
-      <Outlet />
+      <LanguageProvider>
+        <Outlet />
+      </LanguageProvider>
     </AccountProvider>
   )
 }
