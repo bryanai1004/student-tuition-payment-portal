@@ -2,7 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -34,7 +34,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     typeof window !== 'undefined' ? readStoredLocale() : 'en',
   )
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.lang = locale === 'zh' ? 'zh-Hant' : 'en'
     try {
       localStorage.setItem(STORAGE_KEY, locale)
@@ -58,7 +58,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 export function useLanguage(): LanguageContextValue {
   const ctx = useContext(LanguageContext)
   if (!ctx) {
-    throw new Error('useLanguage must be used within LanguageProvider')
+    throw new Error(
+      'useLanguage() must be used within <LanguageProvider>. Mount LanguageProvider around the student portal route tree (see App.tsx → StudentAccountScope).',
+    )
   }
   return ctx
 }

@@ -1,6 +1,7 @@
 import { forwardRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLanguage } from '@/LanguageContext'
+import { portalStudentLabel } from '@/lib/portalLocaleStrings'
 import { useAccount } from '../context/AccountContext'
 import { PORTAL_BRANDING_TITLE } from '../branding'
 import { PORTAL_MOBILE_NAV_DRAWER_ID } from './PortalSidebar'
@@ -23,6 +24,8 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
 ) {
   const navigate = useNavigate()
   const { locale, toggleLanguage } = useLanguage()
+  const langToggleTitle =
+    locale === 'en' ? 'Switch language to 中文 (Traditional Chinese)' : 'Switch language to English'
   const { account, loading, isAuthenticated, logout } = useAccount()
   const displayName = !isAuthenticated
     ? 'Student'
@@ -74,11 +77,10 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
                   type="button"
                   className="portal-lang-toggle"
                   onClick={toggleLanguage}
-                  aria-label={
-                    locale === 'en' ? 'Switch language to 中文' : 'Switch language to English'
-                  }
+                  title={langToggleTitle}
+                  aria-label={langToggleTitle}
                 >
-                  <img src="/language.svg" alt="Language" width={18} height={18} decoding="async" />
+                  <span className="portal-lang-toggle__icon" aria-hidden="true" />
                 </button>
                 <Link
                   to="/my-account"
@@ -99,7 +101,7 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
                 <span className="portal-user-icon" aria-hidden>
                   <IconLogout width={17} height={17} />
                 </span>
-                <span>Logout</span>
+                <span>{portalStudentLabel(locale, 'logout')}</span>
               </button>
             </div>
             {assistantMobile && !showPortalBanner ? (

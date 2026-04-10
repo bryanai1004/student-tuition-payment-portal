@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import type { ComponentType, SVGProps } from 'react'
+import { useLanguage } from '@/LanguageContext'
+import { portalStudentLabel } from '@/lib/portalLocaleStrings'
 import {
   IconAcademics,
   IconClinical,
@@ -37,6 +39,7 @@ type SidebarNavListProps = {
 }
 
 export function SidebarNavList({ onItemClick, variant = 'internal' }: SidebarNavListProps) {
+  const { locale } = useLanguage()
   const handleClick = () => {
     onItemClick?.()
   }
@@ -52,6 +55,8 @@ export function SidebarNavList({ onItemClick, variant = 'internal' }: SidebarNav
     <ul className={listClass}>
       {MAIN_NAV_ITEMS.map((item) => {
         const Icon = item.icon
+        const label =
+          item.to === '/registration' ? portalStudentLabel(locale, 'registrationModule') : item.label
         return (
           <li key={item.to}>
             <NavLink
@@ -64,7 +69,7 @@ export function SidebarNavList({ onItemClick, variant = 'internal' }: SidebarNav
                   <Icon width={20} height={20} />
                 </span>
               ) : null}
-              {item.label}
+              {label}
             </NavLink>
           </li>
         )

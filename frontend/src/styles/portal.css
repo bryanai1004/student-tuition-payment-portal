@@ -244,6 +244,11 @@
   display: inline-flex;
   align-items: center;
   flex-wrap: nowrap;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.portal-branding-bar-user-cluster .portal-user-button {
   min-width: 0;
 }
 
@@ -251,6 +256,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 2;
 
   width: 32px;
   height: 32px;
@@ -259,22 +266,33 @@
   padding: 0;
   border: none;
   background: transparent;
+  color: #1a1a1a;
   cursor: pointer;
   flex-shrink: 0;
 
-  margin-right: 8px;
+  margin-right: 0.5rem;
 }
 
-.portal-lang-toggle img {
+/* Icon from public root — visible even if <img> loading fails; matches account / logout weight */
+.portal-lang-toggle__icon {
   display: block;
   width: 18px;
   height: 18px;
-
-  opacity: 0.85;
-  transition: opacity 0.2s ease;
+  flex-shrink: 0;
+  background-color: transparent;
+  background-image: url('/language.svg');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  opacity: 0.88;
+  transition: opacity 0.15s ease, filter 0.15s ease;
 }
 
-.portal-lang-toggle:hover img {
+.portal-lang-toggle:hover .portal-lang-toggle__icon {
+  opacity: 1;
+}
+
+.portal-lang-toggle:focus-visible .portal-lang-toggle__icon {
   opacity: 1;
 }
 

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Outlet, useSearchParams } from 'react-router-dom'
+import { useLanguage } from '@/LanguageContext'
+import { portalStudentLabel } from '@/lib/portalLocaleStrings'
 import { BackToDashboardLink } from '../../components/BackToDashboardLink'
 import {
   fetchCurrentAcademicTerm,
@@ -40,6 +42,7 @@ function academicTermStubForDeepLink(termId: string): AcademicTerm {
 }
 
 export function RegistrationLayout() {
+  const { locale } = useLanguage()
   const [searchParams, setSearchParams] = useSearchParams()
   const [recentTerms, setRecentTerms] = useState<AcademicTerm[]>([])
   const [currentTerm, setCurrentTerm] = useState<AcademicTerm | null>(null)
@@ -151,7 +154,9 @@ export function RegistrationLayout() {
       <div className="portal-registration-module">
         <header className="portal-module-header">
           <BackToDashboardLink />
-          <h1 className="portal-page-title">Registration</h1>
+          <h1 className="portal-page-title">
+            {portalStudentLabel(locale, 'registrationModule')}
+          </h1>
         </header>
 
         <div
