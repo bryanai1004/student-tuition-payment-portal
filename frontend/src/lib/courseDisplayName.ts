@@ -19,12 +19,15 @@ export function normalizeScheduleTrack(
 
 /**
  * Preferred visible course title for a section’s timetable track.
- * CN: chi_name → eng_name → course_code
- * EN: eng_name → chi_name → course_code
+ * CN: chi_name → eng_name → legacyTitle (if provided) → course_code
+ * EN: eng_name → chi_name → legacyTitle (if provided) → course_code
+ *
+ * When `legacyTitle` is omitted, behavior matches the legacy two-step fallback (names → code).
  */
 export function getPreferredCourseTitle(
   course: CourseTitleFields,
   scheduleTrack: 'EN' | 'CN' | undefined | null,
+  legacyTitle?: string | null,
 ): string {
   const code = trimStr(course.code)
   const eng = trimStr(course.eng_name)
@@ -33,10 +36,14 @@ export function getPreferredCourseTitle(
   if (track === 'CN') {
     if (chi !== '') return chi
     if (eng !== '') return eng
-    return code !== '' ? code : '—'
+  } else {
+    if (eng !== '') return eng
+    if (chi !== '') return chi
   }
-  if (eng !== '') return eng
-  if (chi !== '') return chi
+  if (legacyTitle !== undefined) {
+    const leg = trimStr(legacyTitle)
+    if (leg !== '') return leg
+  }
   return code !== '' ? code : '—'
 }
 

@@ -36,8 +36,9 @@ import {
   type WeekdayFull,
 } from '../../lib/weekdaySchedule'
 import {
-  chineseFirstCourseTitle,
   formatCourseCatalogSelectLabel,
+  getPreferredCourseTitle,
+  type CourseTitleFields,
 } from '../../lib/courseDisplayName'
 import { scheduleTrackTableLabel } from '../../lib/scheduleTrack'
 import { formatCatalogCredits } from './courses/courseCatalogDisplay'
@@ -110,8 +111,8 @@ type AdminCourseSectionGroupTableProps = {
   title: string
   rows: AdminCourseSection[]
   emptyMessage: string
-  /** Chinese-first resolved title for the selected course (same for every row). */
-  courseDisplayTitle: string
+  /** Per-row title from catalog (eng/chi) and section track + optional legacy `course_title`. */
+  resolveRowTitle: (row: AdminCourseSection) => string
   busy: boolean
   csvExportSectionId: number | null
   onViewStudents: (row: AdminCourseSection) => void
@@ -125,7 +126,7 @@ function AdminCourseSectionGroupTable({
   title,
   rows,
   emptyMessage,
-  courseDisplayTitle,
+  resolveRowTitle,
   busy,
   csvExportSectionId,
   onViewStudents,
@@ -158,7 +159,7 @@ function AdminCourseSectionGroupTable({
               rows.map((row) => (
                 <tr key={row.id}>
                   <td>{row.section_code}</td>
-                  <td>{courseDisplayTitle}</td>
+                  <td>{resolveRowTitle(row)}</td>
                   <td className="admin-course-sections-table__numeric">
                     {formatCatalogCredits(row.units)}
                   </td>
@@ -269,16 +270,24 @@ export function AdminCourseSectionsPage() {
     editingIdRef.current = editingId
   }, [editingId])
 
-  /** Server-resolved Chinese-first title; `courseCode` guards against stale responses after quick course switches. */
+  /**
+   * Optional legacy title from GET course-meta (same course as `courseCode` only);
+   * used only when catalog `eng_name` / `chi_name` are both empty.
+   */
   const [resolvedCourseMeta, setResolvedCourseMeta] = useState<{
     courseCode: string
-    title: string
+    legacyTitle: string | null
   } | null>(null)
+
+  /** Create/edit: auto-filled course title; `locked` stops track-driven overwrites after manual edits. */
+  const [courseTitleDraft, setCourseTitleDraft] = useState('')
+  const [courseTitleLocked, setCourseTitleLocked] = useState(false)
 
   const resetForm = useCallback(() => {
     setForm(emptyForm())
     setEditingId(null)
     setFormMessage(null)
+    setCourseTitleLocked(false)
   }, [])
 
   useEffect(() => {
@@ -422,23 +431,49 @@ export function AdminCourseSectionsPage() {
     [sortedCourses, courseCode],
   )
 
-  const courseDisplayTitleForTables = useMemo(() => {
+  const catalogTitleFields: CourseTitleFields = useMemo(() => {
     const code = courseCode.trim()
-    if (
-      resolvedCourseMeta != null &&
-      resolvedCourseMeta.courseCode === code &&
-      resolvedCourseMeta.title.trim() !== ''
-    ) {
-      return resolvedCourseMeta.title
-    }
-    return chineseFirstCourseTitle(
+    return (
       selectedCourseCatalog ?? {
-        code: courseCode,
+        code,
         eng_name: null,
         chi_name: null,
-      },
+      }
     )
-  }, [resolvedCourseMeta, courseCode, selectedCourseCatalog])
+  }, [selectedCourseCatalog, courseCode])
+
+  const metaLegacyTitleForCourse = useMemo((): string | null => {
+    const code = courseCode.trim()
+    if (code === '') return null
+    if (resolvedCourseMeta?.courseCode !== code) return null
+    const t = resolvedCourseMeta.legacyTitle?.trim() ?? ''
+    return t !== '' ? t : null
+  }, [resolvedCourseMeta, courseCode])
+
+  const autoFormCourseTitle = useMemo(
+    () =>
+      getPreferredCourseTitle(
+        catalogTitleFields,
+        form.schedule_track,
+        metaLegacyTitleForCourse,
+      ),
+    [catalogTitleFields, form.schedule_track, metaLegacyTitleForCourse],
+  )
+
+  useEffect(() => {
+    if (courseTitleLocked) return
+    setCourseTitleDraft(autoFormCourseTitle)
+  }, [autoFormCourseTitle, courseTitleLocked])
+
+  const resolveSectionRowTitle = useCallback(
+    (row: AdminCourseSection) =>
+      getPreferredCourseTitle(
+        catalogTitleFields,
+        row.schedule_track,
+        row.course_title ?? metaLegacyTitleForCourse,
+      ),
+    [catalogTitleFields, metaLegacyTitleForCourse],
+  )
 
   useEffect(() => {
     const code = courseCode.trim()
@@ -453,7 +488,10 @@ export function AdminCourseSectionsPage() {
           signal: ac.signal,
         })
         if (ac.signal.aborted) return
-        setResolvedCourseMeta({ courseCode: code, title: meta.title })
+        setResolvedCourseMeta({
+          courseCode: code,
+          legacyTitle: meta.title.trim() !== '' ? meta.title.trim() : null,
+        })
         if (editingIdRef.current !== null) return
         if (meta.suggestedInstructor == null || meta.suggestedInstructor === '')
           return
@@ -481,6 +519,7 @@ export function AdminCourseSectionsPage() {
 
   const beginEdit = useCallback((row: AdminCourseSection) => {
     setEditingId(row.id)
+    setCourseTitleLocked(false)
     const parsed = parseStoredWeekdaysToFullNames(row.weekday)
     setForm({
       section_code: row.section_code,
@@ -633,6 +672,7 @@ export function AdminCourseSectionsPage() {
         notes: form.notes.trim() || null,
       })
       setForm(emptyForm())
+      setCourseTitleLocked(false)
       setSectionsError(null)
       setListVersion((v) => v + 1)
     } catch (e) {
@@ -927,7 +967,7 @@ export function AdminCourseSectionsPage() {
             title="English Timetable Sections"
             rows={enSectionRows}
             emptyMessage="None for this course in this term."
-            courseDisplayTitle={courseDisplayTitleForTables}
+            resolveRowTitle={resolveSectionRowTitle}
             busy={busy}
             csvExportSectionId={csvExportSectionId}
             onViewStudents={openRosterForSection}
@@ -940,7 +980,7 @@ export function AdminCourseSectionsPage() {
             title="Chinese Timetable Sections"
             rows={cnSectionRows}
             emptyMessage="None for this course in this term."
-            courseDisplayTitle={courseDisplayTitleForTables}
+            resolveRowTitle={resolveSectionRowTitle}
             busy={busy}
             csvExportSectionId={csvExportSectionId}
             onViewStudents={openRosterForSection}
@@ -976,10 +1016,14 @@ export function AdminCourseSectionsPage() {
             <input
               type="text"
               className="admin-input"
-              readOnly
-              aria-readonly="true"
-              value={courseDisplayTitleForTables}
-              title="Resolved from catalog (Chinese first); updates when the course selection changes."
+              value={courseTitleDraft}
+              onChange={(e) => {
+                setCourseTitleLocked(true)
+                setCourseTitleDraft(e.target.value)
+              }}
+              disabled={busy}
+              title="Defaults from catalog English/Chinese names for the selected timetable track; edit to override without changing the catalog."
+              autoComplete="off"
             />
           </label>
           <label className="admin-field">
