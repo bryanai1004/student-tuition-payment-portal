@@ -3,6 +3,7 @@ import {
   selectDistinctMarksInstructorsForCourse,
   selectDistinctTimetableInstructorPairsForCourse,
   selectInstructorNamesMapForInstructorIds,
+  type InstructorNamesRow,
 } from "../repositories/adminCourseMetaRepository.js";
 
 export type InstructorSuggestion = {
@@ -68,6 +69,63 @@ function pickStableDisplay(candidates: string[]): string | null {
   return unique[0]!;
 }
 
+type TimetableInstructorPair = {
+  instructor_id: string;
+  instructor: string;
+};
+
+/**
+ * Lexicographic tie-break for choosing one timetable instructor when several IDs exist:
+ * name_eng → name_chi → raw `instructor` values for that id → instructor_id.
+ */
+function timetableInstructorSortKey(
+  pairs: TimetableInstructorPair[],
+  nameMap: Map<string, InstructorNamesRow>,
+  instructorId: string,
+): string {
+  const row = nameMap.get(instructorId);
+  const eng = row != null ? trimOrNull(row.name_eng) : null;
+  const chi = row != null ? trimOrNull(row.name_chi) : null;
+  if (eng != null) return eng;
+  if (chi != null) return chi;
+  const rawFromTable = pickStableDisplay(
+    pairs
+      .filter((p) => p.instructor_id.trim() === instructorId)
+      .map((p) => p.instructor.trim())
+      .filter((s) => s !== ""),
+  );
+  if (rawFromTable != null) return rawFromTable;
+  return instructorId;
+}
+
+function timetableSuggestionForInstructorId(
+  pairs: TimetableInstructorPair[],
+  nameMap: Map<string, InstructorNamesRow>,
+  onlyId: string,
+): InstructorSuggestion {
+  const row = nameMap.get(onlyId);
+  const nameEng = row != null ? trimOrNull(row.name_eng) : null;
+  const nameChi = row != null ? trimOrNull(row.name_chi) : null;
+  let rawText: string | null = null;
+  if (nameEng == null && nameChi == null) {
+    const rawFromTable = pickStableDisplay(
+      pairs
+        .filter((p) => p.instructor_id.trim() === onlyId)
+        .map((p) => p.instructor.trim())
+        .filter((s) => s !== ""),
+    );
+    const fallback = trimOrNull(onlyId);
+    rawText = rawFromTable ?? fallback;
+  }
+  return {
+    source: "timetable",
+    instructorId: onlyId,
+    nameEng,
+    nameChi,
+    rawText,
+  };
+}
+
 /**
  * Resolve instructor hint from timetable / timetable2 / daim_timetable / daim_timetable2:
  * mapped name_eng → name_chi → raw `instructor` column → instructor_id string.
@@ -105,33 +163,28 @@ async function instructorSuggestionFromTimetable(
     }
   }
 
+  if (nonEmptyIds.length === 1) {
+    return timetableSuggestionForInstructorId(pairs, nameMap, nonEmptyIds[0]!);
+  }
+
+  if (nonEmptyIds.length > 1) {
+    const candidates = nonEmptyIds.map((id) =>
+      timetableSuggestionForInstructorId(pairs, nameMap, id),
+    );
+    candidates.sort((a, b) => {
+      const idA = a.instructorId ?? "";
+      const idB = b.instructorId ?? "";
+      const keyA = timetableInstructorSortKey(pairs, nameMap, idA);
+      const keyB = timetableInstructorSortKey(pairs, nameMap, idB);
+      const c = keyA.localeCompare(keyB);
+      if (c !== 0) return c;
+      return idA.localeCompare(idB);
+    });
+    return candidates[0]!;
+  }
+
   const chosen = pickStableDisplay(rowDisplays);
   if (chosen == null) return null;
-
-  if (nonEmptyIds.length === 1) {
-    const onlyId = nonEmptyIds[0]!;
-    const row = nameMap.get(onlyId);
-    const nameEng = row != null ? trimOrNull(row.name_eng) : null;
-    const nameChi = row != null ? trimOrNull(row.name_chi) : null;
-    let rawText: string | null = null;
-    if (nameEng == null && nameChi == null) {
-      const rawFromTable = pickStableDisplay(
-        pairs
-          .filter((p) => p.instructor_id.trim() === onlyId)
-          .map((p) => p.instructor.trim())
-          .filter((s) => s !== ""),
-      );
-      const fallback = trimOrNull(onlyId);
-      rawText = rawFromTable ?? fallback;
-    }
-    return {
-      source: "timetable",
-      instructorId: onlyId,
-      nameEng,
-      nameChi,
-      rawText,
-    };
-  }
 
   return {
     source: "timetable",

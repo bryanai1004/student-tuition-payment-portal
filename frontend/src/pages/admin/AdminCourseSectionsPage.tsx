@@ -270,7 +270,7 @@ export function AdminCourseSectionsPage() {
   /**
    * Course-meta for the selected `courseCode` only (stale rows cleared when code changes).
    * Legacy title is used when catalog `eng_name` / `chi_name` are both empty.
-   * `instructorSuggestion` drives create-mode instructor auto-fill (stable eng → chi → raw).
+   * `instructorSuggestion` drives create-mode instructor auto-fill (track-aware via getPreferredInstructorDisplay).
    */
   const [resolvedCourseMeta, setResolvedCourseMeta] = useState<{
     courseCode: string

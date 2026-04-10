@@ -4,6 +4,9 @@ export type InstructorSuggestionFields = {
   rawText?: string | null
 }
 
+/**
+ * Timetable-track-aware label: CN uses chi → eng → raw; EN uses eng → chi → raw.
+ */
 export function getPreferredInstructorDisplay(
   suggestion: InstructorSuggestionFields | null | undefined,
   track: 'EN' | 'CN',
