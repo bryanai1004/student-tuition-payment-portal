@@ -57,6 +57,21 @@ export function getSecondaryCourseTitle(
   return ''
 }
 
+/**
+ * Deterministic catalog title: Chinese first, then English, then course code.
+ * Use when the UI must match legacy `courses` admin resolution (not timetable track).
+ */
+export function chineseFirstCourseTitle(
+  course: CourseTitleFields,
+): string {
+  const code = trimStr(course.code)
+  const eng = trimStr(course.eng_name)
+  const chi = trimStr(course.chi_name)
+  if (chi !== '') return chi
+  if (eng !== '') return eng
+  return code !== '' ? code : '—'
+}
+
 /** Course picker: `CODE — English / 中文`. */
 export function formatCourseCatalogSelectLabel(course: CourseTitleFields): string {
   const code = trimStr(course.code)

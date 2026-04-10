@@ -13,6 +13,7 @@ import {
   type CourseSectionCreateWithTermIdInput,
   type CourseSectionUpdateInput,
 } from "../services/courseSectionService.js";
+import { resolveCourseMeta } from "../services/resolveCourseMetaService.js";
 
 function devMessage(e: unknown): string {
   return e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
@@ -72,6 +73,40 @@ function parseQueryString(req: Request, key: string): string | null {
   if (typeof v !== "string") return null;
   const t = v.trim();
   return t === "" ? null : t;
+}
+
+/**
+ * GET /api/admin/course-sections/course-meta?course_code=
+ * Chinese-first title from `courses` + optional single-confidence instructor hint from timetables/marks.
+ */
+export async function getAdminCourseSectionCourseMeta(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    const courseCode = parseQueryString(req, "course_code");
+    if (!courseCode) {
+      res.status(400).json({
+        error: "course_code query parameter is required.",
+      });
+      return;
+    }
+    const meta = await resolveCourseMeta(courseCode);
+    if (meta === null) {
+      res.status(400).json({
+        error: "course_code must be a non-empty string.",
+      });
+      return;
+    }
+    res.json(meta);
+  } catch (e) {
+    console.error("[admin/course-sections/course-meta] failed:", e);
+    const body: { error: string; message?: string } = {
+      error: "Failed to resolve course metadata.",
+    };
+    if (env.nodeEnv === "development") body.message = devMessage(e);
+    res.status(500).json(body);
+  }
 }
 
 export async function getAdminCourseSections(

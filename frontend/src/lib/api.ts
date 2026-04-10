@@ -3202,6 +3202,46 @@ export async function postStudentWithdraw(
   }
 }
 
+/** GET /api/admin/course-sections/course-meta — Chinese-first title + optional instructor suggestion. */
+export type AdminCourseSectionCourseMeta = {
+  title: string
+  suggestedInstructor: string | null
+}
+
+function parseAdminCourseSectionCourseMeta(
+  data: unknown,
+): AdminCourseSectionCourseMeta {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected course-meta response')
+  }
+  const o = data as Record<string, unknown>
+  const title = o.title
+  const suggested = o.suggestedInstructor ?? o.suggested_instructor
+  if (typeof title !== 'string') {
+    throw new Error('Unexpected course-meta response')
+  }
+  const suggestedInstructor =
+    suggested == null
+      ? null
+      : typeof suggested === 'string' && suggested.trim() !== ''
+        ? suggested.trim()
+        : null
+  return { title: title.trim() || '', suggestedInstructor }
+}
+
+export async function fetchAdminCourseSectionCourseMeta(
+  courseCode: string,
+  options?: { signal?: AbortSignal },
+): Promise<AdminCourseSectionCourseMeta> {
+  const qs = new URLSearchParams()
+  qs.set('course_code', courseCode.trim())
+  const data = (await fetchApiJson(
+    `/api/admin/course-sections/course-meta?${qs.toString()}`,
+    { signal: options?.signal },
+  )) as unknown
+  return parseAdminCourseSectionCourseMeta(data)
+}
+
 export async function fetchAdminCourseSections(params: {
   academicTermId: string
   /** When omitted, returns all sections for the term (e.g. timetable). */

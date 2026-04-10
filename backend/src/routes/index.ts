@@ -9,6 +9,7 @@ import {
 } from "../controllers/adminStudentController.js";
 import {
   deleteAdminCourseSection,
+  getAdminCourseSectionCourseMeta,
   getAdminCourseSectionEnrollments,
   getAdminCourseSections,
   getAdminExportRegisteredStudentsCsv,
@@ -152,6 +153,10 @@ adminRouter.get(
 adminRouter.get(
   "/course-sections/enrollments",
   getAdminCourseSectionEnrollments,
+);
+adminRouter.get(
+  "/course-sections/course-meta",
+  getAdminCourseSectionCourseMeta,
 );
 adminRouter.get(
   "/course-sections/:id/export-registered-students.csv",

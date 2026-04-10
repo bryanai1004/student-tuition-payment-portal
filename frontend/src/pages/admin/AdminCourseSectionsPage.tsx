@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   adminSchedulingQueryString,
@@ -10,6 +10,7 @@ import {
   deleteAdminCourseSection,
   downloadAdminRegisteredStudentsCsv,
   fetchAcademicTerms,
+  fetchAdminCourseSectionCourseMeta,
   fetchAdminCourseSections,
   fetchCourses,
   updateAdminCourseSection,
@@ -35,8 +36,8 @@ import {
   type WeekdayFull,
 } from '../../lib/weekdaySchedule'
 import {
+  chineseFirstCourseTitle,
   formatCourseCatalogSelectLabel,
-  getPreferredCourseTitle,
 } from '../../lib/courseDisplayName'
 import { scheduleTrackTableLabel } from '../../lib/scheduleTrack'
 import { formatCatalogCredits } from './courses/courseCatalogDisplay'
@@ -109,7 +110,8 @@ type AdminCourseSectionGroupTableProps = {
   title: string
   rows: AdminCourseSection[]
   emptyMessage: string
-  catalog: CourseCatalogItem | null
+  /** Chinese-first resolved title for the selected course (same for every row). */
+  courseDisplayTitle: string
   busy: boolean
   csvExportSectionId: number | null
   onViewStudents: (row: AdminCourseSection) => void
@@ -123,7 +125,7 @@ function AdminCourseSectionGroupTable({
   title,
   rows,
   emptyMessage,
-  catalog,
+  courseDisplayTitle,
   busy,
   csvExportSectionId,
   onViewStudents,
@@ -156,16 +158,7 @@ function AdminCourseSectionGroupTable({
               rows.map((row) => (
                 <tr key={row.id}>
                   <td>{row.section_code}</td>
-                  <td>
-                    {getPreferredCourseTitle(
-                      catalog ?? {
-                        code: row.course_code,
-                        eng_name: null,
-                        chi_name: null,
-                      },
-                      row.schedule_track,
-                    )}
-                  </td>
+                  <td>{courseDisplayTitle}</td>
                   <td className="admin-course-sections-table__numeric">
                     {formatCatalogCredits(row.units)}
                   </td>
@@ -271,6 +264,17 @@ export function AdminCourseSectionsPage() {
   const [formMessage, setFormMessage] = useState<string | null>(null)
   /** Bumped after create/update/delete so the sections query re-runs without changing term/course. */
   const [listVersion, setListVersion] = useState(0)
+  const editingIdRef = useRef(editingId)
+  useEffect(() => {
+    editingIdRef.current = editingId
+  }, [editingId])
+
+  /** Server-resolved Chinese-first title; `courseCode` guards against stale responses after quick course switches. */
+  const [resolvedCourseMeta, setResolvedCourseMeta] = useState<{
+    courseCode: string
+    title: string
+  } | null>(null)
+
   const resetForm = useCallback(() => {
     setForm(emptyForm())
     setEditingId(null)
@@ -417,6 +421,53 @@ export function AdminCourseSectionsPage() {
     () => sortedCourses.find((c) => c.code === courseCode) ?? null,
     [sortedCourses, courseCode],
   )
+
+  const courseDisplayTitleForTables = useMemo(() => {
+    const code = courseCode.trim()
+    if (
+      resolvedCourseMeta != null &&
+      resolvedCourseMeta.courseCode === code &&
+      resolvedCourseMeta.title.trim() !== ''
+    ) {
+      return resolvedCourseMeta.title
+    }
+    return chineseFirstCourseTitle(
+      selectedCourseCatalog ?? {
+        code: courseCode,
+        eng_name: null,
+        chi_name: null,
+      },
+    )
+  }, [resolvedCourseMeta, courseCode, selectedCourseCatalog])
+
+  useEffect(() => {
+    const code = courseCode.trim()
+    if (code === '') {
+      setResolvedCourseMeta(null)
+      return
+    }
+    const ac = new AbortController()
+    void (async () => {
+      try {
+        const meta = await fetchAdminCourseSectionCourseMeta(code, {
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        setResolvedCourseMeta({ courseCode: code, title: meta.title })
+        if (editingIdRef.current !== null) return
+        if (meta.suggestedInstructor == null || meta.suggestedInstructor === '')
+          return
+        setForm((f) =>
+          f.instructor.trim() !== ''
+            ? f
+            : { ...f, instructor: meta.suggestedInstructor! },
+        )
+      } catch {
+        if (!ac.signal.aborted) setResolvedCourseMeta(null)
+      }
+    })()
+    return () => ac.abort()
+  }, [courseCode, editingId])
 
   const courseSelectOptions = useMemo(() => {
     const selected = sortedCourses.find((c) => c.code === courseCode)
@@ -876,7 +927,7 @@ export function AdminCourseSectionsPage() {
             title="English Timetable Sections"
             rows={enSectionRows}
             emptyMessage="None for this course in this term."
-            catalog={selectedCourseCatalog}
+            courseDisplayTitle={courseDisplayTitleForTables}
             busy={busy}
             csvExportSectionId={csvExportSectionId}
             onViewStudents={openRosterForSection}
@@ -889,7 +940,7 @@ export function AdminCourseSectionsPage() {
             title="Chinese Timetable Sections"
             rows={cnSectionRows}
             emptyMessage="None for this course in this term."
-            catalog={selectedCourseCatalog}
+            courseDisplayTitle={courseDisplayTitleForTables}
             busy={busy}
             csvExportSectionId={csvExportSectionId}
             onViewStudents={openRosterForSection}
@@ -920,6 +971,17 @@ export function AdminCourseSectionsPage() {
           </p>
         )}
         <div className="admin-form-grid">
+          <label className="admin-field admin-field--span-2">
+            <span className="admin-field__label">Course title</span>
+            <input
+              type="text"
+              className="admin-input"
+              readOnly
+              aria-readonly="true"
+              value={courseDisplayTitleForTables}
+              title="Resolved from catalog (Chinese first); updates when the course selection changes."
+            />
+          </label>
           <label className="admin-field">
             <span className="admin-field__label">Section code</span>
             <input
