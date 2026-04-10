@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   adminSchedulingQueryString,
@@ -267,11 +267,6 @@ export function AdminCourseSectionsPage() {
   const [formMessage, setFormMessage] = useState<string | null>(null)
   /** Bumped after create/update/delete so the sections query re-runs without changing term/course. */
   const [listVersion, setListVersion] = useState(0)
-  const editingIdRef = useRef(editingId)
-  useEffect(() => {
-    editingIdRef.current = editingId
-  }, [editingId])
-
   /**
    * Course-meta for the selected `courseCode` only (stale rows cleared when code changes).
    * Legacy title is used when catalog `eng_name` / `chi_name` are both empty.
@@ -490,6 +485,7 @@ export function AdminCourseSectionsPage() {
       return
     }
     const ac = new AbortController()
+    setResolvedCourseMeta((prev) => (prev?.courseCode === code ? prev : null))
     void (async () => {
       try {
         const meta = await fetchAdminCourseSectionCourseMeta(code, {
@@ -499,21 +495,32 @@ export function AdminCourseSectionsPage() {
         setResolvedCourseMeta({
           courseCode: code,
           legacyTitle: meta.title.trim() !== '' ? meta.title.trim() : null,
+          instructorSuggestion: meta.instructorSuggestion,
         })
-        if (editingIdRef.current !== null) return
-        if (meta.suggestedInstructor == null || meta.suggestedInstructor === '')
-          return
-        setForm((f) =>
-          f.instructor.trim() !== ''
-            ? f
-            : { ...f, instructor: meta.suggestedInstructor! },
-        )
       } catch {
         if (!ac.signal.aborted) setResolvedCourseMeta(null)
       }
     })()
     return () => ac.abort()
-  }, [courseCode, editingId])
+  }, [courseCode])
+
+  const autoInstructorForCreate = useMemo((): string | undefined => {
+    if (editingId != null) return undefined
+    const code = courseCode.trim()
+    if (code === '' || resolvedCourseMeta == null) return ''
+    if (resolvedCourseMeta.courseCode !== code) return ''
+    return getPreferredInstructorDisplay(
+      resolvedCourseMeta.instructorSuggestion,
+      form.schedule_track,
+    )
+  }, [editingId, courseCode, resolvedCourseMeta, form.schedule_track])
+
+  useEffect(() => {
+    if (editingId != null) return
+    if (instructorLocked) return
+    if (autoInstructorForCreate === undefined) return
+    setForm((f) => ({ ...f, instructor: autoInstructorForCreate }))
+  }, [editingId, instructorLocked, autoInstructorForCreate])
 
   const courseSelectOptions = useMemo(() => {
     const selected = sortedCourses.find((c) => c.code === courseCode)
@@ -528,6 +535,7 @@ export function AdminCourseSectionsPage() {
   const beginEdit = useCallback((row: AdminCourseSection) => {
     setEditingId(row.id)
     setCourseTitleLocked(false)
+    setInstructorLocked(false)
     const parsed = parseStoredWeekdaysToFullNames(row.weekday)
     setForm({
       section_code: row.section_code,
@@ -681,6 +689,7 @@ export function AdminCourseSectionsPage() {
       })
       setForm(emptyForm())
       setCourseTitleLocked(false)
+      setInstructorLocked(false)
       setSectionsError(null)
       setListVersion((v) => v + 1)
     } catch (e) {
@@ -1053,7 +1062,8 @@ export function AdminCourseSectionsPage() {
               onChange={(e) =>
                 setForm((f) => ({
                   ...f,
-                  schedule_track: e.target.value === 'CN' ? 'CN' : 'EN',
+                  schedule_track:
+                    e.target.value === 'CN' ? ('CN' as const) : ('EN' as const),
                 }))
               }
               disabled={busy}
@@ -1141,9 +1151,10 @@ export function AdminCourseSectionsPage() {
             <input
               className="admin-input"
               value={form.instructor}
-              onChange={(e) =>
+              onChange={(e) => {
+                setInstructorLocked(true)
                 setForm((f) => ({ ...f, instructor: e.target.value }))
-              }
+              }}
             />
           </label>
           <label className="admin-field admin-field--span-2">
