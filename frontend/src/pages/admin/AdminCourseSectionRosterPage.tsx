@@ -120,6 +120,11 @@ export function AdminCourseSectionRosterPage() {
     return Number.isInteger(n) && n > 0 ? n : null
   }, [sectionIdFromUrl])
 
+  const effectiveCourseSectionIdForRoster = useMemo(
+    () => sectionIdParamParsed ?? resolvedExportSectionId,
+    [sectionIdParamParsed, resolvedExportSectionId],
+  )
+
   useEffect(() => {
     if (missingContext) {
       setResolvedExportSectionId(null)
@@ -224,6 +229,7 @@ export function AdminCourseSectionRosterPage() {
         const rows = await fetchAdminCourseSectionEnrollments({
           academicTermId: termId,
           courseCode,
+          courseSectionId: effectiveCourseSectionIdForRoster ?? undefined,
           signal: ac.signal,
         })
         if (!ac.signal.aborted) setStudents(rows)
@@ -238,7 +244,13 @@ export function AdminCourseSectionRosterPage() {
       }
     })()
     return () => ac.abort()
-  }, [termId, courseCode, missingContext, reloadNonce])
+  }, [
+    termId,
+    courseCode,
+    missingContext,
+    reloadNonce,
+    effectiveCourseSectionIdForRoster,
+  ])
 
   const bumpRoster = useCallback(() => {
     setReloadNonce((n) => n + 1)
@@ -284,11 +296,18 @@ export function AdminCourseSectionRosterPage() {
     setActionError(null)
     setBusyId(studentId)
     try {
-      const res = await deleteAdminPortalEnrollment({
-        studentId,
-        academic_term_id: termId,
-        course_code: courseCode,
-      })
+      const res =
+        effectiveCourseSectionIdForRoster != null
+          ? await deleteAdminPortalEnrollment({
+              studentId,
+              academic_term_id: termId,
+              course_section_id: effectiveCourseSectionIdForRoster,
+            })
+          : await deleteAdminPortalEnrollment({
+              studentId,
+              academic_term_id: termId,
+              course_code: courseCode,
+            })
       if (res.removedCount < 1) {
         setActionError(
           'No enrollment row was removed (already removed or not found).',

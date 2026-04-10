@@ -59,7 +59,8 @@ export declare function listCourseSectionsByCourseCode(courseCode: string, termF
 /** All sections offered in a legacy term + year (for admin timetable). */
 export declare function listCourseSectionsByTermYear(term: string, year: number): Promise<CourseSectionDetail[]>;
 /**
- * Sections for a term/year with `portal_enrollments` rollups per course (repeated on each section row).
+ * Sections for a term/year with `portal_enrollments` rollups **per section row** (exact `course_section_id`,
+ * plus legacy course-level rows attributed to the canonical `MIN(course_sections.id)` for that course).
  */
 export declare function listCourseSectionsWithEnrollmentAggregates(term: string, year: number, options?: {
     courseCode?: string | null;
@@ -69,7 +70,7 @@ export type CourseSectionCountByCourse = {
     course_code: string;
     section_count: number;
 };
-/** Course-level `portal_enrollments` counts (not tied to `section_code`). */
+/** Course-level `portal_enrollments` counts (distinct students; multiple section rows per student still count once per course). */
 export type PortalEnrollmentRollupByCourse = {
     course_code: string;
     enrolled_count: number;

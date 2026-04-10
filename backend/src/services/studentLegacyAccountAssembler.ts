@@ -66,19 +66,25 @@ function mergeBrowseTermScheduleRecords(
   portalRecords: StudentAcademicCourseRecord[],
   marksRecords: StudentAcademicCourseRecord[],
 ): StudentAcademicCourseRecord[] {
-  const byCode = new Map<string, StudentAcademicCourseRecord>();
-  const key = (r: StudentAcademicCourseRecord) =>
-    r.courseCode.trim().toLowerCase();
+  const byKey = new Map<string, StudentAcademicCourseRecord>();
+  const portalKey = (r: StudentAcademicCourseRecord) => {
+    const sec = (r.sectionCode ?? "").trim().toLowerCase();
+    const tr = (r.scheduleTrack ?? "").trim().toLowerCase();
+    const id = r.portalEnrollmentRowId ?? 0;
+    return `portal:${r.courseCode.trim().toLowerCase()}|${sec}|${tr}|${id}`;
+  };
+  const marksKey = (r: StudentAcademicCourseRecord) =>
+    `marks:${r.courseCode.trim().toLowerCase()}`;
   for (const r of portalRecords) {
     if (r.status === "withdrawn") continue;
-    byCode.set(key(r), r);
+    byKey.set(portalKey(r), r);
   }
   for (const r of marksRecords) {
     if (r.status === "withdrawn") continue;
-    const k = key(r);
-    if (!byCode.has(k)) byCode.set(k, r);
+    const k = marksKey(r);
+    if (!byKey.has(k)) byKey.set(k, r);
   }
-  return [...byCode.values()].sort((a, b) =>
+  return [...byKey.values()].sort((a, b) =>
     a.courseCode.localeCompare(b.courseCode, undefined, {
       sensitivity: "base",
     }),

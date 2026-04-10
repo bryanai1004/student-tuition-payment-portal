@@ -51,6 +51,7 @@ export function AdminSectionEnrolledStudentsModal({
         const rows = await fetchAdminCourseSectionEnrollments({
           academicTermId: academicTermId.trim(),
           courseCode: section.course_code.trim(),
+          courseSectionId: section.id,
           signal: ac.signal,
         })
         if (!ac.signal.aborted) setStudents(rows)
@@ -65,7 +66,7 @@ export function AdminSectionEnrolledStudentsModal({
       }
     })()
     return () => ac.abort()
-  }, [academicTermId, section.course_code])
+  }, [academicTermId, section.course_code, section.id])
 
   const onRemove = async (studentId: string) => {
     setError(null)
@@ -74,7 +75,7 @@ export function AdminSectionEnrolledStudentsModal({
       const res = await deleteAdminPortalEnrollment({
         studentId,
         academic_term_id: academicTermId.trim(),
-        course_code: section.course_code.trim(),
+        course_section_id: section.id,
       })
       if (res.removedCount < 1) {
         setError('No enrollment row was removed (already removed or not found).')

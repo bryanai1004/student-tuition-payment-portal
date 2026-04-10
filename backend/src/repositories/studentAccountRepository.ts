@@ -179,6 +179,14 @@ async function loadPortalTermBillingContextCore(
     courseId: String(r.courseId),
     term: String(r.term),
     year: Number(r.year),
+    sectionCode:
+      r.sectionCode == null || String(r.sectionCode).trim() === ""
+        ? null
+        : String(r.sectionCode).trim(),
+    scheduleTrack:
+      r.scheduleTrack == null || String(r.scheduleTrack).trim() === ""
+        ? null
+        : String(r.scheduleTrack).trim(),
   }));
 
   const courseIds = [...new Set(enrollments.map((e) => e.courseId))];
@@ -303,9 +311,12 @@ export async function loadAccountContext(
   year: number,
 ): Promise<AccountContext | null> {
   const [enrollmentRows] = await pool.query<RowDataPacket[]>(
-    `SELECT student_external_id AS studentId, course_id AS courseId, term, year
+    `SELECT student_external_id AS studentId, course_id AS courseId, term, year,
+            NULLIF(TRIM(section_code), '') AS sectionCode,
+            NULLIF(TRIM(schedule_track), '') AS scheduleTrack
      FROM portal_enrollments
-     WHERE student_external_id = ? AND term = ? AND year = ?`,
+     WHERE student_external_id = ? AND term = ? AND year = ?
+       AND (status IS NULL OR LOWER(TRIM(status)) = 'active')`,
     [studentId, term, year],
   );
 
@@ -333,9 +344,12 @@ export async function loadPortalTermBillingContext(
   year: number,
 ): Promise<AccountContext> {
   const [enrollmentRows] = await pool.query<RowDataPacket[]>(
-    `SELECT student_external_id AS studentId, course_id AS courseId, term, year
+    `SELECT student_external_id AS studentId, course_id AS courseId, term, year,
+            NULLIF(TRIM(section_code), '') AS sectionCode,
+            NULLIF(TRIM(schedule_track), '') AS scheduleTrack
      FROM portal_enrollments
-     WHERE student_external_id = ? AND term = ? AND year = ?`,
+     WHERE student_external_id = ? AND term = ? AND year = ?
+       AND (status IS NULL OR LOWER(TRIM(status)) = 'active')`,
     [studentId, term, year],
   );
   return loadPortalTermBillingContextCore(

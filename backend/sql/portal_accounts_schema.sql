@@ -19,9 +19,17 @@ CREATE TABLE IF NOT EXISTS portal_enrollments (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   student_external_id VARCHAR(64) NOT NULL,
   course_id VARCHAR(64) NOT NULL,
+  course_section_id BIGINT NULL,
+  section_code VARCHAR(32) NULL,
+  schedule_track VARCHAR(8) NULL,
   term VARCHAR(32) NOT NULL,
   year INT NOT NULL,
+  status VARCHAR(32) NULL,
+  withdrawn_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_student_term (student_external_id, term, year),
+  KEY idx_student_section_term (student_external_id, course_section_id, term, year),
   CONSTRAINT fk_portal_enrollment_course
     FOREIGN KEY (course_id) REFERENCES portal_courses (course_id)
 );

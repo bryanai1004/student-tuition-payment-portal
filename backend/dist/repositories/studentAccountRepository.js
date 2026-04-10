@@ -129,6 +129,12 @@ async function loadPortalTermBillingContextCore(pool, studentId, term, year, enr
         courseId: String(r.courseId),
         term: String(r.term),
         year: Number(r.year),
+        sectionCode: r.sectionCode == null || String(r.sectionCode).trim() === ""
+            ? null
+            : String(r.sectionCode).trim(),
+        scheduleTrack: r.scheduleTrack == null || String(r.scheduleTrack).trim() === ""
+            ? null
+            : String(r.scheduleTrack).trim(),
     }));
     const courseIds = [...new Set(enrollments.map((e) => e.courseId))];
     const placeholders = courseIds.length > 0 ? courseIds.map(() => "?").join(",") : "";
@@ -217,9 +223,12 @@ async function loadPortalTermBillingContextCore(pool, studentId, term, year, enr
     };
 }
 export async function loadAccountContext(pool, studentId, term, year) {
-    const [enrollmentRows] = await pool.query(`SELECT student_external_id AS studentId, course_id AS courseId, term, year
+    const [enrollmentRows] = await pool.query(`SELECT student_external_id AS studentId, course_id AS courseId, term, year,
+            NULLIF(TRIM(section_code), '') AS sectionCode,
+            NULLIF(TRIM(schedule_track), '') AS scheduleTrack
      FROM portal_enrollments
-     WHERE student_external_id = ? AND term = ? AND year = ?`, [studentId, term, year]);
+     WHERE student_external_id = ? AND term = ? AND year = ?
+       AND (status IS NULL OR LOWER(TRIM(status)) = 'active')`, [studentId, term, year]);
     if (enrollmentRows.length === 0) {
         return null;
     }
@@ -230,9 +239,12 @@ export async function loadAccountContext(pool, studentId, term, year) {
  * Used to synthesize a ledger when legacy `accounting` has no rows for that quarter.
  */
 export async function loadPortalTermBillingContext(pool, studentId, term, year) {
-    const [enrollmentRows] = await pool.query(`SELECT student_external_id AS studentId, course_id AS courseId, term, year
+    const [enrollmentRows] = await pool.query(`SELECT student_external_id AS studentId, course_id AS courseId, term, year,
+            NULLIF(TRIM(section_code), '') AS sectionCode,
+            NULLIF(TRIM(schedule_track), '') AS scheduleTrack
      FROM portal_enrollments
-     WHERE student_external_id = ? AND term = ? AND year = ?`, [studentId, term, year]);
+     WHERE student_external_id = ? AND term = ? AND year = ?
+       AND (status IS NULL OR LOWER(TRIM(status)) = 'active')`, [studentId, term, year]);
     return loadPortalTermBillingContextCore(pool, studentId, term, year, enrollmentRows);
 }
 //# sourceMappingURL=studentAccountRepository.js.map

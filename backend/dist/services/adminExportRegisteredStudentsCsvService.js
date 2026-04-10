@@ -6,12 +6,11 @@ import { getCourseSectionById } from "../repositories/courseSectionRepository.js
 import { listAdminEnrollmentRowsForSection } from "../repositories/studentEnrollmentRepository.js";
 import { mapLegacyStudentProfileExportRowsById } from "../repositories/studentLegacyAccountRepository.js";
 /**
- * Portal registrations are stored in `portal_enrollments` at **course + calendar term + year** only.
- * There is no `course_sections.id` (or section_code) on enrollment rows. The admin UI therefore shows
- * the same enrolled roster on every scheduled section row for that course in the term; this export
- * uses the same student list as GET /api/admin/course-sections/enrollments for that course/term/year.
- * The requested `sectionId` is used to resolve course_code / term / year for the download filename
- * (`registeredstudent_<code>_<year><termlower>.csv`) and to anchor the admin action to a concrete timetable row.
+ * Portal registrations are section-keyed when `portal_enrollments.course_section_id` is set.
+ * This export uses the same filtered roster as GET /api/admin/course-sections/enrollments with
+ * `section_id` = the requested `course_sections.id` (plus legacy course-level rows on the canonical
+ * MIN(section id) for that course when applicable). The `sectionId` argument resolves course_code /
+ * term / year for the filename (`registeredstudent_<code>_<year><termlower>.csv`).
  *
  * Course feedback (`course_feedback`) is keyed by **course_code + term + year only** (not section).
  * There is no section_id on `course_feedback`; the same feedback row applies to every scheduled
@@ -93,7 +92,7 @@ export async function buildRegisteredStudentsCsvForSection(sectionId) {
     const courseCode = section.course_code.trim();
     const term = section.term.trim();
     const year = section.year;
-    const enrollments = await listAdminEnrollmentRowsForSection(courseCode, term, year);
+    const enrollments = await listAdminEnrollmentRowsForSection(courseCode, term, year, { courseSectionId: sectionId });
     const studentIds = enrollments
         .map((e) => e.studentId.trim())
         .filter((id) => id !== "");

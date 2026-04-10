@@ -373,6 +373,18 @@ export function sortTranscriptPreviewRecords(rows) {
         });
         if (c !== 0)
             return c;
+        const secA = (a.sectionCode ?? "").trim().toLowerCase();
+        const secB = (b.sectionCode ?? "").trim().toLowerCase();
+        if (secA !== secB)
+            return secA.localeCompare(secB);
+        const trA = (a.scheduleTrack ?? "").trim().toLowerCase();
+        const trB = (b.scheduleTrack ?? "").trim().toLowerCase();
+        if (trA !== trB)
+            return trA.localeCompare(trB);
+        const idA = a.portalEnrollmentRowId ?? 0;
+        const idB = b.portalEnrollmentRowId ?? 0;
+        if (idA !== idB)
+            return idA - idB;
         return SOURCE_SORT_RANK[a.source] - SOURCE_SORT_RANK[b.source];
     });
 }
@@ -394,6 +406,9 @@ export function pickNewerRegistrationAnchor(legacy, portal) {
  * `StudentAcademicCourseRecord` (`source: "portal"`). Not a `marks` outcome — grades stay null.
  */
 export function portalEnrollmentRowToAcademicCourseRecord(studentId, row, courseTitle, activeTerm) {
+    const sectionCode = row.section_code;
+    const scheduleTrack = row.schedule_track;
+    const portalEnrollmentRowId = row.portal_enrollment_id;
     if (row.status === "withdrawn") {
         return {
             studentId,
@@ -410,6 +425,9 @@ export function portalEnrollmentRowToAcademicCourseRecord(studentId, row, course
             numericGrade: null,
             status: "withdrawn",
             source: "portal",
+            sectionCode,
+            scheduleTrack,
+            portalEnrollmentRowId,
         };
     }
     const status = inferAcademicCourseStatus({
@@ -434,6 +452,9 @@ export function portalEnrollmentRowToAcademicCourseRecord(studentId, row, course
         numericGrade: null,
         status,
         source: "portal",
+        sectionCode,
+        scheduleTrack,
+        portalEnrollmentRowId,
     };
 }
 /** Skip a portal row when legacy marks already show a completed grade for the same course/term. */

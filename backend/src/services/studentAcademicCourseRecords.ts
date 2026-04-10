@@ -504,6 +504,15 @@ export function sortTranscriptPreviewRecords(
       sensitivity: "base",
     });
     if (c !== 0) return c;
+    const secA = (a.sectionCode ?? "").trim().toLowerCase();
+    const secB = (b.sectionCode ?? "").trim().toLowerCase();
+    if (secA !== secB) return secA.localeCompare(secB);
+    const trA = (a.scheduleTrack ?? "").trim().toLowerCase();
+    const trB = (b.scheduleTrack ?? "").trim().toLowerCase();
+    if (trA !== trB) return trA.localeCompare(trB);
+    const idA = a.portalEnrollmentRowId ?? 0;
+    const idB = b.portalEnrollmentRowId ?? 0;
+    if (idA !== idB) return idA - idB;
     return SOURCE_SORT_RANK[a.source] - SOURCE_SORT_RANK[b.source];
   });
 }
@@ -533,6 +542,10 @@ export function portalEnrollmentRowToAcademicCourseRecord(
   courseTitle: string,
   activeTerm: { term: string; year: number } | null,
 ): StudentAcademicCourseRecord {
+  const sectionCode = row.section_code;
+  const scheduleTrack = row.schedule_track;
+  const portalEnrollmentRowId = row.portal_enrollment_id;
+
   if (row.status === "withdrawn") {
     return {
       studentId,
@@ -549,6 +562,9 @@ export function portalEnrollmentRowToAcademicCourseRecord(
       numericGrade: null,
       status: "withdrawn",
       source: "portal",
+      sectionCode,
+      scheduleTrack,
+      portalEnrollmentRowId,
     };
   }
 
@@ -575,6 +591,9 @@ export function portalEnrollmentRowToAcademicCourseRecord(
     numericGrade: null,
     status,
     source: "portal",
+    sectionCode,
+    scheduleTrack,
+    portalEnrollmentRowId,
   };
 }
 

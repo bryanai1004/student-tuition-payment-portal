@@ -43,28 +43,22 @@ async function assertEnrollmentAllowsMarkGrade(
   const code = courseCode.trim();
   const term = legacyTerm.trim();
   const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT e.status AS enrollment_status
+    `SELECT 1 AS ok
      FROM portal_enrollments e
      INNER JOIN portal_courses pc ON pc.course_id = e.course_id
      WHERE TRIM(e.student_external_id) = TRIM(?)
        AND TRIM(pc.course_code) = TRIM(?)
        AND TRIM(e.term) = TRIM(?)
        AND e.year = ?
+       AND (e.status IS NULL OR LOWER(TRIM(e.status)) = 'active')
      LIMIT 1`,
     [sid, code, term, year],
   );
   if (rows.length === 0) {
     return {
       ok: false,
-      error: "Student is not enrolled in this course for this term.",
-    };
-  }
-  const raw = (rows[0] as { enrollment_status?: unknown }).enrollment_status;
-  const s = raw == null ? "" : String(raw).trim().toLowerCase();
-  if (s === "withdrawn") {
-    return {
-      ok: false,
-      error: "Cannot set marks grade for a withdrawn enrollment.",
+      error:
+        "Student has no active portal enrollment in this course for this term.",
     };
   }
   return { ok: true };

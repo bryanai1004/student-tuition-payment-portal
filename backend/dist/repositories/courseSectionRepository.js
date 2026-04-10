@@ -154,12 +154,14 @@ export async function listCourseSectionsByTermYear(term, year) {
     return listCourseSectionsWithEnrollmentAggregates(term, year, {});
 }
 /**
- * Sections for a term/year with `portal_enrollments` rollups per course (repeated on each section row).
+ * Sections for a term/year with `portal_enrollments` rollups **per section row** (exact `course_section_id`,
+ * plus legacy course-level rows attributed to the canonical `MIN(course_sections.id)` for that course).
  */
 export async function listCourseSectionsWithEnrollmentAggregates(term, year, options) {
     const t = term.trim();
     const cc = (options?.courseCode ?? "").trim();
-    const courseClause = cc !== "" ? "AND cs.course_code = ?" : "";
+    const courseClauseOuter = cc !== "" ? "AND cs.course_code = ?" : "";
+    const courseClauseAgg = cc !== "" ? "AND csx.course_code = ?" : "";
     const sql = `
     SELECT
       cs.id,
@@ -184,9 +186,7 @@ export async function listCourseSectionsWithEnrollmentAggregates(term, year, opt
          CONVERT(TRIM(cs.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci
     LEFT JOIN (
       SELECT
-        pc.course_code AS agg_course_code,
-        e.term AS agg_term,
-        e.year AS agg_year,
+        csx.id AS section_row_id,
         COUNT(DISTINCT e.student_external_id) AS enrolled_count,
         JSON_ARRAYAGG(
           JSON_OBJECT(
@@ -194,24 +194,50 @@ export async function listCourseSectionsWithEnrollmentAggregates(term, year, opt
             'full_name', ps.full_name
           )
         ) AS enrolled_students_json
-      FROM portal_enrollments e
-      INNER JOIN portal_courses pc ON pc.course_id = e.course_id
+      FROM course_sections csx
+      LEFT JOIN portal_enrollments e
+        ON (
+          (e.course_section_id IS NOT NULL AND e.course_section_id = csx.id)
+          OR (
+            e.course_section_id IS NULL
+            AND TRIM(e.term) COLLATE utf8mb4_unicode_ci =
+                TRIM(csx.term) COLLATE utf8mb4_unicode_ci
+            AND e.year = csx.year
+            AND EXISTS (
+              SELECT 1 FROM portal_courses pc
+              WHERE pc.course_id = e.course_id
+                AND TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci =
+                    TRIM(csx.course_code) COLLATE utf8mb4_unicode_ci
+            )
+            AND csx.id = (
+              SELECT MIN(cs2.id)
+              FROM course_sections cs2
+              WHERE TRIM(cs2.course_code) COLLATE utf8mb4_unicode_ci =
+                    TRIM(csx.course_code) COLLATE utf8mb4_unicode_ci
+                AND TRIM(cs2.term) COLLATE utf8mb4_unicode_ci =
+                    TRIM(csx.term) COLLATE utf8mb4_unicode_ci
+                AND cs2.year = csx.year
+            )
+          )
+        )
+        AND (e.status IS NULL OR LOWER(TRIM(e.status)) = 'active')
       LEFT JOIN portal_students ps
         ON CONVERT(ps.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci =
            CONVERT(e.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-      GROUP BY pc.course_code, e.term, e.year
-    ) agg
-      ON CONVERT(agg.agg_course_code USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-         CONVERT(cs.course_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
-      AND CONVERT(agg.agg_term USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-          CONVERT(cs.term USING utf8mb4) COLLATE utf8mb4_unicode_ci
-      AND agg.agg_year = cs.year
+      WHERE TRIM(csx.term) COLLATE utf8mb4_unicode_ci =
+            CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+        AND csx.year = ?
+        ${courseClauseAgg}
+      GROUP BY csx.id
+    ) agg ON agg.section_row_id = cs.id
     WHERE cs.term = ? AND cs.year = ?
-    ${courseClause}
+    ${courseClauseOuter}
     ORDER BY CASE cs.schedule_track WHEN 'EN' THEN 0 WHEN 'CN' THEN 1 ELSE 2 END,
       cs.course_code ASC, cs.weekday ASC, cs.start_time ASC, cs.section_code ASC
   `;
-    const params = cc !== "" ? [t, year, cc] : [t, year];
+    const params = cc !== ""
+        ? [t, year, cc, t, year, cc]
+        : [t, year, t, year];
     const [rows] = await pool.query(sql, params);
     return rows.map((r) => mapCourseSectionRow(r));
 }

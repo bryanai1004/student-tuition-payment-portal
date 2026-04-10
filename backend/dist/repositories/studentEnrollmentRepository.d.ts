@@ -6,8 +6,9 @@ export type EnrollSectionInput = {
     schedule_track?: "EN" | "CN";
 };
 /**
- * Validates each section against `course_sections` and `portal_courses`, then inserts
- * `portal_enrollments` rows. Skips duplicates (same student + course_id + term + year).
+ * Validates each section against `course_sections` and `portal_courses`, then inserts or reactivates
+ * `portal_enrollments` rows. Duplicate / idempotency: same student + `course_section_id` + term + year
+ * (active rows skipped; withdrawn rows reactivated). Legacy course-only rows are not used for new writes.
  */
 export declare function enrollStudentInSections(studentExternalId: string, term: string, year: number, sections: EnrollSectionInput[]): Promise<{
     ok: true;
@@ -27,12 +28,9 @@ export type StudentEnrolledSectionsQueryResult = {
 /**
  * Scheduled section rows for a student's **active** `portal_enrollments` in one calendar term/year.
  *
- * Source chain (production): `portal_enrollments.course_id` → `portal_courses` (maps legacy ids like
- * LEGACY29 to timetable `course_code` e.g. AC100) → `course_sections.course_code` + matching term/year.
- * `portal_enrollments.course_id` is never joined directly to `course_sections.course_code`.
- *
- * One `course_sections` row per enrolled catalog course (`MIN(id)` when multiple sections exist).
- * String joins use `utf8mb4_unicode_ci` to avoid collation mismatch errors across tables.
+ * When `portal_enrollments.course_section_id` is set, the timetable row is that exact section.
+ * Legacy rows with `course_section_id` NULL still resolve via `portal_courses.course_code` and a single
+ * deterministic `course_sections` pick (`MIN(id)`) per enrollment row.
  */
 export declare function listStudentEnrolledSectionsForTerm(studentExternalId: string, term: string, year: number): Promise<StudentEnrolledSectionsQueryResult>;
 /** @deprecated Prefer {@link listStudentEnrolledSectionsForTerm} for schedule metadata. */
@@ -46,8 +44,12 @@ export type AdminSectionEnrollmentRepositoryRow = {
     grade: string | null;
     withdrawn_at: string | null;
 };
-export declare function listAdminEnrollmentRowsForSection(courseCode: string, term: string, year: number): Promise<AdminSectionEnrollmentRepositoryRow[]>;
+export declare function listAdminEnrollmentRowsForSection(courseCode: string, term: string, year: number, options?: {
+    courseSectionId?: number | null;
+}): Promise<AdminSectionEnrollmentRepositoryRow[]>;
 export type PortalEnrollmentAcademicRow = {
+    /** Stable row id for ordering when the same course appears in multiple sections. */
+    portal_enrollment_id: number;
     course_code: string;
     course_title_raw: string;
     term: string;
@@ -59,6 +61,8 @@ export type PortalEnrollmentAcademicRow = {
     instructor: string | null;
     status: PortalEnrollmentAcademicStatus;
     withdrawn_at: string | null;
+    section_code: string | null;
+    schedule_track: string | null;
 };
 /**
  * Latest portal enrollment term/year for a student (same ordering as legacy registration “latest”).
@@ -68,16 +72,18 @@ export declare function findLatestPortalEnrollmentTermYear(studentExternalId: st
     year: number;
 } | null>;
 /**
- * All `portal_enrollments` for a student with catalog title/units and one deterministic section row
- * per enrollment (lowest `course_sections.id` for matching `course_code` + `term` + `year`).
- *
- * Join mirrors `listStudentEnrolledSectionsForTerm`: `portal_courses.course_code` ↔
- * `course_sections` on trimmed codes and calendar term/year so dashboard / account `scheduleRows`
- * get weekday and times when marks are absent (e.g. current term before grades post).
+ * All `portal_enrollments` for a student with catalog title/units and timetable fields from
+ * `course_sections`: exact `course_section_id` when present, else legacy `MIN(id)` pick per row.
  */
 export declare function listPortalEnrollmentRowsForStudentAcademics(studentExternalId: string): Promise<PortalEnrollmentAcademicRow[]>;
 /**
- * Removes one course-level portal enrollment (any section). Only `portal_enrollments` is affected.
+ * Soft-withdraws the enrollment row for one `course_sections.id` (and matching calendar term/year).
+ * Only `portal_enrollments` is updated.
+ */
+export declare function softWithdrawPortalEnrollmentByCourseSection(studentExternalId: string, term: string, year: number, courseSectionId: number): Promise<number>;
+/**
+ * Legacy: soft-withdraws a **course-level** portal row (`course_section_id` IS NULL) only.
+ * Does not affect section-keyed enrollments for the same course code.
  */
 export declare function deletePortalEnrollmentByStudentCourseTermYear(studentExternalId: string, courseCode: string, term: string, year: number): Promise<number>;
 export declare function getPortalStudentDisplayName(studentExternalId: string): Promise<string | null>;

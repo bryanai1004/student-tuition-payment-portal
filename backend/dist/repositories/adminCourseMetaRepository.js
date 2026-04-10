@@ -47,7 +47,42 @@ export async function selectDistinctTimetableInstructorIdsForCourse(courseCode) 
     }
     return out;
 }
-export async function selectInstructorDisplayNameByInstructorId(instructorId) {
+/**
+ * Distinct (instructor_id, instructor) pairs from legacy timetable tables for the course.
+ * Includes rows with empty instructor_id when `instructor` text is present (e.g. daim_timetable).
+ */
+export async function selectDistinctTimetableInstructorPairsForCourse(courseCode) {
+    const [rows] = await pool.query(`SELECT DISTINCT
+       TRIM(t.instructor_id) AS iid,
+       TRIM(t.instructor) AS instr
+     FROM (
+       SELECT instructor_id, instructor, course FROM timetable
+       UNION ALL
+       SELECT instructor_id, instructor, course FROM timetable2
+       UNION ALL
+       SELECT instructor_id, instructor, course FROM daim_timetable
+       UNION ALL
+       SELECT instructor_id, instructor, course FROM daim_timetable2
+     ) AS t
+     WHERE TRIM(t.course) = ?
+       AND (
+         (t.instructor_id IS NOT NULL AND TRIM(t.instructor_id) <> '')
+         OR (t.instructor IS NOT NULL AND TRIM(t.instructor) <> '')
+       )`, [courseCode]);
+    if (!Array.isArray(rows))
+        return [];
+    const out = [];
+    for (const row of rows) {
+        const iid = trimOrEmpty(row.iid);
+        const instr = trimOrEmpty(row.instr);
+        if (iid === "" && instr === "")
+            continue;
+        out.push({ instructor_id: iid, instructor: instr });
+    }
+    return out;
+}
+/** Bilingual names for timetable `instructor_id` → `instructors` (first row by sequence). */
+export async function selectInstructorNamesByInstructorId(instructorId) {
     const [rows] = await pool.query(`SELECT name_chi, name_eng
      FROM instructors
      WHERE TRIM(instructor_id) = ?
@@ -56,11 +91,49 @@ export async function selectInstructorDisplayNameByInstructorId(instructorId) {
     if (!Array.isArray(rows) || rows.length === 0)
         return null;
     const r = rows[0];
-    const chi = trimOrEmpty(r.name_chi);
-    if (chi !== "")
-        return chi;
-    const eng = trimOrEmpty(r.name_eng);
-    return eng !== "" ? eng : null;
+    return {
+        name_chi: trimOrEmpty(r.name_chi),
+        name_eng: trimOrEmpty(r.name_eng),
+    };
+}
+/**
+ * First bilingual row per TRIM(instructor_id) for batch timetable resolution.
+ */
+export async function selectInstructorNamesMapForInstructorIds(instructorIds) {
+    const out = new Map();
+    const unique = [...new Set(instructorIds.map((id) => id.trim()).filter((id) => id !== ""))];
+    if (unique.length === 0)
+        return out;
+    const placeholders = unique.map(() => "?").join(", ");
+    const [rows] = await pool.query(`SELECT i.instructor_id, i.name_chi, i.name_eng
+     FROM instructors i
+     INNER JOIN (
+       SELECT TRIM(instructor_id) AS tid, MIN(sequenceNumber) AS min_seq
+       FROM instructors
+       WHERE TRIM(instructor_id) IN (${placeholders})
+       GROUP BY TRIM(instructor_id)
+     ) AS x ON TRIM(i.instructor_id) = x.tid AND i.sequenceNumber = x.min_seq`, unique);
+    if (!Array.isArray(rows))
+        return out;
+    for (const r of rows) {
+        const row = r;
+        const tid = trimOrEmpty(row.instructor_id);
+        if (tid === "")
+            continue;
+        out.set(tid, {
+            name_chi: trimOrEmpty(row.name_chi),
+            name_eng: trimOrEmpty(row.name_eng),
+        });
+    }
+    return out;
+}
+export async function selectInstructorDisplayNameByInstructorId(instructorId) {
+    const row = await selectInstructorNamesByInstructorId(instructorId);
+    if (row == null)
+        return null;
+    if (row.name_chi !== "")
+        return row.name_chi;
+    return row.name_eng !== "" ? row.name_eng : null;
 }
 /**
  * Distinct trimmed legacy marks instructor strings for the course code (non-empty only).

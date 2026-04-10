@@ -19,21 +19,27 @@ function typeNorm(type) {
     return type.trim().toLowerCase();
 }
 function mergeBrowseTermScheduleRecords(portalRecords, marksRecords) {
-    const byCode = new Map();
-    const key = (r) => r.courseCode.trim().toLowerCase();
+    const byKey = new Map();
+    const portalKey = (r) => {
+        const sec = (r.sectionCode ?? "").trim().toLowerCase();
+        const tr = (r.scheduleTrack ?? "").trim().toLowerCase();
+        const id = r.portalEnrollmentRowId ?? 0;
+        return `portal:${r.courseCode.trim().toLowerCase()}|${sec}|${tr}|${id}`;
+    };
+    const marksKey = (r) => `marks:${r.courseCode.trim().toLowerCase()}`;
     for (const r of portalRecords) {
         if (r.status === "withdrawn")
             continue;
-        byCode.set(key(r), r);
+        byKey.set(portalKey(r), r);
     }
     for (const r of marksRecords) {
         if (r.status === "withdrawn")
             continue;
-        const k = key(r);
-        if (!byCode.has(k))
-            byCode.set(k, r);
+        const k = marksKey(r);
+        if (!byKey.has(k))
+            byKey.set(k, r);
     }
-    return [...byCode.values()].sort((a, b) => a.courseCode.localeCompare(b.courseCode, undefined, {
+    return [...byKey.values()].sort((a, b) => a.courseCode.localeCompare(b.courseCode, undefined, {
         sensitivity: "base",
     }));
 }

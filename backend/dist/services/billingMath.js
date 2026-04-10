@@ -28,6 +28,17 @@ export function lineItemCategoryForCourse(course) {
         return "tuition";
     return "other";
 }
+function enrollmentSectionSuffix(e) {
+    const s = e.sectionCode?.trim() ?? "";
+    const t = e.scheduleTrack?.trim() ?? "";
+    if (s === "" && t === "")
+        return "";
+    if (s !== "" && t !== "")
+        return ` — Sec ${s} (${t})`;
+    if (s !== "")
+        return ` — Sec ${s}`;
+    return ` — ${t}`;
+}
 export function formatCourseLineDescription(course) {
     if (course.type === "didactic" || course.type === "lab") {
         const u = course.units != null && Number.isFinite(Number(course.units))
@@ -84,8 +95,9 @@ export function buildEnrollmentLineItems(enrollments, courseById) {
         const amount = calculateCourseCharge(course);
         if (amount <= 0)
             continue;
+        const base = formatCourseLineDescription(course);
         lines.push({
-            description: formatCourseLineDescription(course),
+            description: `${base}${enrollmentSectionSuffix(e)}`,
             amount,
             category: lineItemCategoryForCourse(course),
         });
@@ -110,9 +122,10 @@ export function buildScheduleRows(enrollments, courseById) {
         if (!c)
             continue;
         const charge = calculateCourseCharge(c);
+        const suffix = enrollmentSectionSuffix(e);
         rows.push({
             courseCode: c.courseCode,
-            title: c.title,
+            title: suffix === "" ? c.title : `${c.title}${suffix}`,
             type: c.type,
             units: c.type === "clinical" ? null : (c.units ?? null),
             hours: c.type === "clinical" ? (c.hours ?? null) : null,

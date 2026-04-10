@@ -139,6 +139,8 @@ export type EnrollmentRecord = {
   courseId: string;
   term: string;
   year: number;
+  sectionCode?: string | null;
+  scheduleTrack?: string | null;
 };
 
 export type CourseRecord = {

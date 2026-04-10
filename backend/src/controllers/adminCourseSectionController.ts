@@ -75,6 +75,16 @@ function parseQueryString(req: Request, key: string): string | null {
   return t === "" ? null : t;
 }
 
+/** Optional `course_sections.id` for section-scoped enrollment lists. */
+function parseOptionalCourseSectionIdQuery(req: Request): number | null {
+  const raw =
+    parseQueryString(req, "section_id") ??
+    parseQueryString(req, "course_section_id");
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 /**
  * GET /api/admin/course-sections/course-meta?course_code=
  * Chinese-first title from `courses` + optional instructor hint from timetables/marks (stable pick when multiple).
@@ -144,8 +154,8 @@ export async function getAdminCourseSections(
 }
 
 /**
- * GET /api/admin/course-sections/enrollments?academic_term_id=&course_code=
- * Portal enrollment roster for admin (all statuses; grade W when withdrawn), same source as student Academics.
+ * GET /api/admin/course-sections/enrollments?academic_term_id=&course_code=&section_id=
+ * Optional `section_id` (`course_sections.id`) limits the roster to that section (+ legacy course-level rows on the canonical MIN(section id) for that course when applicable).
  */
 export async function getAdminCourseSectionEnrollments(
   req: Request,
@@ -169,10 +179,12 @@ export async function getAdminCourseSectionEnrollments(
       });
       return;
     }
+    const courseSectionId = parseOptionalCourseSectionIdQuery(req);
     const rows = await listAdminEnrollmentRowsForSection(
       courseCode,
       termRow.term_name,
       termRow.year,
+      courseSectionId != null ? { courseSectionId } : undefined,
     );
     res.json(
       rows

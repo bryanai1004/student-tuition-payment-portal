@@ -32,8 +32,13 @@ export type StudentAcademicCourseRecord = {
   grade: string | null;
   numericGrade: number | null;
   status: StudentAcademicCourseStatus;
-  /** `portal` = course-level `portal_enrollments` (no fabricated grades). */
+  /** `portal` = `portal_enrollments` registration rows (no fabricated grades). */
   source: "marks" | "clinic" | "portal";
+  /** Set for `source: "portal"` when enrollment is section-keyed (or stored on the row). */
+  sectionCode?: string | null;
+  scheduleTrack?: string | null;
+  /** Stable ordering when the same course appears in multiple portal sections. */
+  portalEnrollmentRowId?: number;
 };
 
 export type StudentAcademicsCurrentTerm = {

@@ -70,18 +70,25 @@ function parseQueryString(req: Request, key: string): string | null {
 
 function parseStudentWithdrawBody(
   body: unknown,
-): { studentId: string; academic_term_id: string; course_code: string } | null {
+): { studentId: string; academic_term_id: string; course_section_id: number } | null {
   if (body == null || typeof body !== "object") return null;
   const o = body as Record<string, unknown>;
   const studentId = typeof o.studentId === "string" ? o.studentId.trim() : "";
   const academic_term_id =
     typeof o.academic_term_id === "string" ? o.academic_term_id.trim() : "";
-  const course_code =
-    typeof o.course_code === "string" ? o.course_code.trim() : "";
-  if (studentId === "" || academic_term_id === "" || course_code === "") {
+  const raw = o.course_section_id;
+  let course_section_id: number;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    course_section_id = Math.trunc(raw);
+  } else if (typeof raw === "string" && /^\d+$/.test(raw.trim())) {
+    course_section_id = parseInt(raw.trim(), 10);
+  } else {
     return null;
   }
-  return { studentId, academic_term_id, course_code };
+  if (studentId === "" || academic_term_id === "" || course_section_id <= 0) {
+    return null;
+  }
+  return { studentId, academic_term_id, course_section_id };
 }
 
 export async function postStudentEnroll(
@@ -130,7 +137,7 @@ export async function postStudentEnroll(
 
 /**
  * GET /api/student/enrolled-sections?studentId=&academic_term_id=
- * Section rows for the student's portal enrollments in that term (one section per course when several exist).
+ * Section rows for the student's active portal enrollments in that term (one row per enrollment; section-keyed when available).
  */
 export async function getStudentEnrolledSections(
   req: Request,
@@ -222,8 +229,7 @@ export async function getStudentEnrolledSections(
 
 /**
  * POST /api/student/withdraw
- * Body: { studentId, academic_term_id, course_code }
- * Soft-withdraws the portal enrollment (same contract as admin enrollment delete).
+ * Body: { studentId, academic_term_id, course_section_id } — `course_sections.id` for the row to withdraw.
  */
 export async function postStudentWithdraw(
   req: Request,
@@ -234,11 +240,15 @@ export async function postStudentWithdraw(
     if (parsed == null) {
       res.status(400).json({
         error:
-          "Request body must include studentId, academic_term_id, and course_code.",
+          "Request body must include studentId, academic_term_id, and course_section_id (numeric course_sections.id).",
       });
       return;
     }
-    const result = await removeAdminPortalEnrollment(parsed);
+    const result = await removeAdminPortalEnrollment({
+      studentId: parsed.studentId,
+      academic_term_id: parsed.academic_term_id,
+      course_section_id: parsed.course_section_id,
+    });
     if (!result.ok) {
       res.status(400).json({ error: result.error });
       return;

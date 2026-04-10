@@ -110,9 +110,15 @@ async function resolvePortalCourseIdForEnrollment(
   };
 }
 
+function normalizeEnrollmentStatusForCompare(raw: unknown): string {
+  if (raw == null) return "active";
+  return String(raw).trim().toLowerCase();
+}
+
 /**
- * Validates each section against `course_sections` and `portal_courses`, then inserts
- * `portal_enrollments` rows. Skips duplicates (same student + course_id + term + year).
+ * Validates each section against `course_sections` and `portal_courses`, then inserts or reactivates
+ * `portal_enrollments` rows. Duplicate / idempotency: same student + `course_section_id` + term + year
+ * (active rows skipped; withdrawn rows reactivated). Legacy course-only rows are not used for new writes.
  */
 export async function enrollStudentInSections(
   studentExternalId: string,
@@ -147,7 +153,7 @@ export async function enrollStudentInSections(
       let secRows: RowDataPacket[];
       if (raw.schedule_track === "EN" || raw.schedule_track === "CN") {
         const [rows] = await conn.query<RowDataPacket[]>(
-          `SELECT id FROM course_sections
+          `SELECT id, section_code, schedule_track FROM course_sections
            WHERE course_code = ? AND section_code = ? AND term = ? AND year = ?
              AND schedule_track = ?`,
           [courseCode, sectionCode, trimmedTerm, year, raw.schedule_track],
@@ -155,7 +161,7 @@ export async function enrollStudentInSections(
         secRows = rows;
       } else {
         const [rows] = await conn.query<RowDataPacket[]>(
-          `SELECT id FROM course_sections
+          `SELECT id, section_code, schedule_track FROM course_sections
            WHERE course_code = ? AND section_code = ? AND term = ? AND year = ?
            ORDER BY CASE schedule_track WHEN 'EN' THEN 0 WHEN 'CN' THEN 1 ELSE 2 END, id ASC`,
           [courseCode, sectionCode, trimmedTerm, year],
@@ -178,6 +184,22 @@ export async function enrollStudentInSections(
         };
       }
       const secRow = secRows[0]!;
+      const courseSectionId = Number(secRow.id);
+      if (!Number.isFinite(courseSectionId) || courseSectionId <= 0) {
+        await conn.rollback();
+        return {
+          ok: false,
+          error: `Invalid section id for ${courseCode} ${sectionCode}.`,
+        };
+      }
+      const secCodeStored = String(secRow.section_code ?? sectionCode).trim();
+      const trRaw = secRow.schedule_track;
+      const scheduleTrackStored =
+        trRaw === null || trRaw === undefined
+          ? ""
+          : String(trRaw).trim().toUpperCase() === "CN"
+            ? "CN"
+            : "EN";
 
       const resolved = await resolvePortalCourseIdForEnrollment(conn, courseCode);
       if (!resolved.ok) {
@@ -186,23 +208,56 @@ export async function enrollStudentInSections(
       }
       const courseId = resolved.courseId;
 
-      const [[exists]] = await conn.query<RowDataPacket[]>(
-        `SELECT 1 AS ok FROM portal_enrollments
+      const [[existing]] = await conn.query<RowDataPacket[]>(
+        `SELECT id, status FROM portal_enrollments
          WHERE student_external_id COLLATE utf8mb4_unicode_ci =
                CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
-           AND course_id = ?
+           AND course_section_id = ?
            AND term COLLATE utf8mb4_unicode_ci =
                CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
            AND year = ?
-         LIMIT 1`,
-        [sid, courseId, trimmedTerm, year],
+         LIMIT 2`,
+        [sid, courseSectionId, trimmedTerm, year],
       );
-      if (exists) continue;
+      if (existing != null) {
+        const st = normalizeEnrollmentStatusForCompare(existing.status);
+        if (st === "active" || st === "") {
+          continue;
+        }
+        if (st === "withdrawn") {
+          await conn.query<ResultSetHeader>(
+            `UPDATE portal_enrollments
+             SET status = 'active',
+                 withdrawn_at = NULL,
+                 course_id = ?,
+                 section_code = ?,
+                 schedule_track = ?
+             WHERE id = ?`,
+            [
+              courseId,
+              secCodeStored,
+              scheduleTrackStored,
+              Number(existing.id),
+            ],
+          );
+          insertedCount += 1;
+        }
+        continue;
+      }
 
       await conn.query<ResultSetHeader>(
-        `INSERT INTO portal_enrollments (student_external_id, course_id, term, year)
-         VALUES (?, ?, ?, ?)`,
-        [sid, courseId, trimmedTerm, year],
+        `INSERT INTO portal_enrollments (
+           student_external_id, course_id, course_section_id, section_code, schedule_track, term, year, status
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+        [
+          sid,
+          courseId,
+          courseSectionId,
+          secCodeStored,
+          scheduleTrackStored,
+          trimmedTerm,
+          year,
+        ],
       );
       insertedCount += 1;
     }
@@ -234,12 +289,9 @@ export type StudentEnrolledSectionsQueryResult = {
 /**
  * Scheduled section rows for a student's **active** `portal_enrollments` in one calendar term/year.
  *
- * Source chain (production): `portal_enrollments.course_id` → `portal_courses` (maps legacy ids like
- * LEGACY29 to timetable `course_code` e.g. AC100) → `course_sections.course_code` + matching term/year.
- * `portal_enrollments.course_id` is never joined directly to `course_sections.course_code`.
- *
- * One `course_sections` row per enrolled catalog course (`MIN(id)` when multiple sections exist).
- * String joins use `utf8mb4_unicode_ci` to avoid collation mismatch errors across tables.
+ * When `portal_enrollments.course_section_id` is set, the timetable row is that exact section.
+ * Legacy rows with `course_section_id` NULL still resolve via `portal_courses.course_code` and a single
+ * deterministic `course_sections` pick (`MIN(id)`) per enrollment row.
  */
 export async function listStudentEnrolledSectionsForTerm(
   studentExternalId: string,
@@ -262,19 +314,19 @@ export async function listStudentEnrolledSectionsForTerm(
 
   const sectionsSql = `
     SELECT
-      cs_inner.id,
-      cs_inner.course_code,
-      cs_inner.term,
-      cs_inner.year,
-      cs_inner.section_code,
-      cs_inner.schedule_track,
-      cs_inner.weekday,
-      cs_inner.start_time,
-      cs_inner.end_time,
-      cs_inner.delivery_mode,
-      cs_inner.room,
-      cs_inner.instructor,
-      cs_inner.notes,
+      COALESCE(cs_direct.id, cs_leg.id) AS id,
+      COALESCE(cs_direct.course_code, cs_leg.course_code) AS course_code,
+      COALESCE(cs_direct.term, cs_leg.term) AS term,
+      COALESCE(cs_direct.year, cs_leg.year) AS year,
+      COALESCE(cs_direct.section_code, cs_leg.section_code) AS section_code,
+      COALESCE(cs_direct.schedule_track, cs_leg.schedule_track) AS schedule_track,
+      COALESCE(cs_direct.weekday, cs_leg.weekday) AS weekday,
+      COALESCE(cs_direct.start_time, cs_leg.start_time) AS start_time,
+      COALESCE(cs_direct.end_time, cs_leg.end_time) AS end_time,
+      COALESCE(cs_direct.delivery_mode, cs_leg.delivery_mode) AS delivery_mode,
+      COALESCE(cs_direct.room, cs_leg.room) AS room,
+      COALESCE(cs_direct.instructor, cs_leg.instructor) AS instructor,
+      COALESCE(cs_direct.notes, cs_leg.notes) AS notes,
       COALESCE(
         NULLIF(TRIM(cat.eng_name), ''),
         NULLIF(TRIM(pc.title), '')
@@ -285,46 +337,43 @@ export async function listStudentEnrolledSectionsForTerm(
     INNER JOIN portal_courses pc
       ON pc.course_id COLLATE utf8mb4_unicode_ci =
          e.course_id COLLATE utf8mb4_unicode_ci
-    INNER JOIN course_sections cs_inner
-      ON cs_inner.course_code COLLATE utf8mb4_unicode_ci =
-         pc.course_code COLLATE utf8mb4_unicode_ci
-      AND cs_inner.term COLLATE utf8mb4_unicode_ci =
+    LEFT JOIN course_sections cs_direct
+      ON e.course_section_id IS NOT NULL
+      AND cs_direct.id = e.course_section_id
+      AND cs_direct.term COLLATE utf8mb4_unicode_ci =
           e.term COLLATE utf8mb4_unicode_ci
-      AND cs_inner.year = e.year
-    INNER JOIN (
-      SELECT MIN(cs3.id) AS pick_id
-      FROM portal_enrollments e3
-      INNER JOIN portal_courses pc3
-        ON pc3.course_id COLLATE utf8mb4_unicode_ci =
-           e3.course_id COLLATE utf8mb4_unicode_ci
-      INNER JOIN course_sections cs3
-        ON cs3.course_code COLLATE utf8mb4_unicode_ci =
-           pc3.course_code COLLATE utf8mb4_unicode_ci
-        AND cs3.term COLLATE utf8mb4_unicode_ci =
-            e3.term COLLATE utf8mb4_unicode_ci
-        AND cs3.year = e3.year
-      WHERE e3.student_external_id COLLATE utf8mb4_unicode_ci =
-            CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
-        AND e3.term COLLATE utf8mb4_unicode_ci =
-            CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
-        AND e3.year = ?
-        AND (e3.status IS NULL OR LOWER(TRIM(e3.status)) = 'active')
-      GROUP BY pc3.course_code
-    ) chosen ON cs_inner.id = chosen.pick_id
+      AND cs_direct.year = e.year
+    LEFT JOIN course_sections cs_leg
+      ON e.course_section_id IS NULL
+      AND TRIM(cs_leg.course_code) COLLATE utf8mb4_unicode_ci =
+          TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+      AND TRIM(cs_leg.term) COLLATE utf8mb4_unicode_ci =
+          TRIM(e.term) COLLATE utf8mb4_unicode_ci
+      AND cs_leg.year = e.year
+      AND cs_leg.id = (
+        SELECT MIN(cs2.id)
+        FROM course_sections cs2
+        WHERE TRIM(cs2.course_code) COLLATE utf8mb4_unicode_ci =
+              TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+          AND TRIM(cs2.term) COLLATE utf8mb4_unicode_ci =
+              TRIM(e.term) COLLATE utf8mb4_unicode_ci
+          AND cs2.year = e.year
+      )
     LEFT JOIN courses cat
       ON TRIM(cat.code) COLLATE utf8mb4_unicode_ci =
-         TRIM(cs_inner.course_code) COLLATE utf8mb4_unicode_ci
+         TRIM(COALESCE(cs_direct.course_code, cs_leg.course_code)) COLLATE utf8mb4_unicode_ci
     WHERE e.student_external_id COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.term COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.year = ?
       AND ${SQL_ACTIVE_PORTAL_ENROLLMENT_E}
-    ORDER BY cs_inner.course_code ASC, cs_inner.weekday ASC, cs_inner.start_time ASC
+      AND (cs_direct.id IS NOT NULL OR cs_leg.id IS NOT NULL)
+    ORDER BY course_code ASC, weekday ASC, start_time ASC
   `;
 
   const countParams = [sid, t, year];
-  const sectionParams = [sid, t, year, sid, t, year];
+  const sectionParams = [sid, t, year];
 
   const [[countRows], [sectionRows]] = await Promise.all([
     pool.query<RowDataPacket[]>(countSql, countParams),
@@ -393,9 +442,29 @@ export async function listAdminEnrollmentRowsForSection(
   courseCode: string,
   term: string,
   year: number,
+  options?: { courseSectionId?: number | null },
 ): Promise<AdminSectionEnrollmentRepositoryRow[]> {
   const code = courseCode.trim();
   const t = term.trim();
+  const sid = options?.courseSectionId;
+  const sectionFilter =
+    sid != null && Number.isFinite(sid) && sid > 0
+      ? `AND (
+          e.course_section_id = ?
+          OR (
+            e.course_section_id IS NULL
+            AND ? = (
+              SELECT MIN(cs2.id)
+              FROM course_sections cs2
+              WHERE TRIM(cs2.course_code) COLLATE utf8mb4_unicode_ci =
+                    TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+                AND TRIM(cs2.term) COLLATE utf8mb4_unicode_ci =
+                    TRIM(e.term) COLLATE utf8mb4_unicode_ci
+                AND cs2.year = e.year
+            )
+          )
+        )`
+      : "";
   const sql = `
     SELECT
       TRIM(e.student_external_id) AS student_external_id,
@@ -419,12 +488,17 @@ export async function listAdminEnrollmentRowsForSection(
     WHERE TRIM(pc.course_code) = TRIM(?)
       AND TRIM(e.term) = TRIM(?)
       AND e.year = ?
+      ${sectionFilter}
     ORDER BY
       CASE WHEN ps.full_name IS NULL OR TRIM(ps.full_name) = '' THEN 1 ELSE 0 END,
       TRIM(ps.full_name) ASC,
       TRIM(e.student_external_id) ASC
   `;
-  const [rows] = await pool.query<RowDataPacket[]>(sql, [code, t, year]);
+  const params: unknown[] =
+    sid != null && Number.isFinite(sid) && sid > 0
+      ? [code, t, year, sid, sid]
+      : [code, t, year];
+  const [rows] = await pool.query<RowDataPacket[]>(sql, params);
   return rows.map((r) => {
     const w = r.withdrawn_at;
     let withdrawnAt: string | null = null;
@@ -460,6 +534,8 @@ export async function listAdminEnrollmentRowsForSection(
 }
 
 export type PortalEnrollmentAcademicRow = {
+  /** Stable row id for ordering when the same course appears in multiple sections. */
+  portal_enrollment_id: number;
   course_code: string;
   course_title_raw: string;
   term: string;
@@ -471,6 +547,8 @@ export type PortalEnrollmentAcademicRow = {
   instructor: string | null;
   status: PortalEnrollmentAcademicStatus;
   withdrawn_at: string | null;
+  section_code: string | null;
+  schedule_track: string | null;
 };
 
 /**
@@ -505,12 +583,8 @@ export async function findLatestPortalEnrollmentTermYear(
 }
 
 /**
- * All `portal_enrollments` for a student with catalog title/units and one deterministic section row
- * per enrollment (lowest `course_sections.id` for matching `course_code` + `term` + `year`).
- *
- * Join mirrors `listStudentEnrolledSectionsForTerm`: `portal_courses.course_code` ↔
- * `course_sections` on trimmed codes and calendar term/year so dashboard / account `scheduleRows`
- * get weekday and times when marks are absent (e.g. current term before grades post).
+ * All `portal_enrollments` for a student with catalog title/units and timetable fields from
+ * `course_sections`: exact `course_section_id` when present, else legacy `MIN(id)` pick per row.
  */
 export async function listPortalEnrollmentRowsForStudentAcademics(
   studentExternalId: string,
@@ -518,28 +592,38 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
   const sid = studentExternalId.trim();
   const sql = `
     SELECT
+      e.id AS portal_enrollment_id,
       TRIM(pc.course_code) AS course_code,
       TRIM(pc.title) AS course_title_raw,
       TRIM(e.term) AS term,
       e.year,
       pc.units,
-      cs_pick.weekday,
-      cs_pick.start_time,
-      cs_pick.end_time,
-      cs_pick.instructor,
+      NULLIF(TRIM(e.section_code), '') AS enrollment_section_code,
+      NULLIF(TRIM(e.schedule_track), '') AS enrollment_schedule_track,
+      COALESCE(cs_direct.weekday, cs_leg.weekday) AS weekday,
+      COALESCE(cs_direct.start_time, cs_leg.start_time) AS start_time,
+      COALESCE(cs_direct.end_time, cs_leg.end_time) AS end_time,
+      COALESCE(cs_direct.instructor, cs_leg.instructor) AS instructor,
       e.status AS enrollment_status,
       e.withdrawn_at AS withdrawn_at
     FROM portal_enrollments e
     INNER JOIN portal_courses pc
       ON pc.course_id COLLATE utf8mb4_unicode_ci =
          e.course_id COLLATE utf8mb4_unicode_ci
-    LEFT JOIN course_sections cs_pick
-      ON TRIM(cs_pick.course_code) COLLATE utf8mb4_unicode_ci =
-         TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
-      AND TRIM(cs_pick.term) COLLATE utf8mb4_unicode_ci =
+    LEFT JOIN course_sections cs_direct
+      ON e.course_section_id IS NOT NULL
+      AND cs_direct.id = e.course_section_id
+      AND TRIM(cs_direct.term) COLLATE utf8mb4_unicode_ci =
           TRIM(e.term) COLLATE utf8mb4_unicode_ci
-      AND cs_pick.year = e.year
-      AND cs_pick.id = (
+      AND cs_direct.year = e.year
+    LEFT JOIN course_sections cs_leg
+      ON e.course_section_id IS NULL
+      AND TRIM(cs_leg.course_code) COLLATE utf8mb4_unicode_ci =
+          TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+      AND TRIM(cs_leg.term) COLLATE utf8mb4_unicode_ci =
+          TRIM(e.term) COLLATE utf8mb4_unicode_ci
+      AND cs_leg.year = e.year
+      AND cs_leg.id = (
         SELECT cs2.id
         FROM course_sections cs2
         WHERE TRIM(cs2.course_code) COLLATE utf8mb4_unicode_ci =
@@ -562,7 +646,8 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
         WHEN 'WINTER' THEN 1
         ELSE 0
       END DESC,
-      pc.course_code ASC
+      pc.course_code ASC,
+      e.id ASC
   `;
   const [rows] = await pool.query<RowDataPacket[]>(sql, [sid]);
   return rows.map((r) => {
@@ -574,7 +659,16 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
           ? w.toISOString()
           : String(w).trim() || null;
     }
+    const sec =
+      r.enrollment_section_code == null
+        ? null
+        : String(r.enrollment_section_code).trim() || null;
+    const tr =
+      r.enrollment_schedule_track == null
+        ? null
+        : String(r.enrollment_schedule_track).trim() || null;
     return {
+      portal_enrollment_id: Number(r.portal_enrollment_id ?? 0),
       course_code: String(r.course_code ?? "").trim(),
       course_title_raw: String(r.course_title_raw ?? "").trim(),
       term: String(r.term ?? "").trim(),
@@ -592,12 +686,82 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
         r.instructor == null ? null : String(r.instructor).trim() || null,
       status: normalizePortalEnrollmentAcademicStatus(r.enrollment_status),
       withdrawn_at: withdrawnAt,
+      section_code: sec,
+      schedule_track: tr,
     };
   });
 }
 
 /**
- * Removes one course-level portal enrollment (any section). Only `portal_enrollments` is affected.
+ * Soft-withdraws the enrollment row for one `course_sections.id` (and matching calendar term/year).
+ * Only `portal_enrollments` is updated.
+ */
+export async function softWithdrawPortalEnrollmentByCourseSection(
+  studentExternalId: string,
+  term: string,
+  year: number,
+  courseSectionId: number,
+): Promise<number> {
+  const sid = studentExternalId.trim();
+  const t = term.trim();
+  const csid = Math.trunc(Number(courseSectionId));
+  if (!Number.isFinite(csid) || csid <= 0) return 0;
+  /**
+   * Section-keyed rows match `course_section_id` directly.
+   * Legacy rows (`course_section_id` NULL) match when the withdraw target is the canonical
+   * `MIN(course_sections.id)` for that catalog course + term/year (same pick as timetable reads).
+   */
+  const sql = `
+    UPDATE portal_enrollments e
+    INNER JOIN portal_courses pc ON pc.course_id = e.course_id
+    SET
+      e.status = 'withdrawn',
+      e.withdrawn_at = NOW()
+    WHERE e.student_external_id COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.term COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.year = ?
+      AND (e.status IS NULL OR LOWER(TRIM(e.status)) = 'active')
+      AND (
+        e.course_section_id = ?
+        OR (
+          e.course_section_id IS NULL
+          AND EXISTS (
+            SELECT 1 FROM course_sections cs0
+            WHERE cs0.id = ?
+              AND TRIM(cs0.course_code) COLLATE utf8mb4_unicode_ci =
+                  TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+              AND TRIM(cs0.term) COLLATE utf8mb4_unicode_ci =
+                  TRIM(e.term) COLLATE utf8mb4_unicode_ci
+              AND cs0.year = e.year
+          )
+          AND ? = (
+            SELECT MIN(cs2.id)
+            FROM course_sections cs2
+            WHERE TRIM(cs2.course_code) COLLATE utf8mb4_unicode_ci =
+                  TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+              AND TRIM(cs2.term) COLLATE utf8mb4_unicode_ci =
+                  TRIM(e.term) COLLATE utf8mb4_unicode_ci
+              AND cs2.year = e.year
+          )
+        )
+      )
+  `;
+  const [result] = await pool.query<ResultSetHeader>(sql, [
+    sid,
+    t,
+    year,
+    csid,
+    csid,
+    csid,
+  ]);
+  return result.affectedRows;
+}
+
+/**
+ * Legacy: soft-withdraws a **course-level** portal row (`course_section_id` IS NULL) only.
+ * Does not affect section-keyed enrollments for the same course code.
  */
 export async function deletePortalEnrollmentByStudentCourseTermYear(
   studentExternalId: string,
@@ -621,7 +785,8 @@ export async function deletePortalEnrollmentByStudentCourseTermYear(
       AND e.term COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.year = ?
-      AND (e.status IS NULL OR e.status = 'active')
+      AND e.course_section_id IS NULL
+      AND (e.status IS NULL OR LOWER(TRIM(e.status)) = 'active')
   `;
   const [result] = await pool.query<ResultSetHeader>(sql, [sid, code, t, year]);
   return result.affectedRows;

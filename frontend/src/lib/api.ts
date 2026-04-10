@@ -3111,7 +3111,7 @@ export type PostStudentEnrollResponse = {
   insertedCount: number
 }
 
-/** POST /api/student/enroll — inserts `portal_enrollments` for the term (course-level; deduped). */
+/** POST /api/student/enroll — inserts section-keyed `portal_enrollments` for the term (deduped per course_section_id). */
 export async function postStudentEnroll(
   body: PostStudentEnrollBody,
   options?: { signal?: AbortSignal },
@@ -3162,12 +3162,12 @@ export async function fetchStudentEnrolledSections(
   return parseStudentEnrolledSectionsResponse(data)
 }
 
-/** POST /api/student/withdraw — soft-withdraws one didactic portal enrollment for the term. */
+/** POST /api/student/withdraw — soft-withdraws one portal enrollment for the term (`course_sections.id`). */
 export async function postStudentWithdraw(
   body: {
     studentId: string
     academic_term_id: string
-    course_code: string
+    course_section_id: number
   },
   options?: { signal?: AbortSignal },
 ): Promise<{ success: boolean; removedCount: number }> {
@@ -3178,7 +3178,7 @@ export async function postStudentWithdraw(
       body: JSON.stringify({
         studentId: body.studentId.trim(),
         academic_term_id: body.academic_term_id.trim(),
-        course_code: body.course_code.trim(),
+        course_section_id: body.course_section_id,
       }),
       signal: options?.signal,
     })) as unknown
@@ -3360,11 +3360,20 @@ function parseAdminCourseSectionEnrollmentList(
 export async function fetchAdminCourseSectionEnrollments(params: {
   academicTermId: string
   courseCode: string
+  /** When set, roster is limited to this `course_sections.id` (and matching legacy rows). */
+  courseSectionId?: number | null
   signal?: AbortSignal
 }): Promise<AdminCourseSectionEnrollmentRow[]> {
   const qs = new URLSearchParams()
   qs.set('academic_term_id', params.academicTermId.trim())
   qs.set('course_code', params.courseCode.trim())
+  if (
+    params.courseSectionId != null &&
+    Number.isFinite(params.courseSectionId) &&
+    params.courseSectionId > 0
+  ) {
+    qs.set('section_id', String(Math.trunc(params.courseSectionId)))
+  }
   const data = (await fetchApiJson(
     `/api/admin/course-sections/enrollments?${qs.toString()}`,
     { signal: params.signal },
@@ -3571,22 +3580,32 @@ export async function postAdminMarksSetGrade(params: {
 }
 
 /**
- * DELETE /api/admin/enrollments — removes one `portal_enrollments` row (course-level; not legacy marks).
+ * DELETE /api/admin/enrollments — soft-withdraw one portal row (prefer `course_section_id`; else legacy `course_code` for NULL-section rows only).
  */
 export async function deleteAdminPortalEnrollment(params: {
   studentId: string
   academic_term_id: string
-  course_code: string
+  course_section_id?: number
+  course_code?: string
   signal?: AbortSignal
 }): Promise<AdminPortalEnrollmentDeleteResponse> {
+  const body: Record<string, unknown> = {
+    studentId: params.studentId.trim(),
+    academic_term_id: params.academic_term_id.trim(),
+  }
+  if (
+    params.course_section_id != null &&
+    Number.isFinite(params.course_section_id) &&
+    params.course_section_id > 0
+  ) {
+    body.course_section_id = Math.trunc(params.course_section_id)
+  } else if (params.course_code != null && params.course_code.trim() !== '') {
+    body.course_code = params.course_code.trim()
+  }
   const data = (await fetchApiJson('/api/admin/enrollments', {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      studentId: params.studentId.trim(),
-      academic_term_id: params.academic_term_id.trim(),
-      course_code: params.course_code.trim(),
-    }),
+    body: JSON.stringify(body),
     signal: params.signal,
   })) as unknown
   if (

@@ -45,8 +45,12 @@ export function AddDropPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedTerm, setSelectedTerm] = useState<AcademicTerm | null>(null)
   const [coursesCatalog, setCoursesCatalog] = useState<CourseCatalogItem[] | null>(null)
-  const [withdrawingCode, setWithdrawingCode] = useState<string | null>(null)
-  const [rowErrorByCode, setRowErrorByCode] = useState<Record<string, string>>({})
+  const [withdrawingSectionId, setWithdrawingSectionId] = useState<number | null>(
+    null,
+  )
+  const [rowErrorBySectionId, setRowErrorBySectionId] = useState<
+    Record<number, string>
+  >({})
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const termKey = registrationTermId?.trim() ?? ''
@@ -134,28 +138,29 @@ export function AddDropPage() {
 
   const handleWithdraw = async (row: AdminCourseSection) => {
     const code = row.course_code.trim()
-    if (code === '' || termKey === '' || studentKey === '') return
+    const sectionId = row.id
+    if (code === '' || termKey === '' || studentKey === '' || sectionId <= 0) return
     if (!withdrawEligibility.withdrawAllowed) return
 
     const ok = window.confirm(t('addDropWithdrawConfirm').replace('{code}', code))
     if (!ok) return
 
-    setRowErrorByCode((prev) => {
+    setRowErrorBySectionId((prev) => {
       const next = { ...prev }
-      delete next[code]
+      delete next[sectionId]
       return next
     })
-    setWithdrawingCode(code)
+    setWithdrawingSectionId(sectionId)
     try {
       const res = await postStudentWithdraw({
         studentId: studentKey,
         academic_term_id: termKey,
-        course_code: code,
+        course_section_id: sectionId,
       })
       if (!res.success || res.removedCount < 1) {
-        setRowErrorByCode((prev) => ({
+        setRowErrorBySectionId((prev) => ({
           ...prev,
-          [code]: t('addDropWithdrawNoEnrollment'),
+          [sectionId]: t('addDropWithdrawNoEnrollment'),
         }))
         return
       }
@@ -164,9 +169,9 @@ export function AddDropPage() {
       await refetchEnrolledSectionsOnly()
     } catch (e) {
       const msg = e instanceof Error ? e.message : t('withdrawalFailedGeneric')
-      setRowErrorByCode((prev) => ({ ...prev, [code]: msg }))
+      setRowErrorBySectionId((prev) => ({ ...prev, [sectionId]: msg }))
     } finally {
-      setWithdrawingCode(null)
+      setWithdrawingSectionId(null)
     }
   }
 
@@ -293,8 +298,8 @@ export function AddDropPage() {
                           : tba
                       const loc =
                         row.room?.trim() && row.room.trim() !== '' ? row.room.trim() : tba
-                      const rowErr = rowErrorByCode[code]
-                      const submitting = withdrawingCode === code
+                      const rowErr = rowErrorBySectionId[row.id]
+                      const submitting = withdrawingSectionId === row.id
                       return (
                         <tr key={row.id}>
                           <td>
