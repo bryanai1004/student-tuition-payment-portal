@@ -12,6 +12,9 @@ export type AdminOpenRegistrationCourseRow = {
         student_external_id: string;
         full_name: string | null;
     }>;
+    prerequisiteCourseId: string | null;
+    prerequisiteCourseCode: string | null;
+    prerequisiteCourseTitle: string | null;
     registrationStatus: "Open" | "Closed";
 };
 /**

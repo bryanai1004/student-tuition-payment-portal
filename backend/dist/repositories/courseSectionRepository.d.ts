@@ -72,6 +72,12 @@ export type CourseSectionCountByCourse = {
     course_code: string;
     section_count: number;
 };
+export type CoursePrerequisiteCandidateByCourse = {
+    course_code: string;
+    prerequisite_course_id: string | null;
+    prerequisite_course_code: string | null;
+    prerequisite_course_title: string | null;
+};
 /** Course-level `portal_enrollments` counts (distinct students; multiple section rows per student still count once per course). */
 export type PortalEnrollmentRollupByCourse = {
     course_code: string;
@@ -80,6 +86,13 @@ export type PortalEnrollmentRollupByCourse = {
 };
 export declare function listPortalEnrollmentRollupsByCourseForTermYear(term: string, year: number): Promise<PortalEnrollmentRollupByCourse[]>;
 export declare function countCourseSectionsByCourseForTermYear(term: string, year: number): Promise<CourseSectionCountByCourse[]>;
+/**
+ * Candidate prerequisite rows for each offered course in a term/year.
+ *
+ * Returns one row per section so the service layer can deterministically pick a
+ * course-level prerequisite and optionally warn when sections disagree.
+ */
+export declare function listCoursePrerequisiteCandidatesByCourseForTermYear(term: string, year: number): Promise<CoursePrerequisiteCandidateByCourse[]>;
 export declare function createCourseSection(input: CourseSectionCreateInput): Promise<CourseSectionDetail>;
 /**
  * Applies a partial update. Returns `null` if the row does not exist.

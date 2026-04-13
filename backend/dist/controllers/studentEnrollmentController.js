@@ -90,7 +90,10 @@ export async function postStudentEnroll(req, res) {
         }
         const result = await enrollStudentForAcademicTerm(parsed.studentId, parsed.academic_term_id, parsed.sections);
         if (!result.ok) {
-            res.status(400).json({ error: result.error });
+            const body = { error: result.error };
+            if (result.details != null)
+                body.details = result.details;
+            res.status(400).json(body);
             return;
         }
         res.json({ success: true, insertedCount: result.insertedCount });

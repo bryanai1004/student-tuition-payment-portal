@@ -4,6 +4,12 @@
  */
 import { type EnrollSectionInput } from "../repositories/studentEnrollmentRepository.js";
 export type { EnrollSectionInput };
+export type MissingPrerequisiteDetail = {
+    courseCode: string;
+    sectionCode: string;
+    missingPrerequisiteCourseCode: string;
+    missingPrerequisiteCourseTitle: string | null;
+};
 /** Thrown when academic term policy blocks registration (maps to HTTP 400 with this message). */
 export declare class RegistrationLockedOverdueBalanceError extends Error {
     constructor();
@@ -20,5 +26,6 @@ export declare function enrollStudentForAcademicTerm(studentId: string, academic
 } | {
     ok: false;
     error: string;
+    details?: MissingPrerequisiteDetail[];
 }>;
 //# sourceMappingURL=studentEnrollmentService.d.ts.map

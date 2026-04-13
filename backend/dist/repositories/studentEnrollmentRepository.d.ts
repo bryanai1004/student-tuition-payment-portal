@@ -5,12 +5,36 @@ export type EnrollSectionInput = {
     /** Disambiguates duplicate section_code across EN vs CN offered timetables. */
     schedule_track?: "EN" | "CN";
 };
+export type ResolvedEnrollmentSection = {
+    course_section_id: number;
+    course_code: string;
+    section_code: string;
+    schedule_track: "EN" | "CN";
+    prerequisite_course_id: string | null;
+    prerequisite_course_code: string | null;
+    prerequisite_course_title: string | null;
+};
+export type StudentHistoricalCourseReference = {
+    course_id: string | null;
+    course_code: string | null;
+    source: "marks" | "portal";
+};
+export declare function resolveRequestedEnrollmentSectionsForTerm(term: string, year: number, sections: EnrollSectionInput[]): Promise<{
+    ok: true;
+    sections: ResolvedEnrollmentSection[];
+} | {
+    ok: false;
+    error: string;
+}>;
+export declare function listStudentHistoricalCourseReferences(studentExternalId: string): Promise<StudentHistoricalCourseReference[]>;
 /**
  * Validates each section against `course_sections` and `portal_courses`, then inserts or reactivates
  * `portal_enrollments` rows. Duplicate / idempotency: same student + `course_section_id` + term + year
  * (active rows skipped; withdrawn rows reactivated). Legacy course-only rows are not used for new writes.
  */
-export declare function enrollStudentInSections(studentExternalId: string, term: string, year: number, sections: EnrollSectionInput[]): Promise<{
+export declare function enrollStudentInSections(studentExternalId: string, term: string, year: number, sections: EnrollSectionInput[], options?: {
+    resolvedSections?: ResolvedEnrollmentSection[];
+}): Promise<{
     ok: true;
     insertedCount: number;
 } | {
