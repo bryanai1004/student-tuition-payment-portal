@@ -563,6 +563,11 @@ export function AdminCourseSectionsPage() {
     return [selected, ...filteredCoursesForSelect]
   }, [sortedCourses, filteredCoursesForSelect, courseCode])
 
+  const prerequisiteCourseOptions = useMemo(
+    () => sortedCourses,
+    [sortedCourses],
+  )
+
   const beginEdit = useCallback((row: AdminCourseSection) => {
     setEditingId(row.id)
     setCourseTitleLocked(false)
@@ -1102,11 +1107,11 @@ export function AdminCourseSectionsPage() {
                   prerequisite_course_id: e.target.value,
                 }))
               }
-              disabled={busy || sortedCourses.length === 0}
+              disabled={busy || prerequisiteCourseOptions.length === 0}
               aria-label="Prerequisite course"
             >
               <option value="">None</option>
-              {sortedCourses.map((c) => (
+              {prerequisiteCourseOptions.map((c) => (
                 <option key={c.course_id} value={c.course_id}>
                   {formatCourseCatalogSelectLabel(c)}
                 </option>
