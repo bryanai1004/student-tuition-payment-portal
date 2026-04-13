@@ -77,7 +77,7 @@ export type LegacyStudentProfileRow = RowDataPacket;
 /**
  * Load one legacy `students` row by primary key `id` (e.g. C17310).
  */
-export declare function loadLegacyStudentProfileRow(pool: Pool, studentId: string): Promise<LegacyStudentProfileRow | null>;
+export declare function loadLegacyStudentProfileRow(pool: LegacyMysqlClient, studentId: string): Promise<LegacyStudentProfileRow | null>;
 export type LegacyStudentLoaRow = {
     studentId: string;
     absentQuarter: string | null;
@@ -93,7 +93,19 @@ export type LegacyStudentLoaRow = {
  * Latest LOA row for one student from legacy `loa`, matched by trimmed `student_id`.
  * Ordering: absent_year DESC, quarter DESC (Fall > Summer > Spring > Winter), seqNumber DESC.
  */
-export declare function findLatestLegacyStudentLoaRow(pool: Pool, studentId: string): Promise<LegacyStudentLoaRow | null>;
+export declare function findLatestLegacyStudentLoaRow(pool: LegacyMysqlClient, studentId: string): Promise<LegacyStudentLoaRow | null>;
+export type LegacyStudentLoaInsert = {
+    studentId: string;
+    absentQuarter: string;
+    absentYear: number;
+    absentStartingDate: string;
+    returnQuarter: string;
+    returnYear: number;
+    returnDate: string;
+    reason: string;
+};
+/** Insert one legacy `loa` row; `seqNumber` remains database-managed. */
+export declare function createLegacyStudentLoaRow(pool: LegacyMysqlClient, input: LegacyStudentLoaInsert): Promise<number>;
 /** Columns aligned with admin student profile (`getAdminStudentDetail` / `students` table). */
 export type LegacyStudentProfileExportRow = {
     id: string;
@@ -140,6 +152,12 @@ export type LegacyAdminStudentListQuery = {
     entryYear: string | null;
     /** Derived intake code from `students.id` character 4. */
     intakeCode: string | null;
+    /** Presence filter backed by legacy `loa` rows. */
+    loa: "all" | "yes" | "no";
+    /** LOA start quarter from `loa.absent_quarter`. */
+    loaQuarter: "Winter" | "Spring" | "Summer" | "Fall" | null;
+    /** LOA start year from `loa.absent_year`. */
+    loaYear: number | null;
 };
 /**
  * Count of students matching the admin roster search (before pagination).
@@ -163,6 +181,11 @@ export type LegacyAdminStudentEnrollmentFacetRow = RowDataPacket & {
     intake_code: string | null;
 };
 export declare function listLegacyAdminStudentEnrollmentFacetRows(pool: Pool, query: LegacyAdminStudentListQuery): Promise<LegacyAdminStudentEnrollmentFacetRow[]>;
+export type LegacyAdminStudentLoaTermFacetRow = RowDataPacket & {
+    absent_quarter: string | null;
+    absent_year: number | null;
+};
+export declare function listLegacyAdminStudentLoaTermFacetRows(pool: Pool, query: LegacyAdminStudentListQuery): Promise<LegacyAdminStudentLoaTermFacetRow[]>;
 /**
  * Export rows for an explicit student selection, sorted by student id for stable CSV output.
  */

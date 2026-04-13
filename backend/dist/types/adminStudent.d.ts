@@ -40,12 +40,19 @@ export type AdminStudentListItem = {
 /** Temporary `/api/admin/students` roster filter only. */
 export type AdminStudentRosterProgramFilter = "all" | "dahm" | "mahm";
 export type AdminStudentRosterTrackFilter = "all" | "C" | "E";
+export type AdminStudentRosterLoaFilter = "all" | "yes" | "no";
+export type AdminStudentLoaTermOption = {
+    quarter: "Winter" | "Spring" | "Summer" | "Fall";
+    year: number;
+    label: string;
+};
 export type AdminStudentEnrollmentFilterOptions = {
     years: string[];
     intakes: Array<{
         code: string;
         label: string;
     }>;
+    loaTerms: AdminStudentLoaTermOption[];
 };
 export type AdminStudentLoaSummary = {
     hasLoa: boolean;
@@ -103,6 +110,14 @@ export type AdminStudentUpdateBody = {
     zip: string | null;
     signedDate: string | null;
     enrollStartDate: string | null;
+};
+/** POST /api/admin/students/:studentId/loa — create one legacy `loa` row. */
+export type AdminStudentCreateLoaBody = {
+    loaQuarter: string;
+    loaYear: string;
+    plannedReturnQuarter: string;
+    plannedReturnYear: string;
+    reason: string | null;
 };
 export type AdminDivision = "Chinese" | "English";
 /** POST /api/admin/students — create legacy student + password row. */

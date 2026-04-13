@@ -191,6 +191,31 @@ export async function findLatestLegacyStudentLoaRow(pool, studentId) {
         seqNumber: parseLegacyNullableInt(row.seqNumber),
     };
 }
+/** Insert one legacy `loa` row; `seqNumber` remains database-managed. */
+export async function createLegacyStudentLoaRow(pool, input) {
+    const [result] = await pool.execute(`INSERT INTO loa (
+       student_id,
+       absent_quarter,
+       absent_year,
+       absent_starting_date,
+       return_quarter,
+       return_year,
+       return_date,
+       reasons,
+       HasStuReturned,
+       actual_return
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'N', NULL)`, [
+        input.studentId.trim(),
+        input.absentQuarter,
+        input.absentYear,
+        input.absentStartingDate,
+        input.returnQuarter,
+        input.returnYear,
+        input.returnDate,
+        input.reason,
+    ]);
+    return result.insertId;
+}
 function strCell(v) {
     if (v == null)
         return null;
@@ -338,6 +363,24 @@ function buildAdminStudentTrackClause(track) {
             return "";
     }
 }
+function buildAdminStudentLoaPresenceClause(loa) {
+    switch (loa) {
+        case "yes":
+            return `EXISTS (
+        SELECT 1
+        FROM loa
+        WHERE TRIM(loa.student_id) = TRIM(s.id)
+      )`;
+        case "no":
+            return `NOT EXISTS (
+        SELECT 1
+        FROM loa
+        WHERE TRIM(loa.student_id) = TRIM(s.id)
+      )`;
+        default:
+            return "";
+    }
+}
 function buildAdminStudentListFilters(query) {
     const clauses = [];
     const params = [];
@@ -360,6 +403,10 @@ function buildAdminStudentListFilters(query) {
     if (trackClause !== "") {
         clauses.push(trackClause);
     }
+    const loaPresenceClause = buildAdminStudentLoaPresenceClause(query.loa);
+    if (loaPresenceClause !== "") {
+        clauses.push(loaPresenceClause);
+    }
     if (query.entryYear != null) {
         clauses.push(`${ADMIN_STUDENT_ENTRY_YEAR_SQL} = ?`);
         params.push(query.entryYear);
@@ -367,6 +414,16 @@ function buildAdminStudentListFilters(query) {
     if (query.intakeCode != null) {
         clauses.push(`${ADMIN_STUDENT_INTAKE_CODE_SQL} = ?`);
         params.push(query.intakeCode);
+    }
+    if (query.loaQuarter != null && query.loaYear != null) {
+        clauses.push(`EXISTS (
+      SELECT 1
+      FROM loa
+      WHERE TRIM(loa.student_id) = TRIM(s.id)
+        AND UPPER(TRIM(loa.absent_quarter)) = UPPER(?)
+        AND CAST(NULLIF(TRIM(loa.absent_year), '') AS SIGNED) = ?
+    )`);
+        params.push(query.loaQuarter, query.loaYear);
     }
     if (clauses.length === 0) {
         return { clause: "", params };
@@ -439,6 +496,23 @@ export async function listLegacyAdminStudentEnrollmentFacetRows(pool, query) {
      ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}
      ${clause}
      ORDER BY entry_year DESC, intake_code ASC`, params);
+    return rows;
+}
+export async function listLegacyAdminStudentLoaTermFacetRows(pool, query) {
+    const { clause, params } = buildAdminStudentListFilters(query);
+    const [rows] = await pool.query(`SELECT DISTINCT
+       TRIM(l.absent_quarter) AS absent_quarter,
+       CAST(NULLIF(TRIM(l.absent_year), '') AS SIGNED) AS absent_year
+     FROM loa l
+     INNER JOIN students s
+       ON TRIM(l.student_id) = TRIM(s.id)
+     ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}
+     ${clause}
+     HAVING absent_quarter IS NOT NULL
+       AND absent_quarter <> ''
+       AND absent_year IS NOT NULL
+     ORDER BY absent_year DESC,
+       ${legacyQuarterOrderSql("absent_quarter")} ASC`, params);
     return rows;
 }
 /**

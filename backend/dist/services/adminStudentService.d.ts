@@ -1,4 +1,4 @@
-import type { AdminStudentCreateBody, AdminStudentDetail, AdminStudentEnrollmentFilterOptions, AdminStudentListItem, AdminStudentRosterProgramFilter, AdminStudentRosterTrackFilter, AdminStudentUpdateBody } from "../types/adminStudent.js";
+import type { AdminStudentCreateBody, AdminStudentCreateLoaBody, AdminStudentDetail, AdminStudentEnrollmentFilterOptions, AdminStudentListItem, AdminStudentRosterLoaFilter, AdminStudentRosterProgramFilter, AdminStudentRosterTrackFilter, AdminStudentUpdateBody } from "../types/adminStudent.js";
 export type AdminStudentListPageResult = {
     items: AdminStudentListItem[];
     total: number;
@@ -14,6 +14,9 @@ export declare function listAdminStudentsPage(options: {
     track: AdminStudentRosterTrackFilter;
     entryYear: string | null;
     intakeCode: string | null;
+    loa: AdminStudentRosterLoaFilter;
+    loaQuarter: "Winter" | "Spring" | "Summer" | "Fall" | null;
+    loaYear: number | null;
     includeClinicalSummary?: boolean;
 }): Promise<AdminStudentListPageResult>;
 export type BuildAdminStudentsCsvInput = {
@@ -27,6 +30,9 @@ export type BuildAdminStudentsCsvInput = {
     track: AdminStudentRosterTrackFilter;
     entryYear: string | null;
     intakeCode: string | null;
+    loa: AdminStudentRosterLoaFilter;
+    loaQuarter: "Winter" | "Spring" | "Summer" | "Fall" | null;
+    loaYear: number | null;
     view: "roster" | "new-enrollment";
 };
 export type BuildAdminStudentsCsvResult = {
@@ -37,6 +43,15 @@ export type BuildAdminStudentsCsvResult = {
 };
 export declare function buildAdminStudentsCsv(input: BuildAdminStudentsCsvInput): Promise<BuildAdminStudentsCsvResult>;
 export declare function getAdminStudentDetail(studentIdRaw: string): Promise<AdminStudentDetail | null>;
+export type AdminStudentCreateLoaResult = {
+    ok: true;
+    detail: AdminStudentDetail;
+} | {
+    ok: false;
+    status: 400 | 404 | 409;
+    message: string;
+};
+export declare function createAdminStudentLoa(studentIdRaw: string, body: AdminStudentCreateLoaBody): Promise<AdminStudentCreateLoaResult>;
 export type AdminStudentUpdateResult = {
     ok: true;
     detail: AdminStudentDetail;
