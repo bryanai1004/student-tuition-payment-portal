@@ -12,6 +12,21 @@ export declare function listAdminStudentsPage(options: {
     program: AdminStudentRosterProgramFilter;
     includeClinicalSummary?: boolean;
 }): Promise<AdminStudentListPageResult>;
+export type BuildAdminStudentsCsvInput = {
+    mode: "selected";
+    studentIds: string[];
+} | {
+    mode: "filtered";
+    search: string;
+    program: AdminStudentRosterProgramFilter;
+};
+export type BuildAdminStudentsCsvResult = {
+    mode: "selected" | "filtered";
+    filename: string;
+    csvBody: string;
+    rowCount: number;
+};
+export declare function buildAdminStudentsCsv(input: BuildAdminStudentsCsvInput): Promise<BuildAdminStudentsCsvResult>;
 export declare function getAdminStudentDetail(studentIdRaw: string): Promise<AdminStudentDetail | null>;
 export type AdminStudentUpdateResult = {
     ok: true;

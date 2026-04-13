@@ -314,15 +314,7 @@ export async function countLegacyAdminStudentListRows(pool, query) {
     const n = Number(row.cnt);
     return Number.isFinite(n) ? n : 0;
 }
-/**
- * One page of legacy `students` rows with latest registration term/year (admin roster).
- * Search is applied in SQL before `LIMIT` / `OFFSET`.
- */
-export async function listLegacyAdminStudentListRowsPage(pool, query) {
-    const { clause, params } = buildAdminStudentListFilters(query);
-    const limit = Math.max(0, Math.trunc(query.limit));
-    const offset = Math.max(0, Math.trunc(query.offset));
-    const [rows] = await pool.query(`SELECT
+const ADMIN_STUDENT_LIST_SELECT_SQL = `SELECT
        TRIM(s.id) AS id,
        s.name,
        s.email,
@@ -335,10 +327,44 @@ export async function listLegacyAdminStudentListRowsPage(pool, query) {
        lr.term AS latest_term,
        lr.year AS latest_year
      FROM students s
-     ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}
+     ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}`;
+/**
+ * One page of legacy `students` rows with latest registration term/year (admin roster).
+ * Search is applied in SQL before `LIMIT` / `OFFSET`.
+ */
+export async function listLegacyAdminStudentListRowsPage(pool, query) {
+    const { clause, params } = buildAdminStudentListFilters(query);
+    const limit = Math.max(0, Math.trunc(query.limit));
+    const offset = Math.max(0, Math.trunc(query.offset));
+    const [rows] = await pool.query(`${ADMIN_STUDENT_LIST_SELECT_SQL}
      ${clause}
      ORDER BY s.name ASC, s.id ASC
      LIMIT ? OFFSET ?`, [...params, limit, offset]);
+    return rows;
+}
+/**
+ * Full admin roster result set for the same search/program filters as the paginated list.
+ */
+export async function listLegacyAdminStudentListRows(pool, query) {
+    const { clause, params } = buildAdminStudentListFilters(query);
+    const [rows] = await pool.query(`${ADMIN_STUDENT_LIST_SELECT_SQL}
+     ${clause}
+     ORDER BY s.name ASC, s.id ASC`, params);
+    return rows;
+}
+/**
+ * Export rows for an explicit student selection, sorted by student id for stable CSV output.
+ */
+export async function listLegacyAdminStudentListRowsByStudentIds(pool, studentIds) {
+    const normalized = Array.from(new Set(studentIds
+        .map((studentId) => studentId.trim())
+        .filter((studentId) => studentId !== "")));
+    if (normalized.length === 0)
+        return [];
+    const placeholders = normalized.map(() => "?").join(", ");
+    const [rows] = await pool.query(`${ADMIN_STUDENT_LIST_SELECT_SQL}
+     WHERE TRIM(s.id) IN (${placeholders})
+     ORDER BY TRIM(s.id) ASC`, normalized);
     return rows;
 }
 /**

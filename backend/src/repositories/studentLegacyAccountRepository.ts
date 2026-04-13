@@ -488,6 +488,21 @@ export async function countLegacyAdminStudentListRows(
   return Number.isFinite(n) ? n : 0;
 }
 
+const ADMIN_STUDENT_LIST_SELECT_SQL = `SELECT
+       TRIM(s.id) AS id,
+       s.name,
+       s.email,
+       TRIM(s.program) AS program,
+       s.background,
+       s.requirements_id,
+       s.tertiary,
+       s.signed_date,
+       s.EnrollStartDate AS enroll_start_date,
+       lr.term AS latest_term,
+       lr.year AS latest_year
+     FROM students s
+     ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}`;
+
 export type LegacyAdminStudentListPageQuery = LegacyAdminStudentListQuery & {
   limit: number;
   offset: number;
@@ -505,24 +520,53 @@ export async function listLegacyAdminStudentListRowsPage(
   const limit = Math.max(0, Math.trunc(query.limit));
   const offset = Math.max(0, Math.trunc(query.offset));
   const [rows] = await pool.query<LegacyAdminStudentListRow[]>(
-    `SELECT
-       TRIM(s.id) AS id,
-       s.name,
-       s.email,
-       TRIM(s.program) AS program,
-       s.background,
-       s.requirements_id,
-       s.tertiary,
-       s.signed_date,
-       s.EnrollStartDate AS enroll_start_date,
-       lr.term AS latest_term,
-       lr.year AS latest_year
-     FROM students s
-     ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}
+    `${ADMIN_STUDENT_LIST_SELECT_SQL}
      ${clause}
      ORDER BY s.name ASC, s.id ASC
      LIMIT ? OFFSET ?`,
     [...params, limit, offset],
+  );
+  return rows;
+}
+
+/**
+ * Full admin roster result set for the same search/program filters as the paginated list.
+ */
+export async function listLegacyAdminStudentListRows(
+  pool: Pool,
+  query: LegacyAdminStudentListQuery,
+): Promise<LegacyAdminStudentListRow[]> {
+  const { clause, params } = buildAdminStudentListFilters(query);
+  const [rows] = await pool.query<LegacyAdminStudentListRow[]>(
+    `${ADMIN_STUDENT_LIST_SELECT_SQL}
+     ${clause}
+     ORDER BY s.name ASC, s.id ASC`,
+    params,
+  );
+  return rows;
+}
+
+/**
+ * Export rows for an explicit student selection, sorted by student id for stable CSV output.
+ */
+export async function listLegacyAdminStudentListRowsByStudentIds(
+  pool: Pool,
+  studentIds: readonly string[],
+): Promise<LegacyAdminStudentListRow[]> {
+  const normalized = Array.from(
+    new Set(
+      studentIds
+        .map((studentId) => studentId.trim())
+        .filter((studentId) => studentId !== ""),
+    ),
+  );
+  if (normalized.length === 0) return [];
+  const placeholders = normalized.map(() => "?").join(", ");
+  const [rows] = await pool.query<LegacyAdminStudentListRow[]>(
+    `${ADMIN_STUDENT_LIST_SELECT_SQL}
+     WHERE TRIM(s.id) IN (${placeholders})
+     ORDER BY TRIM(s.id) ASC`,
+    normalized,
   );
   return rows;
 }

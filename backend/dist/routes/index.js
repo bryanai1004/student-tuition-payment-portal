@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAdminStudent, getAdminStudents, getNextAdminStudentId, postAdminStudent, postDeleteSelectedAdminStudents, putAdminStudent, } from "../controllers/adminStudentController.js";
+import { getAdminStudent, getAdminStudents, getNextAdminStudentId, postExportAdminStudentsCsv, postAdminStudent, postDeleteSelectedAdminStudents, putAdminStudent, } from "../controllers/adminStudentController.js";
 import { deleteAdminCourseSection, getAdminCourseSectionCourseMeta, getAdminCourseSectionEnrollments, getAdminCourseSections, getAdminExportRegisteredStudentsCsv, patchAdminCourseSection, postAdminCourseSection, } from "../controllers/adminCourseSectionController.js";
 import { deleteAdminPortalEnrollmentHandler } from "../controllers/adminEnrollmentController.js";
 import { setStudentGrade } from "../controllers/adminMarksController.js";
@@ -45,6 +45,7 @@ adminRouter.get("/students", getAdminStudents);
 adminRouter.get("/students/next-id", getNextAdminStudentId);
 adminRouter.post("/students", postAdminStudent);
 adminRouter.post("/students/delete-selected", postDeleteSelectedAdminStudents);
+adminRouter.post("/students/export.csv", postExportAdminStudentsCsv);
 adminRouter.get("/students/:studentId", getAdminStudent);
 adminRouter.put("/students/:studentId", putAdminStudent);
 adminRouter.get("/students/:studentId/course-feedback", getAdminStudentCourseFeedback);

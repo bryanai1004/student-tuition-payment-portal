@@ -3,6 +3,7 @@ import {
   getAdminStudent,
   getAdminStudents,
   getNextAdminStudentId,
+  postExportAdminStudentsCsv,
   postAdminStudent,
   postDeleteSelectedAdminStudents,
   putAdminStudent,
@@ -140,6 +141,7 @@ adminRouter.get("/students", getAdminStudents);
 adminRouter.get("/students/next-id", getNextAdminStudentId);
 adminRouter.post("/students", postAdminStudent);
 adminRouter.post("/students/delete-selected", postDeleteSelectedAdminStudents);
+adminRouter.post("/students/export.csv", postExportAdminStudentsCsv);
 adminRouter.get("/students/:studentId", getAdminStudent);
 adminRouter.put("/students/:studentId", putAdminStudent);
 adminRouter.get(

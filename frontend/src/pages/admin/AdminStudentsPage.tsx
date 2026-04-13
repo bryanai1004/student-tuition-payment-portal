@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   deleteSelectedAdminStudents,
+  downloadAdminStudentsCsv,
   fetchAdminStudents,
   type AdminStudentsProgramFilter,
   type AdminStudentListItem,
@@ -48,6 +49,8 @@ export function AdminStudentsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [deleteSummary, setDeleteSummary] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const debouncedSearchPrev = useRef<string | null>(null)
   useEffect(() => {
@@ -192,6 +195,26 @@ export function AdminStudentsPage() {
     }
   }
 
+  async function onExportCsv() {
+    setExporting(true)
+    setExportError(null)
+    try {
+      const ids = Array.from(selectedIds)
+      if (ids.length > 0) {
+        await downloadAdminStudentsCsv({ studentIds: ids })
+      } else {
+        await downloadAdminStudentsCsv({
+          search: debouncedSearch,
+          program,
+        })
+      }
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'CSV export failed.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const rangeEnd = Math.min(page * PAGE_SIZE, total)
 
@@ -223,6 +246,14 @@ export function AdminStudentsPage() {
             <option value="dahm">DAHM</option>
             <option value="mahm">MAHM</option>
           </select>
+          <button
+            type="button"
+            className="portal-btn portal-btn--secondary"
+            disabled={loading || Boolean(error) || exporting}
+            onClick={() => void onExportCsv()}
+          >
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
           <button
             type="button"
             className="portal-btn portal-btn--secondary"
@@ -266,6 +297,22 @@ export function AdminStudentsPage() {
           >
             {deleteSummary}
           </pre>
+        </section>
+      ) : null}
+
+      {exportError && !sectionLoading ? (
+        <section
+          className="portal-card portal-profile-state portal-profile-state--error"
+          role="alert"
+          aria-live="assertive"
+          style={{ marginBottom: '1rem' }}
+        >
+          <p className="portal-profile-state__title" style={{ marginTop: 0 }}>
+            CSV export failed
+          </p>
+          <p className="portal-profile-state__detail" style={{ marginBottom: 0 }}>
+            {exportError}
+          </p>
         </section>
       ) : null}
 

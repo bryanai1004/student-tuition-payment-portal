@@ -131,6 +131,14 @@ export type LegacyAdminStudentListPageQuery = LegacyAdminStudentListQuery & {
  * Search is applied in SQL before `LIMIT` / `OFFSET`.
  */
 export declare function listLegacyAdminStudentListRowsPage(pool: Pool, query: LegacyAdminStudentListPageQuery): Promise<LegacyAdminStudentListRow[]>;
+/**
+ * Full admin roster result set for the same search/program filters as the paginated list.
+ */
+export declare function listLegacyAdminStudentListRows(pool: Pool, query: LegacyAdminStudentListQuery): Promise<LegacyAdminStudentListRow[]>;
+/**
+ * Export rows for an explicit student selection, sorted by student id for stable CSV output.
+ */
+export declare function listLegacyAdminStudentListRowsByStudentIds(pool: Pool, studentIds: readonly string[]): Promise<LegacyAdminStudentListRow[]>;
 export type LegacyStudentMasterUpdate = {
     name: string;
     email: string;

@@ -1,4 +1,4 @@
-import { createAdminStudent, deleteSelectedAdminStudents, getAdminStudentDetail, listAdminStudentsPage, previewNextAdminStudentId, updateAdminStudent, } from "../services/adminStudentService.js";
+import { buildAdminStudentsCsv, createAdminStudent, deleteSelectedAdminStudents, getAdminStudentDetail, listAdminStudentsPage, previewNextAdminStudentId, updateAdminStudent, } from "../services/adminStudentService.js";
 function isRecord(v) {
     return v != null && typeof v === "object" && !Array.isArray(v);
 }
@@ -157,6 +157,57 @@ function parseAdminStudentProgramParam(raw) {
             return "all";
     }
 }
+function parseAdminStudentIds(raw) {
+    if (raw == null)
+        return { ok: true, value: [] };
+    if (!Array.isArray(raw)) {
+        return { ok: false, error: "studentIds must be an array when provided." };
+    }
+    const seen = new Set();
+    const normalized = [];
+    for (const item of raw) {
+        if (typeof item !== "string") {
+            return { ok: false, error: "Each student id must be a string." };
+        }
+        const studentId = item.trim();
+        if (studentId === "")
+            continue;
+        if (!STUDENT_ID_PARAM.test(studentId)) {
+            return { ok: false, error: `Invalid student id: ${studentId}` };
+        }
+        if (!seen.has(studentId)) {
+            seen.add(studentId);
+            normalized.push(studentId);
+        }
+    }
+    return { ok: true, value: normalized };
+}
+function parseAdminStudentsExportBody(raw) {
+    if (!isRecord(raw))
+        return { ok: false, error: "Invalid request body." };
+    const studentIds = parseAdminStudentIds(raw.studentIds);
+    if (!studentIds.ok)
+        return studentIds;
+    if (studentIds.value.length > 0) {
+        return {
+            ok: true,
+            value: {
+                mode: "selected",
+                studentIds: studentIds.value,
+            },
+        };
+    }
+    const search = typeof raw.search === "string" ? raw.search.trim().slice(0, 200) : "";
+    const program = parseAdminStudentProgramParam(raw.program);
+    return {
+        ok: true,
+        value: {
+            mode: "filtered",
+            search,
+            program,
+        },
+    };
+}
 export async function getAdminStudents(req, res) {
     try {
         const rawClinical = req.query.clinicalSummary;
@@ -185,6 +236,24 @@ export async function getAdminStudents(req, res) {
     catch (e) {
         console.error(e);
         res.status(500).json({ error: "Failed to load students" });
+    }
+}
+export async function postExportAdminStudentsCsv(req, res) {
+    const body = parseAdminStudentsExportBody(req.body);
+    if (!body.ok) {
+        res.status(400).json({ error: body.error });
+        return;
+    }
+    try {
+        const built = await buildAdminStudentsCsv(body.value);
+        const asciiName = built.filename.replace(/"/g, "");
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${asciiName}"`);
+        res.send(Buffer.from(`\uFEFF${built.csvBody}`, "utf8"));
+    }
+    catch (e) {
+        console.error("[admin/students/export.csv] failed:", e);
+        res.status(500).json({ error: "Failed to export students CSV." });
     }
 }
 function paramStudentId(params) {

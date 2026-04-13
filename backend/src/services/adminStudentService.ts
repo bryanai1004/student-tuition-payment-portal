@@ -12,7 +12,9 @@ import {
   legacyStudentMasterExists,
   legacyStudentPasswordRowExists,
   countLegacyAdminStudentListRows,
+  listLegacyAdminStudentListRows,
   listLegacyAdminStudentListRowsPage,
+  listLegacyAdminStudentListRowsByStudentIds,
   loadLegacyStudentProfileRow,
   updateLegacyStudentMasterRow,
 } from "../repositories/studentLegacyAccountRepository.js";
@@ -201,6 +203,112 @@ export async function listAdminStudentsPage(options: {
     }
   }
   return { items, total, page, pageSize };
+}
+
+function csvEscapeCell(value: string): string {
+  const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  if (/[",\n]/.test(normalized)) {
+    return `"${normalized.replace(/"/g, '""')}"`;
+  }
+  return normalized;
+}
+
+function csvCell(value: string | null | undefined): string {
+  return value == null ? "" : String(value);
+}
+
+function formatCsvDate(iso: string | null): string {
+  if (iso == null || iso.trim() === "") return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
+  if (!m) return iso;
+  const [, year, month, day] = m;
+  return `${month}/${day}/${year}`;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function buildAdminStudentsExportTimestamp(date = new Date()): string {
+  return [
+    String(date.getFullYear()),
+    pad2(date.getMonth() + 1),
+    pad2(date.getDate()),
+    "_",
+    pad2(date.getHours()),
+    pad2(date.getMinutes()),
+  ].join("");
+}
+
+const ADMIN_STUDENTS_CSV_HEADERS = [
+  "Student ID",
+  "Name",
+  "Division",
+  "Email",
+  "Program",
+  "Signed Date",
+  "Latest Registration Term",
+] as const;
+
+export type BuildAdminStudentsCsvInput =
+  | {
+      mode: "selected";
+      studentIds: string[];
+    }
+  | {
+      mode: "filtered";
+      search: string;
+      program: AdminStudentRosterProgramFilter;
+    };
+
+export type BuildAdminStudentsCsvResult = {
+  mode: "selected" | "filtered";
+  filename: string;
+  csvBody: string;
+  rowCount: number;
+};
+
+export async function buildAdminStudentsCsv(
+  input: BuildAdminStudentsCsvInput,
+): Promise<BuildAdminStudentsCsvResult> {
+  const rows =
+    input.mode === "selected"
+      ? await listLegacyAdminStudentListRowsByStudentIds(pool, input.studentIds)
+      : await listLegacyAdminStudentListRows(pool, {
+          search: input.search.trim(),
+          program: input.program,
+        });
+
+  const items = rows.map((row) =>
+    mapRowToListItem(row as Record<string, unknown>),
+  );
+  const lines = [
+    ADMIN_STUDENTS_CSV_HEADERS.map((header) => csvEscapeCell(header)).join(","),
+  ];
+
+  for (const item of items) {
+    const values = [
+      item.studentId,
+      item.name,
+      item.division,
+      csvCell(item.email),
+      item.program,
+      formatCsvDate(item.signedDate),
+      csvCell(item.latestRegistrationTerm),
+    ];
+    lines.push(values.map(csvEscapeCell).join(","));
+  }
+
+  const timestamp = buildAdminStudentsExportTimestamp();
+  const prefix =
+    input.mode === "selected" ? "students_selected_" : "students_filtered_";
+
+  return {
+    mode: input.mode,
+    filename: `${prefix}${timestamp}.csv`,
+    csvBody: lines.join("\r\n"),
+    rowCount: items.length,
+  };
 }
 
 function mapProfileRowToAdminDetail(

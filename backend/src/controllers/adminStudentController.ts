@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import {
+  buildAdminStudentsCsv,
   createAdminStudent,
   deleteSelectedAdminStudents,
   getAdminStudentDetail,
@@ -183,6 +184,65 @@ function parseAdminStudentProgramParam(
   }
 }
 
+function parseAdminStudentIds(raw: unknown): ParseBodyResult<string[]> {
+  if (raw == null) return { ok: true, value: [] };
+  if (!Array.isArray(raw)) {
+    return { ok: false, error: "studentIds must be an array when provided." };
+  }
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") {
+      return { ok: false, error: "Each student id must be a string." };
+    }
+    const studentId = item.trim();
+    if (studentId === "") continue;
+    if (!STUDENT_ID_PARAM.test(studentId)) {
+      return { ok: false, error: `Invalid student id: ${studentId}` };
+    }
+    if (!seen.has(studentId)) {
+      seen.add(studentId);
+      normalized.push(studentId);
+    }
+  }
+  return { ok: true, value: normalized };
+}
+
+function parseAdminStudentsExportBody(
+  raw: unknown,
+): ParseBodyResult<
+  | { mode: "selected"; studentIds: string[] }
+  | {
+      mode: "filtered";
+      search: string;
+      program: AdminStudentRosterProgramFilter;
+    }
+> {
+  if (!isRecord(raw)) return { ok: false, error: "Invalid request body." };
+  const studentIds = parseAdminStudentIds(raw.studentIds);
+  if (!studentIds.ok) return studentIds;
+  if (studentIds.value.length > 0) {
+    return {
+      ok: true,
+      value: {
+        mode: "selected",
+        studentIds: studentIds.value,
+      },
+    };
+  }
+  const search =
+    typeof raw.search === "string" ? raw.search.trim().slice(0, 200) : "";
+  const program = parseAdminStudentProgramParam(raw.program);
+  return {
+    ok: true,
+    value: {
+      mode: "filtered",
+      search,
+      program,
+    },
+  };
+}
+
 export async function getAdminStudents(
   req: Request,
   res: Response,
@@ -223,6 +283,31 @@ export async function getAdminStudents(
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Failed to load students" });
+  }
+}
+
+export async function postExportAdminStudentsCsv(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const body = parseAdminStudentsExportBody(req.body);
+  if (!body.ok) {
+    res.status(400).json({ error: body.error });
+    return;
+  }
+
+  try {
+    const built = await buildAdminStudentsCsv(body.value);
+    const asciiName = built.filename.replace(/"/g, "");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${asciiName}"`,
+    );
+    res.send(Buffer.from(`\uFEFF${built.csvBody}`, "utf8"));
+  } catch (e) {
+    console.error("[admin/students/export.csv] failed:", e);
+    res.status(500).json({ error: "Failed to export students CSV." });
   }
 }
 

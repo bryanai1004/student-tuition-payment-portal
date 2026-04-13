@@ -1,5 +1,5 @@
 import { pool } from "../lib/db.js";
-import { createLegacyStudentMasterRow, createLegacyStudentPasswordRow, deleteLegacyStudentMasterRow, deleteLegacyStudentPasswordRow, findLatestLegacyTermYear, getNextLegacyStudentId, hasLegacyStudentAccounting, hasLegacyStudentMarks, hasLegacyStudentRegistration, legacyStudentMasterExists, legacyStudentPasswordRowExists, countLegacyAdminStudentListRows, listLegacyAdminStudentListRowsPage, loadLegacyStudentProfileRow, updateLegacyStudentMasterRow, } from "../repositories/studentLegacyAccountRepository.js";
+import { createLegacyStudentMasterRow, createLegacyStudentPasswordRow, deleteLegacyStudentMasterRow, deleteLegacyStudentPasswordRow, findLatestLegacyTermYear, getNextLegacyStudentId, hasLegacyStudentAccounting, hasLegacyStudentMarks, hasLegacyStudentRegistration, legacyStudentMasterExists, legacyStudentPasswordRowExists, countLegacyAdminStudentListRows, listLegacyAdminStudentListRows, listLegacyAdminStudentListRowsPage, listLegacyAdminStudentListRowsByStudentIds, loadLegacyStudentProfileRow, updateLegacyStudentMasterRow, } from "../repositories/studentLegacyAccountRepository.js";
 import { combineAddressLine, legacyDbDateToIso, resolveEnrollmentDate, } from "./studentProfileService.js";
 import { batchBuildClinicalProgressForStudentIds, buildClinicalProgress, } from "./clinicalProgressService.js";
 function str(v) {
@@ -133,6 +133,79 @@ export async function listAdminStudentsPage(options) {
         }
     }
     return { items, total, page, pageSize };
+}
+function csvEscapeCell(value) {
+    const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    if (/[",\n]/.test(normalized)) {
+        return `"${normalized.replace(/"/g, '""')}"`;
+    }
+    return normalized;
+}
+function csvCell(value) {
+    return value == null ? "" : String(value);
+}
+function formatCsvDate(iso) {
+    if (iso == null || iso.trim() === "")
+        return "";
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
+    if (!m)
+        return iso;
+    const [, year, month, day] = m;
+    return `${month}/${day}/${year}`;
+}
+function pad2(n) {
+    return String(n).padStart(2, "0");
+}
+function buildAdminStudentsExportTimestamp(date = new Date()) {
+    return [
+        String(date.getFullYear()),
+        pad2(date.getMonth() + 1),
+        pad2(date.getDate()),
+        "_",
+        pad2(date.getHours()),
+        pad2(date.getMinutes()),
+    ].join("");
+}
+const ADMIN_STUDENTS_CSV_HEADERS = [
+    "Student ID",
+    "Name",
+    "Division",
+    "Email",
+    "Program",
+    "Signed Date",
+    "Latest Registration Term",
+];
+export async function buildAdminStudentsCsv(input) {
+    const rows = input.mode === "selected"
+        ? await listLegacyAdminStudentListRowsByStudentIds(pool, input.studentIds)
+        : await listLegacyAdminStudentListRows(pool, {
+            search: input.search.trim(),
+            program: input.program,
+        });
+    const items = rows.map((row) => mapRowToListItem(row));
+    const lines = [
+        ADMIN_STUDENTS_CSV_HEADERS.map((header) => csvEscapeCell(header)).join(","),
+    ];
+    for (const item of items) {
+        const values = [
+            item.studentId,
+            item.name,
+            item.division,
+            csvCell(item.email),
+            item.program,
+            formatCsvDate(item.signedDate),
+            csvCell(item.latestRegistrationTerm),
+        ];
+        lines.push(values.map(csvEscapeCell).join(","));
+    }
+    const timestamp = buildAdminStudentsExportTimestamp();
+    const prefix = input.mode === "selected" ? "students_selected_" : "students_filtered_";
+    return {
+        mode: input.mode,
+        filename: `${prefix}${timestamp}.csv`,
+        csvBody: lines.join("\r\n"),
+        rowCount: items.length,
+    };
 }
 function mapProfileRowToAdminDetail(row, latestRegistrationTerm) {
     const studentId = str(row.id);

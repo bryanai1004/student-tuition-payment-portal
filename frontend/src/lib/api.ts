@@ -738,6 +738,79 @@ export async function deleteSelectedAdminStudents(
   throw new Error('Unexpected delete-selected response')
 }
 
+export async function downloadAdminStudentsCsv(options?: {
+  studentIds?: string[]
+  search?: string
+  program?: AdminStudentsProgramFilter
+  signal?: AbortSignal
+}): Promise<void> {
+  const normalizedIds = Array.from(
+    new Set(
+      (options?.studentIds ?? [])
+        .map((studentId) => studentId.trim())
+        .filter((studentId) => studentId !== ''),
+    ),
+  )
+  const isSelectedExport = normalizedIds.length > 0
+  const body = isSelectedExport
+    ? { studentIds: normalizedIds }
+    : {
+        search: (options?.search ?? '').trim(),
+        program: options?.program ?? 'all',
+      }
+
+  const res = await apiFetch('/api/admin/students/export.csv', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    let msg = `Export failed (HTTP ${res.status}).`
+    const ct = (res.headers.get('content-type') ?? '').toLowerCase()
+    if (ct.includes('application/json') && text.trim() !== '') {
+      try {
+        const parsed = JSON.parse(text) as {
+          error?: string
+          message?: string
+        }
+        if (typeof parsed.message === 'string' && parsed.message.trim() !== '') {
+          msg = parsed.message.trim()
+        } else if (
+          typeof parsed.error === 'string' &&
+          parsed.error.trim() !== ''
+        ) {
+          msg = parsed.error.trim()
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    throw new Error(msg)
+  }
+
+  const blob = await res.blob()
+  const fromHeader = parseAttachmentFilenameFromContentDisposition(
+    res.headers.get('content-disposition'),
+  )
+  const filename =
+    fromHeader ??
+    (isSelectedExport ? 'students_selected.csv' : 'students_filtered.csv')
+  const url = URL.createObjectURL(blob)
+  try {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
 export async function fetchStudentProfile(
   studentId: string,
   options?: { signal?: AbortSignal },
