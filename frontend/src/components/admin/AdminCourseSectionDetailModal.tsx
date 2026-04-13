@@ -4,6 +4,7 @@ import {
   downloadAdminRegisteredStudentsCsv,
   type AdminCourseSection,
 } from '../../lib/api'
+import { adminSchedulingQueryString } from '../../lib/adminSchedulingSearchParams'
 import {
   getPreferredCourseTitle,
   getSecondaryCourseTitle,
@@ -84,13 +85,11 @@ export function AdminCourseSectionDetailModal({
   const selectedAcademicTermId = academicTermId?.trim() ?? ''
   const courseSectionsSearch = (() => {
     if (selectedCourseCode === '' || selectedAcademicTermId === '') return null
-    const q = new URLSearchParams(returnSearch).get('q')?.trim() ?? ''
-    const pairs = [
-      `term=${encodeURIComponent(selectedAcademicTermId)}`,
-      `course=${encodeURIComponent(selectedCourseCode)}`,
-    ]
-    if (q !== '') pairs.push(`q=${encodeURIComponent(q)}`)
-    return `?${pairs.join('&')}`
+    const query = adminSchedulingQueryString({
+      term: selectedAcademicTermId,
+      course: selectedCourseCode,
+    })
+    return query === '' ? null : `?${query}`
   })()
 
   return (

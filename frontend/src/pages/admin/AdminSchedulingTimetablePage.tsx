@@ -150,6 +150,7 @@ export function AdminSchedulingTimetablePage() {
   const [detail, setDetail] = useState<{
     section: AdminCourseSection
     dayLabel: string
+    academicTermId: string
   } | null>(null)
   const [langTab, setLangTab] = useState<TimetableLangTab>('en')
 
@@ -297,8 +298,10 @@ export function AdminSchedulingTimetablePage() {
     return m
   }, [courseCatalog])
 
-  const termCatalogLabel =
-    terms?.find((t) => t.id === academicTermId)?.term_label ?? null
+  const detailTermCatalogLabel =
+    detail == null
+      ? null
+      : terms?.find((t) => t.id === detail.academicTermId)?.term_label ?? null
 
   const timetableReturnSearch = searchParams.toString()
 
@@ -416,7 +419,11 @@ export function AdminSchedulingTimetablePage() {
                     bodyHeightPx={bodyHeightPx}
                     catalogByCode={catalogByCode}
                     onBlockClick={(section, dayLabel) =>
-                      setDetail({ section, dayLabel })
+                      setDetail({
+                        section,
+                        dayLabel,
+                        academicTermId: academicTermId.trim(),
+                      })
                     }
                   />
                 </div>
@@ -440,7 +447,11 @@ export function AdminSchedulingTimetablePage() {
                     bodyHeightPx={bodyHeightPx}
                     catalogByCode={catalogByCode}
                     onBlockClick={(section, dayLabel) =>
-                      setDetail({ section, dayLabel })
+                      setDetail({
+                        section,
+                        dayLabel,
+                        academicTermId: academicTermId.trim(),
+                      })
                     }
                   />
                 </div>
@@ -458,8 +469,8 @@ export function AdminSchedulingTimetablePage() {
             null
           }
           dayColumnLabel={detail.dayLabel}
-          termCatalogLabel={termCatalogLabel}
-          academicTermId={academicTermId.trim() || null}
+          termCatalogLabel={detailTermCatalogLabel}
+          academicTermId={detail.academicTermId.trim() || null}
           returnSearch={timetableReturnSearch}
           onClose={() => setDetail(null)}
         />
