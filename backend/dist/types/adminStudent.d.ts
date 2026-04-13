@@ -29,6 +29,8 @@ export type AdminStudentListItem = {
     /** Present when the list is requested with `clinicalSummary=1`. */
     clinicalProgressSummary?: AdminStudentClinicalProgressSummary;
 };
+/** Temporary `/api/admin/students` roster filter only. */
+export type AdminStudentRosterProgramFilter = "all" | "dahm" | "mahm";
 /**
  * GET /api/admin/students — paginated roster payload (`items` is one page only).
  * Query: `page`, `pageSize`, `search`, optional `clinicalSummary`.

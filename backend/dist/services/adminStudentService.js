@@ -95,10 +95,12 @@ export async function listAdminStudentsPage(options) {
     const page = Math.max(1, Math.trunc(options.page));
     const pageSize = Math.max(1, Math.trunc(options.pageSize));
     const search = options.search.trim();
+    const program = options.program;
     const offset = (page - 1) * pageSize;
-    const total = await countLegacyAdminStudentListRows(pool, { search });
+    const total = await countLegacyAdminStudentListRows(pool, { search, program });
     const rows = await listLegacyAdminStudentListRowsPage(pool, {
         search,
+        program,
         limit: pageSize,
         offset,
     });

@@ -262,26 +262,55 @@ function escapeMysqlLikePattern(fragment) {
         .replace(/%/g, "\\%")
         .replace(/_/g, "\\_");
 }
-function buildAdminStudentListSearch(searchTrimmed) {
-    if (searchTrimmed === "") {
-        return { clause: "", params: [] };
+function buildAdminStudentProgramClause(program) {
+    switch (program) {
+        case "dahm":
+            return `EXISTS (
+        SELECT 1
+        FROM daim_students_info dsi
+        WHERE TRIM(dsi.student_id) = TRIM(s.id)
+      )`;
+        case "mahm":
+            return `NOT EXISTS (
+        SELECT 1
+        FROM daim_students_info dsi
+        WHERE TRIM(dsi.student_id) = TRIM(s.id)
+      )`;
+        default:
+            return "";
     }
-    const like = `%${escapeMysqlLikePattern(searchTrimmed.toLowerCase())}%`;
+}
+function buildAdminStudentListFilters(query) {
+    const clauses = [];
+    const params = [];
+    const searchTrimmed = query.search.trim();
+    if (searchTrimmed !== "") {
+        const like = `%${escapeMysqlLikePattern(searchTrimmed.toLowerCase())}%`;
+        clauses.push(`(
+      LOWER(TRIM(s.id)) LIKE ? ESCAPE '\\\\'
+      OR LOWER(COALESCE(s.name, '')) LIKE ? ESCAPE '\\\\'
+      OR LOWER(COALESCE(s.email, '')) LIKE ? ESCAPE '\\\\'
+      OR LOWER(TRIM(CAST(IFNULL(s.requirements_id, '') AS CHAR))) LIKE ? ESCAPE '\\\\'
+    )`);
+        params.push(like, like, like, like);
+    }
+    const programClause = buildAdminStudentProgramClause(query.program);
+    if (programClause !== "") {
+        clauses.push(programClause);
+    }
+    if (clauses.length === 0) {
+        return { clause: "", params };
+    }
     return {
-        clause: ` WHERE (
-       LOWER(TRIM(s.id)) LIKE ? ESCAPE '\\\\'
-       OR LOWER(COALESCE(s.name, '')) LIKE ? ESCAPE '\\\\'
-       OR LOWER(COALESCE(s.email, '')) LIKE ? ESCAPE '\\\\'
-       OR LOWER(TRIM(CAST(IFNULL(s.requirements_id, '') AS CHAR))) LIKE ? ESCAPE '\\\\'
-     )`,
-        params: [like, like, like, like],
+        clause: ` WHERE ${clauses.join("\n AND ")}`,
+        params,
     };
 }
 /**
  * Count of students matching the admin roster search (before pagination).
  */
 export async function countLegacyAdminStudentListRows(pool, query) {
-    const { clause, params } = buildAdminStudentListSearch(query.search.trim());
+    const { clause, params } = buildAdminStudentListFilters(query);
     const [rows] = await pool.query(`SELECT COUNT(*) AS cnt
      FROM students s
      ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}
@@ -297,7 +326,7 @@ export async function countLegacyAdminStudentListRows(pool, query) {
  * Search is applied in SQL before `LIMIT` / `OFFSET`.
  */
 export async function listLegacyAdminStudentListRowsPage(pool, query) {
-    const { clause, params } = buildAdminStudentListSearch(query.search.trim());
+    const { clause, params } = buildAdminStudentListFilters(query);
     const limit = Math.max(0, Math.trunc(query.limit));
     const offset = Math.max(0, Math.trunc(query.offset));
     const [rows] = await pool.query(`SELECT

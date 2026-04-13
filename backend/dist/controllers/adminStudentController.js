@@ -113,6 +113,19 @@ function parsePositiveIntParam(raw, fallback, max) {
         return max;
     return truncated;
 }
+function parseAdminStudentProgramParam(raw) {
+    if (typeof raw !== "string")
+        return "all";
+    switch (raw.trim().toLowerCase()) {
+        case "dahm":
+            return "dahm";
+        case "mahm":
+            return "mahm";
+        case "all":
+        default:
+            return "all";
+    }
+}
 export async function getAdminStudents(req, res) {
     try {
         const rawClinical = req.query.clinicalSummary;
@@ -123,10 +136,12 @@ export async function getAdminStudents(req, res) {
         const search = typeof searchRaw === "string"
             ? searchRaw.trim().slice(0, 200)
             : "";
+        const program = parseAdminStudentProgramParam(req.query.program);
         const result = await listAdminStudentsPage({
             page,
             pageSize,
             search,
+            program,
             includeClinicalSummary,
         });
         res.json({

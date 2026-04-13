@@ -114,6 +114,8 @@ export type LegacyAdminStudentListRow = RowDataPacket & {
 export type LegacyAdminStudentListQuery = {
     /** Trimmed search string; matches student id, name, email, and program (`requirements_id`) case-insensitively. */
     search: string;
+    /** Temporary admin roster program filter: DAHM = exists in legacy `daim_students_info`; MAHM = not in that set. */
+    program: "all" | "dahm" | "mahm";
 };
 /**
  * Count of students matching the admin roster search (before pagination).
