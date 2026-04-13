@@ -1,5 +1,6 @@
 import type { RowDataPacket } from "mysql2";
 import { pool } from "../lib/db.js";
+import { ensurePortalCoursesForLegacyCatalog } from "./portalCourseRepository.js";
 
 /** API output keys (fixed contract). */
 export const COURSE_LIST_KEYS = [
@@ -119,6 +120,10 @@ export async function listCoursesFromMysql(): Promise<CourseListItem[]> {
 
   const selections: string[] = [];
   const codePhysical = pickColumn(cols, ["code"]);
+
+  if (codePhysical) {
+    await ensurePortalCoursesForLegacyCatalog();
+  }
 
   for (const spec of COLUMN_SPECS) {
     const physical = pickColumn(cols, spec.candidates);
