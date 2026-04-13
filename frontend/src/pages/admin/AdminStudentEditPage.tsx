@@ -5,6 +5,7 @@ import {
   updateAdminStudent,
   type AdminStudentDetail,
   type AdminStudentUpdatePayload,
+  type StudentProgram,
 } from '../../lib/api'
 import {
   ADMIN_GENDER_SELECT_VALUES,
@@ -27,6 +28,7 @@ function detailToFormState(d: AdminStudentDetail): Record<string, string> {
 
   return {
     name: d.name,
+    program: d.program,
     email: d.email ?? '',
     gender,
     backgroundSchool: d.backgroundSchool ?? '',
@@ -44,6 +46,7 @@ function detailToFormState(d: AdminStudentDetail): Record<string, string> {
 function formToPayload(f: Record<string, string>): AdminStudentUpdatePayload {
   return {
     name: f.name.trim(),
+    program: f.program as StudentProgram,
     email: nullableTrim(f.email),
     gender: nullableTrim(f.gender),
     backgroundSchool: nullableTrim(f.backgroundSchool),
@@ -243,6 +246,32 @@ export function AdminStudentEditPage() {
               Profile fields
             </legend>
             {field('name', 'Name *')}
+            {form ? (
+              <div className="portal-stack" style={{ gap: '0.35rem' }}>
+                <label
+                  htmlFor="admin-edit-program"
+                  className="portal-card-note"
+                  style={{ margin: 0 }}
+                >
+                  Program *
+                </label>
+                <select
+                  id="admin-edit-program"
+                  className="admin-input"
+                  style={{ width: '100%', maxWidth: '100%' }}
+                  value={form.program}
+                  onChange={(ev) =>
+                    setForm((prev) =>
+                      prev ? { ...prev, program: ev.target.value } : prev,
+                    )
+                  }
+                  disabled={saving}
+                >
+                  <option value="DAHM">DAHM</option>
+                  <option value="MAHM">MAHM</option>
+                </select>
+              </div>
+            ) : null}
             {field('email', 'Email')}
             {form ? (
               <div className="portal-stack" style={{ gap: '0.35rem' }}>

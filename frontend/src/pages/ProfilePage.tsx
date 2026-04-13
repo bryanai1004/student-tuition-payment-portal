@@ -146,6 +146,10 @@ export function ProfilePage() {
               <dd>{dashText(profile.studentId, dash)}</dd>
             </div>
             <div className="portal-row">
+              <dt>{t('program')}</dt>
+              <dd>{profile.program}</dd>
+            </div>
+            <div className="portal-row">
               <dt>{t('track')}</dt>
               <dd>{dashText(profile.track ?? undefined, dash)}</dd>
             </div>

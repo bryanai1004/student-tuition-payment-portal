@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom'
 import {
   deleteSelectedAdminStudents,
   fetchAdminStudents,
+  type AdminStudentsProgramFilter,
   type AdminStudentListItem,
 } from '../../lib/api'
 
 const PAGE_SIZE = 25
 const SEARCH_DEBOUNCE_MS = 300
-type AdminStudentsProgramFilter = 'all' | 'DAHM' | 'MAHM'
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -220,8 +220,8 @@ export function AdminStudentsPage() {
             disabled={sectionLoading || Boolean(error)}
           >
             <option value="all">All</option>
-            <option value="DAHM">DAHM</option>
-            <option value="MAHM">MAHM</option>
+            <option value="dahm">DAHM</option>
+            <option value="mahm">MAHM</option>
           </select>
           <button
             type="button"
@@ -360,7 +360,7 @@ export function AdminStudentsPage() {
                       </td>
                       <td>{r.division}</td>
                       <td>{displayCell(r.email)}</td>
-                      <td>{displayCell(r.requirementsId)}</td>
+                      <td>{r.program}</td>
                       <td>{formatTableDate(r.signedDate)}</td>
                       <td>{displayCell(r.latestRegistrationTerm)}</td>
                     </tr>

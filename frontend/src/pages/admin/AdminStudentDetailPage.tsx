@@ -693,7 +693,7 @@ export function AdminStudentDetailPage() {
                   </div>
                   <div className="portal-row">
                     <dt>Program</dt>
-                    <dd>{dashText(detail.requirementsId)}</dd>
+                    <dd>{detail.program}</dd>
                   </div>
                 </dl>
               </section>

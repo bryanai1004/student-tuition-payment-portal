@@ -156,9 +156,14 @@ export async function fetchStudentRegisteredScheduleRowsForTerm(
 }
 
 /** GET /api/students/:studentId/profile — legacy `students` demographics. */
+export type StudentProgram = 'DAHM' | 'MAHM'
+
+export type AdminStudentsProgramFilter = 'all' | 'dahm' | 'mahm'
+
 export type StudentProfileResponse = {
   studentId: string
   fullName: string
+  program: StudentProgram
   track: string | null
   gender: string | null
   age: number | null
@@ -180,6 +185,7 @@ export type AdminStudentListItem = {
   division: 'Chinese' | 'English' | 'Unknown'
   name: string
   email: string | null
+  program: StudentProgram
   requirementsId: string | null
   highestDegree: string | null
   backgroundSchool: string | null
@@ -243,6 +249,7 @@ export type AdminStudentDetail = {
   division: 'Chinese' | 'English' | 'Unknown'
   name: string
   email: string | null
+  program: StudentProgram
   requirementsId: string | null
   highestDegree: string | null
   backgroundSchool: string | null
@@ -263,6 +270,7 @@ export type AdminStudentDetail = {
 
 export type AdminStudentUpdatePayload = {
   name: string
+  program: StudentProgram
   email: string | null
   gender: string | null
   backgroundSchool: string | null
@@ -281,6 +289,11 @@ function parseAdminDivision(
 ): 'Chinese' | 'English' | 'Unknown' {
   if (v === 'Chinese' || v === 'English' || v === 'Unknown') return v
   throw new Error('Unexpected admin students response')
+}
+
+function parseStudentProgram(v: unknown): StudentProgram {
+  if (v === 'DAHM' || v === 'MAHM') return v
+  throw new Error('Unexpected student program value')
 }
 
 function parseNullableString(v: unknown): string | null {
@@ -450,6 +463,7 @@ function parseAdminStudentListRow(o: Record<string, unknown>): AdminStudentListI
     division: parseAdminDivision(o.division),
     name: o.name,
     email: parseNullableString(o.email),
+    program: parseStudentProgram(o.program),
     requirementsId: parseNullableRequirementsId(o.requirementsId),
     highestDegree: parseNullableString(o.highestDegree),
     backgroundSchool: parseNullableString(o.backgroundSchool),
@@ -483,6 +497,7 @@ function parseAdminStudentDetailPayload(data: unknown): AdminStudentDetail {
     division: parseAdminDivision(o.division),
     name: o.name,
     email: parseNullableString(o.email),
+    program: parseStudentProgram(o.program),
     requirementsId: parseNullableRequirementsId(o.requirementsId),
     highestDegree: parseNullableString(o.highestDegree),
     backgroundSchool: parseNullableString(o.backgroundSchool),
@@ -545,8 +560,8 @@ export async function fetchAdminStudents(options?: {
   pageSize?: number
   /** Server-side filter (student id, name, email, program). */
   search?: string
-  /** Temporary admin roster program filter. */
-  program?: 'all' | 'DAHM' | 'MAHM'
+  /** Server-side persisted program filter. */
+  program?: AdminStudentsProgramFilter
   /** When true, each row may include `clinicalProgressSummary` (same source as admin detail). */
   clinicalSummary?: boolean
 }): Promise<AdminStudentListPageResponse> {
@@ -560,9 +575,9 @@ export async function fetchAdminStudents(options?: {
     params.set('search', search.slice(0, 200))
   }
   const program = options?.program ?? 'all'
-  if (program === 'DAHM') {
+  if (program === 'dahm') {
     params.set('program', 'dahm')
-  } else if (program === 'MAHM') {
+  } else if (program === 'mahm') {
     params.set('program', 'mahm')
   }
   if (options?.clinicalSummary) {
@@ -610,6 +625,7 @@ export type CreateAdminStudentBody = {
   /** ISO `YYYY-MM-DD`; id bucket uses calendar year + month from this date. */
   entryDate: string
   name: string
+  program: StudentProgram
   email?: string | null
   gender?: string | null
   requirementsId?: number | null
@@ -734,7 +750,25 @@ export async function fetchStudentProfile(
     typeof (data as { studentId?: unknown }).studentId === 'string' &&
     typeof (data as { fullName?: unknown }).fullName === 'string'
   ) {
-    return data as StudentProfileResponse
+    const profile = data as Record<string, unknown>
+    return {
+      studentId: profile.studentId as string,
+      fullName: profile.fullName as string,
+      program: parseStudentProgram(profile.program),
+      track: parseNullableString(profile.track),
+      gender: parseNullableString(profile.gender),
+      age: parseNullableNumber(profile.age),
+      enrollmentDate: parseNullableString(profile.enrollmentDate),
+      background: parseNullableString(profile.background),
+      credits: parseNullableNumber(profile.credits),
+      highestDegree: parseNullableString(profile.highestDegree),
+      race: parseNullableString(profile.race),
+      address: parseNullableString(profile.address),
+      city: parseNullableString(profile.city),
+      state: parseNullableString(profile.state),
+      zip: parseNullableString(profile.zip),
+      email: parseNullableString(profile.email),
+    }
   }
   throw new Error('Unexpected student profile response')
 }

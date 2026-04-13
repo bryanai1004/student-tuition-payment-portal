@@ -110,6 +110,10 @@ function creditsFromDb(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function studentProgramFromDb(v: unknown): "DAHM" | "MAHM" {
+  return str(v).toUpperCase() === "DAHM" ? "DAHM" : "MAHM";
+}
+
 export function trackFromRequirementsId(v: unknown): string | null {
   if (v == null || v === "") return null;
   const s = String(v).trim();
@@ -133,6 +137,7 @@ function readRow(row: RowDataPacket): {
   state: string;
   zip: string;
   email: string;
+  program: unknown;
   requirements_id: unknown;
 } {
   const r = row as Record<string, unknown>;
@@ -159,6 +164,7 @@ function readRow(row: RowDataPacket): {
     state: str(r.state),
     zip: str(r.zip),
     email: str(r.email),
+    program: r.program,
     requirements_id: r.requirements_id,
   };
 }
@@ -173,6 +179,7 @@ export function mapLegacyStudentRowToProfile(
   return {
     studentId: r.id,
     fullName,
+    program: studentProgramFromDb(r.program),
     track: trackFromRequirementsId(r.requirements_id),
     gender: r.gender.length > 0 ? r.gender : null,
     age: ageFromDob(r.dob),

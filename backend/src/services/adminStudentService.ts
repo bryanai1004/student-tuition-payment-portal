@@ -25,6 +25,7 @@ import type {
   AdminStudentRosterProgramFilter,
   AdminStudentUpdateBody,
 } from "../types/adminStudent.js";
+import type { StudentProgram } from "../types/studentProgram.js";
 import type { ClinicalProgress } from "../types/studentAccount.js";
 import {
   combineAddressLine,
@@ -56,6 +57,10 @@ function readEnrollStart(row: Record<string, unknown>): unknown {
     row.enroll_start ??
     null
   );
+}
+
+function studentProgramFromDb(v: unknown): StudentProgram {
+  return str(v).toUpperCase() === "DAHM" ? "DAHM" : "MAHM";
 }
 
 /** e.g. `Fall 2025` from legacy `registration` term + year. */
@@ -128,6 +133,7 @@ function mapRowToListItem(r: Record<string, unknown>): AdminStudentListItem {
     division: divisionFromStudentId(studentId),
     name,
     email,
+    program: studentProgramFromDb(r.program),
     requirementsId: requirementsIdToApi(r.requirements_id),
     highestDegree: tertiary.length > 0 ? tertiary : null,
     backgroundSchool: bg.length > 0 ? bg : null,
@@ -232,6 +238,7 @@ function mapProfileRowToAdminDetail(
     division: divisionFromStudentId(studentId),
     name,
     email,
+    program: studentProgramFromDb(row.program),
     requirementsId: requirementsIdToApi(row.requirements_id),
     highestDegree: tertiary.length > 0 ? tertiary : null,
     backgroundSchool: bg.length > 0 ? bg : null,
@@ -379,6 +386,7 @@ export async function updateAdminStudent(
   const patch = {
     name,
     email: str(body.email),
+    program: body.program,
     gender: str(body.gender),
     background: str(body.backgroundSchool),
     tertiary: str(body.highestDegree),
@@ -543,6 +551,7 @@ export async function createAdminStudent(
   const insertPayload = {
     name,
     email: str(body.email),
+    program: body.program,
     gender: str(body.gender),
     background: str(body.backgroundSchool),
     tertiary: str(body.highestDegree),

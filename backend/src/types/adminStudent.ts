@@ -1,4 +1,5 @@
 import type { ClinicalProgress } from "./studentAccount.js";
+import type { StudentProgram } from "./studentProgram.js";
 
 /**
  * Clinical roster columns for GET /api/admin/students?clinicalSummary=1.
@@ -20,6 +21,7 @@ export type AdminStudentListItem = {
   division: "Chinese" | "English" | "Unknown";
   name: string;
   email: string | null;
+  program: StudentProgram;
   requirementsId: string | null;
   highestDegree: string | null;
   backgroundSchool: string | null;
@@ -52,6 +54,7 @@ export type AdminStudentDetail = {
   division: "Chinese" | "English" | "Unknown";
   name: string;
   email: string | null;
+  program: StudentProgram;
   requirementsId: string | null;
   highestDegree: string | null;
   backgroundSchool: string | null;
@@ -72,6 +75,7 @@ export type AdminStudentDetail = {
 /** PUT /api/admin/students/:studentId — editable legacy master fields only. */
 export type AdminStudentUpdateBody = {
   name: string;
+  program: StudentProgram;
   email: string | null;
   gender: string | null;
   backgroundSchool: string | null;
@@ -93,6 +97,7 @@ export type AdminStudentCreateBody = {
   /** ISO calendar date `YYYY-MM-DD`; year and month drive student id bucket. */
   entryDate: string;
   name: string;
+  program: StudentProgram;
   email?: string | null;
   gender?: string | null;
   requirementsId?: number | null;

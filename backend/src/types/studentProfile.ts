@@ -1,7 +1,10 @@
+import type { StudentProgram } from "./studentProgram.js";
+
 /** GET /api/students/:studentId/profile — legacy `students` row, portal-shaped. */
 export type StudentProfilePayload = {
   studentId: string;
   fullName: string;
+  program: StudentProgram;
   track: string | null;
   gender: string | null;
   age: number | null;

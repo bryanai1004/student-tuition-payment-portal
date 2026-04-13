@@ -5,6 +5,7 @@ import {
   fetchNextAdminStudentId,
   type AdminDivision,
   type CreateAdminStudentBody,
+  type StudentProgram,
 } from '../../lib/api'
 import {
   ADMIN_GENDER_SELECT_VALUES,
@@ -59,6 +60,7 @@ export function AdminStudentCreatePage() {
   const [previewError, setPreviewError] = useState<string | null>(null)
 
   const [name, setName] = useState('')
+  const [program, setProgram] = useState<StudentProgram | ''>('')
   const [initialPassword, setInitialPassword] = useState('')
   const [email, setEmail] = useState('')
   const [gender, setGender] = useState('')
@@ -143,6 +145,9 @@ export function AdminStudentCreatePage() {
     if (name.trim() === '') {
       reasons.push('Name is required')
     }
+    if (program !== 'DAHM' && program !== 'MAHM') {
+      reasons.push('Program is required')
+    }
     if (initialPassword.trim() === '') {
       reasons.push('Initial password is required')
     }
@@ -156,6 +161,7 @@ export function AdminStudentCreatePage() {
     entryDate,
     initialPassword,
     name,
+    program,
     previewError,
     requirementsParsed,
   ])
@@ -168,6 +174,7 @@ export function AdminStudentCreatePage() {
     e.preventDefault()
     if (!formValid) return
     if (division !== 'Chinese' && division !== 'English') return
+    if (program !== 'DAHM' && program !== 'MAHM') return
 
     const reqId: number | null =
       requirementsParsed === 'invalid' ? null : requirementsParsed
@@ -176,6 +183,7 @@ export function AdminStudentCreatePage() {
       division,
       entryDate: entryDate.trim(),
       name: name.trim(),
+      program,
       initialPassword,
       email: nullableTrim(email),
       gender: nullableTrim(gender),
@@ -340,6 +348,25 @@ export function AdminStudentCreatePage() {
               value={name}
               onChange={(ev) => setName(ev.target.value)}
             />
+          </div>
+
+          <div className="portal-stack" style={{ gap: '0.35rem' }}>
+            <label htmlFor="admin-create-program" className="portal-card-note" style={{ margin: 0 }}>
+              Program *
+            </label>
+            <select
+              id="admin-create-program"
+              className="admin-input"
+              style={{ width: '100%', maxWidth: '100%' }}
+              value={program}
+              onChange={(ev) =>
+                setProgram(ev.target.value as StudentProgram | '')
+              }
+            >
+              <option value="">Select…</option>
+              <option value="DAHM">DAHM</option>
+              <option value="MAHM">MAHM</option>
+            </select>
           </div>
 
           <div className="portal-stack" style={{ gap: '0.35rem' }}>

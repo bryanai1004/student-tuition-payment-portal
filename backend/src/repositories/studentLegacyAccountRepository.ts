@@ -222,6 +222,7 @@ export async function loadLegacyStudentProfileRow(
     `SELECT
        id,
        name,
+       program,
        gender,
        dob,
        signed_date,
@@ -287,7 +288,7 @@ export async function mapLegacyStudentProfileExportRowsById(
        name,
        gender,
        email,
-       requirements_id,
+       program,
        tertiary,
        background
      FROM students
@@ -300,7 +301,7 @@ export async function mapLegacyStudentProfileExportRowsById(
     const name = strCell(r.name);
     const gender = strCell(r.gender);
     const email = strCell(r.email);
-    const req = strCell(r.requirements_id);
+    const program = strCell(r.program);
     const tertiary = strCell(r.tertiary);
     const bg = strCell(r.background);
     out.set(id, {
@@ -308,7 +309,7 @@ export async function mapLegacyStudentProfileExportRowsById(
       name,
       gender,
       email,
-      program: req,
+      program,
       highestDegree: tertiary,
       backgroundSchool: bg,
     });
@@ -379,6 +380,7 @@ export type LegacyAdminStudentListRow = RowDataPacket & {
   id: string;
   name: unknown;
   email: unknown;
+  program: unknown;
   background: unknown;
   requirements_id: unknown;
   tertiary: unknown;
@@ -417,9 +419,9 @@ function escapeMysqlLikePattern(fragment: string): string {
 }
 
 export type LegacyAdminStudentListQuery = {
-  /** Trimmed search string; matches student id, name, email, and program (`requirements_id`) case-insensitively. */
+  /** Trimmed search string; matches student id, name, email, and program case-insensitively. */
   search: string;
-  /** Temporary admin roster program filter: DAHM = exists in legacy `daim_students_info`; MAHM = not in that set. */
+  /** Admin roster program filter backed by `students.program`. */
   program: "all" | "dahm" | "mahm";
 };
 
@@ -428,17 +430,9 @@ function buildAdminStudentProgramClause(
 ): string {
   switch (program) {
     case "dahm":
-      return `EXISTS (
-        SELECT 1
-        FROM daim_students_info dsi
-        WHERE TRIM(dsi.student_id) = TRIM(s.id)
-      )`;
+      return `UPPER(TRIM(s.program)) = 'DAHM'`;
     case "mahm":
-      return `NOT EXISTS (
-        SELECT 1
-        FROM daim_students_info dsi
-        WHERE TRIM(dsi.student_id) = TRIM(s.id)
-      )`;
+      return `UPPER(TRIM(s.program)) = 'MAHM'`;
     default:
       return "";
   }
@@ -456,7 +450,7 @@ function buildAdminStudentListFilters(
       LOWER(TRIM(s.id)) LIKE ? ESCAPE '\\\\'
       OR LOWER(COALESCE(s.name, '')) LIKE ? ESCAPE '\\\\'
       OR LOWER(COALESCE(s.email, '')) LIKE ? ESCAPE '\\\\'
-      OR LOWER(TRIM(CAST(IFNULL(s.requirements_id, '') AS CHAR))) LIKE ? ESCAPE '\\\\'
+      OR LOWER(TRIM(COALESCE(s.program, ''))) LIKE ? ESCAPE '\\\\'
     )`);
     params.push(like, like, like, like);
   }
@@ -515,6 +509,7 @@ export async function listLegacyAdminStudentListRowsPage(
        TRIM(s.id) AS id,
        s.name,
        s.email,
+       TRIM(s.program) AS program,
        s.background,
        s.requirements_id,
        s.tertiary,
@@ -535,6 +530,7 @@ export async function listLegacyAdminStudentListRowsPage(
 export type LegacyStudentMasterUpdate = {
   name: string;
   email: string;
+  program: string;
   gender: string;
   background: string;
   tertiary: string;
@@ -561,6 +557,7 @@ export async function updateLegacyStudentMasterRow(
     `UPDATE students SET
        name = ?,
        email = ?,
+       program = ?,
        gender = ?,
        background = ?,
        tertiary = ?,
@@ -576,6 +573,7 @@ export async function updateLegacyStudentMasterRow(
     [
       patch.name,
       patch.email,
+      patch.program,
       patch.gender,
       patch.background,
       patch.tertiary,
@@ -598,6 +596,7 @@ export type LegacyStudentMasterInsert = {
   studentId: string;
   name: string;
   email: string;
+  program: string;
   gender: string;
   requirements_id: number | null;
   tertiary: string;
@@ -723,7 +722,7 @@ export async function createLegacyStudentMasterRow(
        notes, cpr, toefl, exam, level1exam, level2exam, level3exam, cnt,
        hold, signed_date, grad_date, grad_term, grad_year, withdraw_date,
        required_units_to_grad, marital, citizenship,
-       EnrollStartDate, requirements_id, financial_aid, grad_check_out,
+       EnrollStartDate, requirements_id, program, financial_aid, grad_check_out,
        cale_license, cale_date, level1practice
      ) VALUES (
        ?, '', ?, '0000-00-00',
@@ -735,7 +734,7 @@ export async function createLegacyStudentMasterRow(
        '', '', '', '', '', '', '', '',
        0, ?, '0000-00-00', '-', 0, '0000-00-00',
        0, '', '',
-       ?, ?, 0, 0,
+       ?, ?, ?, 0, 0,
        NULL, '0000-00-00', ''
      )`,
     [
@@ -753,6 +752,7 @@ export async function createLegacyStudentMasterRow(
       input.signed_date_sql,
       input.enroll_start_sql,
       input.requirements_id,
+      input.program,
     ],
   );
 }
