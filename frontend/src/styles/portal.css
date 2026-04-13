@@ -7929,6 +7929,32 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   color: var(--portal-text-muted);
 }
 
+.admin-loa-editor {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--portal-border-subtle);
+}
+
+.admin-loa-editor__toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.admin-loa-editor__grid {
+  margin-top: 0.75rem;
+}
+
+.admin-loa-editor__helper {
+  margin: 0;
+}
+
+.admin-loa-editor__error {
+  margin: 0;
+  color: #a4000f;
+}
+
 .admin-registration-history-table th,
 .admin-registration-history-table td {
   font-size: 0.8125rem;

@@ -160,7 +160,14 @@ export type StudentProgram = 'DAHM' | 'MAHM'
 
 export type AdminStudentsProgramFilter = 'all' | 'dahm' | 'mahm'
 export type AdminStudentsTrackFilter = 'all' | 'C' | 'E'
+export type AdminStudentsLoaFilter = 'all' | 'yes' | 'no'
 export type AdminStudentsListView = 'roster' | 'new-enrollment'
+
+export type AdminStudentLoaTermOption = {
+  quarter: 'Winter' | 'Spring' | 'Summer' | 'Fall'
+  year: number
+  label: string
+}
 
 export type AdminStudentEnrollmentFilterOptions = {
   years: string[]
@@ -168,6 +175,7 @@ export type AdminStudentEnrollmentFilterOptions = {
     code: string
     label: string
   }>
+  loaTerms: AdminStudentLoaTermOption[]
 }
 
 export type StudentProfileResponse = {
@@ -308,6 +316,14 @@ export type AdminStudentUpdatePayload = {
   enrollStartDate: string | null
 }
 
+export type AdminStudentCreateLoaPayload = {
+  loaQuarter: string
+  loaYear: string
+  plannedReturnQuarter: string
+  plannedReturnYear: string
+  reason?: string | null
+}
+
 function parseAdminDivision(
   v: unknown,
 ): 'Chinese' | 'English' | 'Unknown' {
@@ -437,7 +453,7 @@ function parseAdminStudentEnrollmentFilterOptions(
   v: unknown,
 ): AdminStudentEnrollmentFilterOptions {
   if (v == null || typeof v !== 'object') {
-    return { years: [], intakes: [] }
+    return { years: [], intakes: [], loaTerms: [] }
   }
   const raw = v as Record<string, unknown>
   const years = Array.isArray(raw.years)
@@ -452,7 +468,34 @@ function parseAdminStudentEnrollmentFilterOptions(
     }
     return [{ code: intake.code, label: intake.label }]
   })
-  return { years, intakes }
+  const loaTermsRaw = Array.isArray(raw.loaTerms) ? raw.loaTerms : []
+  const loaTerms = loaTermsRaw.flatMap<AdminStudentLoaTermOption>((entry) => {
+    if (entry == null || typeof entry !== 'object') return []
+    const loaTerm = entry as Record<string, unknown>
+    const quarter = loaTerm.quarter
+    const year = loaTerm.year
+    const label = loaTerm.label
+    if (
+      (quarter !== 'Winter' &&
+        quarter !== 'Spring' &&
+        quarter !== 'Summer' &&
+        quarter !== 'Fall') ||
+      typeof label !== 'string'
+    ) {
+      return []
+    }
+    const normalizedYear =
+      typeof year === 'number' && Number.isFinite(year)
+        ? Math.trunc(year)
+        : typeof year === 'string' && /^\d+$/.test(year.trim())
+          ? Number.parseInt(year.trim(), 10)
+          : NaN
+    if (!Number.isFinite(normalizedYear)) {
+      return []
+    }
+    return [{ quarter, year: normalizedYear, label }]
+  })
+  return { years, intakes, loaTerms }
 }
 
 function parseOptionalClinicalProgress(
@@ -658,6 +701,12 @@ export async function fetchAdminStudents(options?: {
   entryYear?: string
   /** Server-side intake code derived from student ID. */
   intakeCode?: string
+  /** Server-side LOA presence filter backed by `loa`. */
+  loa?: AdminStudentsLoaFilter
+  /** Server-side LOA start quarter backed by `loa.absent_quarter`. */
+  loaQuarter?: string
+  /** Server-side LOA start year backed by `loa.absent_year`. */
+  loaYear?: number | string
   /** When true, each row may include `clinicalProgressSummary` (same source as admin detail). */
   clinicalSummary?: boolean
 }): Promise<AdminStudentListPageResponse> {
@@ -688,6 +737,21 @@ export async function fetchAdminStudents(options?: {
   if (intakeCode !== '') {
     params.set('intakeCode', intakeCode)
   }
+  const loa = options?.loa ?? 'all'
+  if (loa === 'yes' || loa === 'no') {
+    params.set('loa', loa)
+  }
+  const loaQuarter = (options?.loaQuarter ?? '').trim()
+  if (loaQuarter !== '') {
+    params.set('loaQuarter', loaQuarter)
+  }
+  const loaYearRaw =
+    typeof options?.loaYear === 'number'
+      ? String(Math.trunc(options.loaYear))
+      : (options?.loaYear ?? '').trim()
+  if (loaYearRaw !== '') {
+    params.set('loaYear', loaYearRaw)
+  }
   if (options?.clinicalSummary) {
     params.set('clinicalSummary', '1')
   }
@@ -715,6 +779,22 @@ export async function updateAdminStudent(
   const path = `/api/admin/students/${encodeURIComponent(studentId)}`
   const data = await fetchApiJson(path, {
     method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })
+  return parseAdminStudentDetailPayload(data)
+}
+
+/** POST /api/admin/students/:studentId/loa — create a legacy `loa` row and return refreshed detail. */
+export async function createAdminStudentLoa(
+  studentId: string,
+  body: AdminStudentCreateLoaPayload,
+  options?: { signal?: AbortSignal },
+): Promise<AdminStudentDetail> {
+  const path = `/api/admin/students/${encodeURIComponent(studentId)}/loa`
+  const data = await fetchApiJson(path, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal: options?.signal,
@@ -853,6 +933,9 @@ export async function downloadAdminStudentsCsv(options?: {
   track?: AdminStudentsTrackFilter
   entryYear?: string
   intakeCode?: string
+  loa?: AdminStudentsLoaFilter
+  loaQuarter?: string
+  loaYear?: number | string
   view?: AdminStudentsListView
   signal?: AbortSignal
 }): Promise<void> {
@@ -875,6 +958,12 @@ export async function downloadAdminStudentsCsv(options?: {
         track: options?.track ?? 'all',
         entryYear: (options?.entryYear ?? '').trim(),
         intakeCode: (options?.intakeCode ?? '').trim(),
+        loa: options?.loa ?? 'all',
+        loaQuarter: (options?.loaQuarter ?? '').trim(),
+        loaYear:
+          typeof options?.loaYear === 'number'
+            ? String(Math.trunc(options.loaYear))
+            : (options?.loaYear ?? '').trim(),
         view: options?.view ?? 'roster',
       }
 

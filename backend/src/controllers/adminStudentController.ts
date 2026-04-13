@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import {
   buildAdminStudentsCsv,
+  createAdminStudentLoa,
   createAdminStudent,
   deleteSelectedAdminStudents,
   getAdminStudentDetail,
@@ -10,6 +11,8 @@ import {
 } from "../services/adminStudentService.js";
 import type {
   AdminStudentCreateBody,
+  AdminStudentCreateLoaBody,
+  AdminStudentRosterLoaFilter,
   AdminStudentRosterProgramFilter,
   AdminStudentRosterTrackFilter,
   AdminStudentUpdateBody,
@@ -143,6 +146,22 @@ function parseCreateBody(raw: unknown): ParseBodyResult<AdminStudentCreateBody> 
   };
 }
 
+function parseCreateLoaBody(
+  raw: unknown,
+): ParseBodyResult<AdminStudentCreateLoaBody> {
+  if (!isRecord(raw)) return { ok: false, error: "Invalid request body." };
+  return {
+    ok: true,
+    value: {
+      loaQuarter: trimStr(raw.loaQuarter),
+      loaYear: trimStr(raw.loaYear),
+      plannedReturnQuarter: trimStr(raw.plannedReturnQuarter),
+      plannedReturnYear: trimStr(raw.plannedReturnYear),
+      reason: parseNullableStringField(raw.reason),
+    },
+  };
+}
+
 const STUDENT_ID_PARAM = /^[A-Za-z0-9._-]{1,64}$/;
 
 const ADMIN_STUDENT_LIST_DEFAULT_PAGE = 1;
@@ -209,6 +228,48 @@ function parseAdminStudentIntakeCodeParam(raw: unknown): string | null {
   return trimmed === "" ? null : trimmed.slice(0, 1);
 }
 
+function parseAdminStudentLoaParam(raw: unknown): AdminStudentRosterLoaFilter {
+  if (typeof raw !== "string") return "all";
+  switch (raw.trim().toLowerCase()) {
+    case "yes":
+      return "yes";
+    case "no":
+      return "no";
+    default:
+      return "all";
+  }
+}
+
+function parseAdminStudentLoaQuarterParam(
+  raw: unknown,
+): "Winter" | "Spring" | "Summer" | "Fall" | null {
+  if (typeof raw !== "string") return null;
+  switch (raw.trim().toLowerCase()) {
+    case "winter":
+      return "Winter";
+    case "spring":
+      return "Spring";
+    case "summer":
+      return "Summer";
+    case "fall":
+      return "Fall";
+    default:
+      return null;
+  }
+}
+
+function parseAdminStudentLoaYearParam(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    const year = Math.trunc(raw);
+    return year >= 1900 && year <= 2100 ? year : null;
+  }
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!/^\d{4}$/.test(trimmed)) return null;
+  const year = Number.parseInt(trimmed, 10);
+  return year >= 1900 && year <= 2100 ? year : null;
+}
+
 function parseAdminStudentListViewParam(
   raw: unknown,
 ): "roster" | "new-enrollment" {
@@ -257,6 +318,9 @@ function parseAdminStudentsExportBody(
       track: AdminStudentRosterTrackFilter;
       entryYear: string | null;
       intakeCode: string | null;
+      loa: AdminStudentRosterLoaFilter;
+      loaQuarter: "Winter" | "Spring" | "Summer" | "Fall" | null;
+      loaYear: number | null;
       view: "roster" | "new-enrollment";
     }
 > {
@@ -280,6 +344,9 @@ function parseAdminStudentsExportBody(
   const track = parseAdminStudentTrackParam(raw.track);
   const entryYear = parseAdminStudentEntryYearParam(raw.entryYear);
   const intakeCode = parseAdminStudentIntakeCodeParam(raw.intakeCode);
+  const loa = parseAdminStudentLoaParam(raw.loa);
+  const loaQuarter = parseAdminStudentLoaQuarterParam(raw.loaQuarter);
+  const loaYear = parseAdminStudentLoaYearParam(raw.loaYear);
   return {
     ok: true,
     value: {
@@ -289,6 +356,9 @@ function parseAdminStudentsExportBody(
       track,
       entryYear,
       intakeCode,
+      loa,
+      loaQuarter,
+      loaYear,
       view,
     },
   };
@@ -320,6 +390,9 @@ export async function getAdminStudents(
     const track = parseAdminStudentTrackParam(req.query.track);
     const entryYear = parseAdminStudentEntryYearParam(req.query.entryYear);
     const intakeCode = parseAdminStudentIntakeCodeParam(req.query.intakeCode);
+    const loa = parseAdminStudentLoaParam(req.query.loa);
+    const loaQuarter = parseAdminStudentLoaQuarterParam(req.query.loaQuarter);
+    const loaYear = parseAdminStudentLoaYearParam(req.query.loaYear);
 
     const result = await listAdminStudentsPage({
       page,
@@ -329,6 +402,9 @@ export async function getAdminStudents(
       track,
       entryYear,
       intakeCode,
+      loa,
+      loaQuarter,
+      loaYear,
       includeClinicalSummary,
     });
     res.json({
@@ -434,6 +510,35 @@ export async function postAdminStudent(
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Failed to create student" });
+  }
+}
+
+export async function postAdminStudentLoa(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const studentId = normalizeStudentIdParam(paramStudentId(req.params));
+  if (!studentId) {
+    res.status(400).json({ error: "Invalid student id." });
+    return;
+  }
+
+  const body = parseCreateLoaBody(req.body);
+  if (!body.ok) {
+    res.status(400).json({ error: body.error });
+    return;
+  }
+
+  try {
+    const result = await createAdminStudentLoa(studentId, body.value);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.message });
+      return;
+    }
+    res.status(201).json(result.detail);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to create LOA record" });
   }
 }
 

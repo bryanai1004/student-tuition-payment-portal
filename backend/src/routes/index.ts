@@ -5,6 +5,7 @@ import {
   getNextAdminStudentId,
   postExportAdminStudentsCsv,
   postAdminStudent,
+  postAdminStudentLoa,
   postDeleteSelectedAdminStudents,
   putAdminStudent,
 } from "../controllers/adminStudentController.js";
@@ -142,6 +143,7 @@ adminRouter.get("/students/next-id", getNextAdminStudentId);
 adminRouter.post("/students", postAdminStudent);
 adminRouter.post("/students/delete-selected", postDeleteSelectedAdminStudents);
 adminRouter.post("/students/export.csv", postExportAdminStudentsCsv);
+adminRouter.post("/students/:studentId/loa", postAdminStudentLoa);
 adminRouter.get("/students/:studentId", getAdminStudent);
 adminRouter.put("/students/:studentId", putAdminStudent);
 adminRouter.get(

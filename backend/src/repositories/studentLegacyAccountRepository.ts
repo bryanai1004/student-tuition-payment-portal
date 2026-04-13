@@ -7,7 +7,12 @@
  */
 
 import { createHash } from "node:crypto";
-import type { Pool, PoolConnection, RowDataPacket } from "mysql2/promise";
+import type {
+  Pool,
+  PoolConnection,
+  ResultSetHeader,
+  RowDataPacket,
+} from "mysql2/promise";
 
 /** Pool or a single connection (for transactions). */
 export type LegacyMysqlClient = Pool | PoolConnection;
@@ -213,7 +218,7 @@ export type LegacyStudentProfileRow = RowDataPacket;
  * Load one legacy `students` row by primary key `id` (e.g. C17310).
  */
 export async function loadLegacyStudentProfileRow(
-  pool: Pool,
+  pool: LegacyMysqlClient,
   studentId: string,
 ): Promise<LegacyStudentProfileRow | null> {
   const [rows] = await pool.query<RowDataPacket[]>(
@@ -273,7 +278,7 @@ function parseLegacyNullableInt(v: unknown): number | null {
  * Ordering: absent_year DESC, quarter DESC (Fall > Summer > Spring > Winter), seqNumber DESC.
  */
 export async function findLatestLegacyStudentLoaRow(
-  pool: Pool,
+  pool: LegacyMysqlClient,
   studentId: string,
 ): Promise<LegacyStudentLoaRow | null> {
   const [rows] = await pool.query<RowDataPacket[]>(
@@ -311,6 +316,49 @@ export async function findLatestLegacyStudentLoaRow(
     actualReturn: strCell(row.actual_return),
     seqNumber: parseLegacyNullableInt(row.seqNumber),
   };
+}
+
+export type LegacyStudentLoaInsert = {
+  studentId: string;
+  absentQuarter: string;
+  absentYear: number;
+  absentStartingDate: string;
+  returnQuarter: string;
+  returnYear: number;
+  returnDate: string;
+  reason: string;
+};
+
+/** Insert one legacy `loa` row; `seqNumber` remains database-managed. */
+export async function createLegacyStudentLoaRow(
+  pool: LegacyMysqlClient,
+  input: LegacyStudentLoaInsert,
+): Promise<number> {
+  const [result] = await pool.execute<ResultSetHeader>(
+    `INSERT INTO loa (
+       student_id,
+       absent_quarter,
+       absent_year,
+       absent_starting_date,
+       return_quarter,
+       return_year,
+       return_date,
+       reasons,
+       HasStuReturned,
+       actual_return
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'N', NULL)`,
+    [
+      input.studentId.trim(),
+      input.absentQuarter,
+      input.absentYear,
+      input.absentStartingDate,
+      input.returnQuarter,
+      input.returnYear,
+      input.returnDate,
+      input.reason,
+    ],
+  );
+  return result.insertId;
 }
 
 /** Columns aligned with admin student profile (`getAdminStudentDetail` / `students` table). */
@@ -487,6 +535,12 @@ export type LegacyAdminStudentListQuery = {
   entryYear: string | null;
   /** Derived intake code from `students.id` character 4. */
   intakeCode: string | null;
+  /** Presence filter backed by legacy `loa` rows. */
+  loa: "all" | "yes" | "no";
+  /** LOA start quarter from `loa.absent_quarter`. */
+  loaQuarter: "Winter" | "Spring" | "Summer" | "Fall" | null;
+  /** LOA start year from `loa.absent_year`. */
+  loaYear: number | null;
 };
 
 const ADMIN_STUDENT_ID_TRIM_SQL = "TRIM(s.id)";
@@ -533,11 +587,32 @@ function buildAdminStudentTrackClause(
   }
 }
 
+function buildAdminStudentLoaPresenceClause(
+  loa: LegacyAdminStudentListQuery["loa"],
+): string {
+  switch (loa) {
+    case "yes":
+      return `EXISTS (
+        SELECT 1
+        FROM loa
+        WHERE TRIM(loa.student_id) = TRIM(s.id)
+      )`;
+    case "no":
+      return `NOT EXISTS (
+        SELECT 1
+        FROM loa
+        WHERE TRIM(loa.student_id) = TRIM(s.id)
+      )`;
+    default:
+      return "";
+  }
+}
+
 function buildAdminStudentListFilters(
   query: LegacyAdminStudentListQuery,
-): { clause: string; params: string[] } {
+): { clause: string; params: Array<string | number> } {
   const clauses: string[] = [];
-  const params: string[] = [];
+  const params: Array<string | number> = [];
   const searchTrimmed = query.search.trim();
   if (searchTrimmed !== "") {
     const like = `%${escapeMysqlLikePattern(searchTrimmed.toLowerCase())}%`;
@@ -557,6 +632,10 @@ function buildAdminStudentListFilters(
   if (trackClause !== "") {
     clauses.push(trackClause);
   }
+  const loaPresenceClause = buildAdminStudentLoaPresenceClause(query.loa);
+  if (loaPresenceClause !== "") {
+    clauses.push(loaPresenceClause);
+  }
   if (query.entryYear != null) {
     clauses.push(`${ADMIN_STUDENT_ENTRY_YEAR_SQL} = ?`);
     params.push(query.entryYear);
@@ -564,6 +643,16 @@ function buildAdminStudentListFilters(
   if (query.intakeCode != null) {
     clauses.push(`${ADMIN_STUDENT_INTAKE_CODE_SQL} = ?`);
     params.push(query.intakeCode);
+  }
+  if (query.loaQuarter != null && query.loaYear != null) {
+    clauses.push(`EXISTS (
+      SELECT 1
+      FROM loa
+      WHERE TRIM(loa.student_id) = TRIM(s.id)
+        AND UPPER(TRIM(loa.absent_quarter)) = UPPER(?)
+        AND CAST(NULLIF(TRIM(loa.absent_year), '') AS SIGNED) = ?
+    )`);
+    params.push(query.loaQuarter, query.loaYear);
   }
   if (clauses.length === 0) {
     return { clause: "", params };
@@ -672,6 +761,35 @@ export async function listLegacyAdminStudentEnrollmentFacetRows(
      ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}
      ${clause}
      ORDER BY entry_year DESC, intake_code ASC`,
+    params,
+  );
+  return rows;
+}
+
+export type LegacyAdminStudentLoaTermFacetRow = RowDataPacket & {
+  absent_quarter: string | null;
+  absent_year: number | null;
+};
+
+export async function listLegacyAdminStudentLoaTermFacetRows(
+  pool: Pool,
+  query: LegacyAdminStudentListQuery,
+): Promise<LegacyAdminStudentLoaTermFacetRow[]> {
+  const { clause, params } = buildAdminStudentListFilters(query);
+  const [rows] = await pool.query<LegacyAdminStudentLoaTermFacetRow[]>(
+    `SELECT DISTINCT
+       TRIM(l.absent_quarter) AS absent_quarter,
+       CAST(NULLIF(TRIM(l.absent_year), '') AS SIGNED) AS absent_year
+     FROM loa l
+     INNER JOIN students s
+       ON TRIM(l.student_id) = TRIM(s.id)
+     ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}
+     ${clause}
+     HAVING absent_quarter IS NOT NULL
+       AND absent_quarter <> ''
+       AND absent_year IS NOT NULL
+     ORDER BY absent_year DESC,
+       ${legacyQuarterOrderSql("absent_quarter")} ASC`,
     params,
   );
   return rows;

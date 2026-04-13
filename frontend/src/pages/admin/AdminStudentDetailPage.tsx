@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
+  createAdminStudentLoa,
   fetchAcademicTerms,
   fetchAdminStudentDetail,
   fetchAdminStudentDocuments,
@@ -129,6 +130,25 @@ function buildQuarterOptions(
   return Array.from(uniq).sort((a, b) => termSortKey(b) - termSortKey(a))
 }
 
+const LOA_QUARTER_OPTIONS = ['Winter', 'Spring', 'Summer', 'Fall'] as const
+
+const EMPTY_LOA_FORM = {
+  loaQuarter: '',
+  loaYear: '',
+  plannedReturnQuarter: '',
+  plannedReturnYear: '',
+  reason: '',
+}
+
+function buildLoaYearOptions(now = new Date()): string[] {
+  const currentYear = now.getFullYear()
+  const out: string[] = []
+  for (let year = currentYear - 2; year <= currentYear + 4; year += 1) {
+    out.push(String(year))
+  }
+  return out
+}
+
 function cellHistory(
   item: AdminStudentRegistrationHistoryItem,
   key: keyof AdminStudentRegistrationHistoryItem,
@@ -174,6 +194,10 @@ export function AdminStudentDetailPage() {
   const [resettingRequirement, setResettingRequirement] =
     useState<DocumentRequirementType | null>(null)
   const [resettingAllDocuments, setResettingAllDocuments] = useState(false)
+  const [loaSelection, setLoaSelection] = useState<'no' | 'yes'>('no')
+  const [loaForm, setLoaForm] = useState(EMPTY_LOA_FORM)
+  const [loaSaveError, setLoaSaveError] = useState<string | null>(null)
+  const [loaSaving, setLoaSaving] = useState(false)
 
   useEffect(() => {
     setActiveTab('registration')
@@ -189,7 +213,18 @@ export function AdminStudentDetailPage() {
     setDocumentsActionError(null)
     setResettingRequirement(null)
     setResettingAllDocuments(false)
+    setLoaSelection('no')
+    setLoaForm(EMPTY_LOA_FORM)
+    setLoaSaveError(null)
+    setLoaSaving(false)
   }, [studentId])
+
+  useEffect(() => {
+    const hasLoa = detail?.loaSummary.hasLoa === true
+    setLoaSelection(hasLoa ? 'yes' : 'no')
+    setLoaForm(EMPTY_LOA_FORM)
+    setLoaSaveError(null)
+  }, [detail?.loaSummary.hasLoa, studentId])
 
   useEffect(() => {
     if (!studentId.trim()) {
@@ -408,6 +443,59 @@ export function AdminStudentDetailPage() {
     resettingAllDocuments ||
     resettingRequirement !== null
 
+  const loaYearOptions = useMemo(() => buildLoaYearOptions(), [])
+  const hasExistingLoa = detail?.loaSummary.hasLoa === true
+  const showLoaCreateForm = !hasExistingLoa && loaSelection === 'yes'
+
+  const handleLoaSelectionChange = useCallback((nextValue: 'no' | 'yes') => {
+    setLoaSelection(nextValue)
+    setLoaSaveError(null)
+    if (nextValue === 'no') {
+      setLoaForm(EMPTY_LOA_FORM)
+    }
+  }, [])
+
+  const handleLoaSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      if (!studentId.trim()) {
+        setLoaSaveError('Missing student id.')
+        return
+      }
+      if (
+        !loaForm.loaQuarter ||
+        !loaForm.loaYear ||
+        !loaForm.plannedReturnQuarter ||
+        !loaForm.plannedReturnYear
+      ) {
+        setLoaSaveError(
+          'Select LOA quarter/year and planned return quarter/year.',
+        )
+        return
+      }
+      setLoaSaveError(null)
+      setLoaSaving(true)
+      try {
+        const nextDetail = await createAdminStudentLoa(studentId, {
+          loaQuarter: loaForm.loaQuarter,
+          loaYear: loaForm.loaYear,
+          plannedReturnQuarter: loaForm.plannedReturnQuarter,
+          plannedReturnYear: loaForm.plannedReturnYear,
+          reason: loaForm.reason.trim() || null,
+        })
+        setDetail(nextDetail)
+        setError(null)
+      } catch (e) {
+        setLoaSaveError(
+          e instanceof Error ? e.message : 'Could not save LOA record.',
+        )
+      } finally {
+        setLoaSaving(false)
+      }
+    },
+    [loaForm, studentId],
+  )
+
   return (
     <main className="admin-page">
       <div className="admin-page__toolbar">
@@ -541,8 +629,31 @@ export function AdminStudentDetailPage() {
                     <dd>{dashText(detail.latestRegistrationTerm)}</dd>
                   </div>
                   <div className="portal-row">
-                    <dt>LOA Status</dt>
-                    <dd>{detail.loaSummary.hasLoa ? 'Yes' : 'No'}</dd>
+                    <dt>LOA</dt>
+                    <dd>
+                      <div className="admin-loa-editor__toggle">
+                        <select
+                          aria-label="LOA"
+                          className="admin-input admin-detail-quarter-select"
+                          value={loaSelection}
+                          disabled={loaSaving || hasExistingLoa}
+                          onChange={(e) =>
+                            handleLoaSelectionChange(
+                              e.target.value === 'yes' ? 'yes' : 'no',
+                            )
+                          }
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                        {hasExistingLoa ? (
+                          <p className="portal-card-note admin-loa-editor__helper">
+                            Existing LOA records display here, but update/remove
+                            actions are not part of this step yet.
+                          </p>
+                        ) : null}
+                      </div>
+                    </dd>
                   </div>
                   <div className="portal-row">
                     <dt>LOA Term</dt>
@@ -575,6 +686,141 @@ export function AdminStudentDetailPage() {
                     <dd>{formatEntryYear(detail.entryYear)}</dd>
                   </div>
                 </dl>
+                {showLoaCreateForm ? (
+                  <form className="admin-loa-editor" onSubmit={handleLoaSubmit}>
+                    <p className="portal-card-note admin-loa-editor__helper">
+                      Choose the LOA term and planned return term, then save to
+                      create a new record in the existing LOA table.
+                    </p>
+                    <div className="admin-form-grid admin-loa-editor__grid">
+                      <label className="admin-field">
+                        <span className="admin-field__label">LOA Quarter *</span>
+                        <select
+                          className="admin-input"
+                          value={loaForm.loaQuarter}
+                          onChange={(e) =>
+                            setLoaForm((current) => ({
+                              ...current,
+                              loaQuarter: e.target.value,
+                            }))
+                          }
+                          disabled={loaSaving}
+                        >
+                          <option value="">Select…</option>
+                          {LOA_QUARTER_OPTIONS.map((quarter) => (
+                            <option key={quarter} value={quarter}>
+                              {quarter}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="admin-field">
+                        <span className="admin-field__label">LOA Year *</span>
+                        <select
+                          className="admin-input"
+                          value={loaForm.loaYear}
+                          onChange={(e) =>
+                            setLoaForm((current) => ({
+                              ...current,
+                              loaYear: e.target.value,
+                            }))
+                          }
+                          disabled={loaSaving}
+                        >
+                          <option value="">Select…</option>
+                          {loaYearOptions.map((year) => (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="admin-field">
+                        <span className="admin-field__label">
+                          Planned Return Quarter *
+                        </span>
+                        <select
+                          className="admin-input"
+                          value={loaForm.plannedReturnQuarter}
+                          onChange={(e) =>
+                            setLoaForm((current) => ({
+                              ...current,
+                              plannedReturnQuarter: e.target.value,
+                            }))
+                          }
+                          disabled={loaSaving}
+                        >
+                          <option value="">Select…</option>
+                          {LOA_QUARTER_OPTIONS.map((quarter) => (
+                            <option key={quarter} value={quarter}>
+                              {quarter}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="admin-field">
+                        <span className="admin-field__label">
+                          Planned Return Year *
+                        </span>
+                        <select
+                          className="admin-input"
+                          value={loaForm.plannedReturnYear}
+                          onChange={(e) =>
+                            setLoaForm((current) => ({
+                              ...current,
+                              plannedReturnYear: e.target.value,
+                            }))
+                          }
+                          disabled={loaSaving}
+                        >
+                          <option value="">Select…</option>
+                          {loaYearOptions.map((year) => (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="admin-field admin-field--span-2">
+                        <span className="admin-field__label">Reason</span>
+                        <textarea
+                          className="admin-input admin-textarea"
+                          value={loaForm.reason}
+                          onChange={(e) =>
+                            setLoaForm((current) => ({
+                              ...current,
+                              reason: e.target.value,
+                            }))
+                          }
+                          disabled={loaSaving}
+                          rows={3}
+                        />
+                      </label>
+                    </div>
+                    {loaSaveError ? (
+                      <p className="admin-loa-editor__error" role="alert">
+                        {loaSaveError}
+                      </p>
+                    ) : null}
+                    <div className="admin-form-actions">
+                      <button
+                        type="submit"
+                        className="portal-btn portal-btn--primary"
+                        disabled={loaSaving}
+                      >
+                        {loaSaving ? 'Saving LOA…' : 'Save LOA'}
+                      </button>
+                      <button
+                        type="button"
+                        className="portal-btn portal-btn--secondary"
+                        disabled={loaSaving}
+                        onClick={() => handleLoaSelectionChange('no')}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
               </section>
 
               <section

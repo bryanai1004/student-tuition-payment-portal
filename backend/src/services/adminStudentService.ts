@@ -1,5 +1,6 @@
 import { pool } from "../lib/db.js";
 import {
+  createLegacyStudentLoaRow,
   createLegacyStudentMasterRow,
   createLegacyStudentPasswordRow,
   deleteLegacyStudentMasterRow,
@@ -13,6 +14,7 @@ import {
   legacyStudentMasterExists,
   legacyStudentPasswordRowExists,
   countLegacyAdminStudentListRows,
+  listLegacyAdminStudentLoaTermFacetRows,
   listLegacyAdminStudentEnrollmentFacetRows,
   listLegacyAdminStudentListRows,
   listLegacyAdminStudentListRowsPage,
@@ -24,10 +26,13 @@ import type {
   AdminDivision,
   AdminStudentClinicalProgressSummary,
   AdminStudentCreateBody,
+  AdminStudentCreateLoaBody,
   AdminStudentDetail,
   AdminStudentEnrollmentFilterOptions,
   AdminStudentListItem,
+  AdminStudentLoaTermOption,
   AdminStudentLoaSummary,
+  AdminStudentRosterLoaFilter,
   AdminStudentRosterProgramFilter,
   AdminStudentRosterTrackFilter,
   AdminStudentUpdateBody,
@@ -47,6 +52,11 @@ import {
   getAdminStudentIntakeLabel,
   parseAdminStudentEnrollmentInfo,
 } from "./adminStudentEnrollmentMetadata.js";
+import {
+  deriveAdminLoaQuarterStartDate,
+  normalizeAdminLoaQuarter,
+  normalizeAdminLoaYear,
+} from "./adminStudentLoaDates.js";
 
 function str(v: unknown): string {
   if (v == null) return "";
@@ -106,22 +116,10 @@ function entryYearFromResolved(iso: string | null): number | null {
   return Number.isFinite(y) ? y : null;
 }
 
-function normalizedQuarter(raw: unknown): string | null {
-  const quarter = str(raw);
-  if (quarter === "") return null;
-  const lowered = quarter.toLowerCase();
-  switch (lowered) {
-    case "winter":
-      return "Winter";
-    case "spring":
-      return "Spring";
-    case "summer":
-      return "Summer";
-    case "fall":
-      return "Fall";
-    default:
-      return null;
-  }
+function normalizedQuarter(
+  raw: unknown,
+): AdminStudentLoaTermOption["quarter"] | null {
+  return normalizeAdminLoaQuarter(raw);
 }
 
 function normalizedYear(raw: unknown): number | null {
@@ -229,8 +227,14 @@ async function buildAdminStudentEnrollmentFilterOptions(options: {
   track: AdminStudentRosterTrackFilter;
   entryYear: string | null;
   intakeCode: string | null;
+  loa: AdminStudentRosterLoaFilter;
+  loaQuarter: "Winter" | "Spring" | "Summer" | "Fall" | null;
+  loaYear: number | null;
 }): Promise<AdminStudentEnrollmentFilterOptions> {
-  const rows = await listLegacyAdminStudentEnrollmentFacetRows(pool, options);
+  const [rows, loaRows] = await Promise.all([
+    listLegacyAdminStudentEnrollmentFacetRows(pool, options),
+    listLegacyAdminStudentLoaTermFacetRows(pool, options),
+  ]);
   const years = Array.from(
     new Set(
       rows
@@ -252,7 +256,23 @@ async function buildAdminStudentEnrollmentFilterOptions(options: {
       label: getAdminStudentIntakeLabel(code) ?? code,
     }));
 
-  return { years, intakes };
+  const loaTerms: AdminStudentLoaTermOption[] = [];
+  const seenLoaTerms = new Set<string>();
+  for (const row of loaRows) {
+    const quarter = normalizedQuarter(row.absent_quarter);
+    const year = normalizedYear(row.absent_year);
+    if (quarter == null || year == null) continue;
+    const key = `${quarter}|${year}`;
+    if (seenLoaTerms.has(key)) continue;
+    seenLoaTerms.add(key);
+    loaTerms.push({
+      quarter,
+      year,
+      label: `${quarter} ${year}`,
+    });
+  }
+
+  return { years, intakes, loaTerms };
 }
 
 export type AdminStudentListPageResult = {
@@ -271,6 +291,9 @@ export async function listAdminStudentsPage(options: {
   track: AdminStudentRosterTrackFilter;
   entryYear: string | null;
   intakeCode: string | null;
+  loa: AdminStudentRosterLoaFilter;
+  loaQuarter: "Winter" | "Spring" | "Summer" | "Fall" | null;
+  loaYear: number | null;
   includeClinicalSummary?: boolean;
 }): Promise<AdminStudentListPageResult> {
   const page = Math.max(1, Math.trunc(options.page));
@@ -280,6 +303,9 @@ export async function listAdminStudentsPage(options: {
   const track = options.track;
   const entryYear = options.entryYear;
   const intakeCode = options.intakeCode;
+  const loa = options.loa;
+  const loaQuarter = options.loaQuarter;
+  const loaYear = options.loaYear;
   const offset = (page - 1) * pageSize;
 
   const total = await countLegacyAdminStudentListRows(pool, {
@@ -288,6 +314,9 @@ export async function listAdminStudentsPage(options: {
     track,
     entryYear,
     intakeCode,
+    loa,
+    loaQuarter,
+    loaYear,
   });
   const rows = await listLegacyAdminStudentListRowsPage(pool, {
     search,
@@ -295,6 +324,9 @@ export async function listAdminStudentsPage(options: {
     track,
     entryYear,
     intakeCode,
+    loa,
+    loaQuarter,
+    loaYear,
     limit: pageSize,
     offset,
   });
@@ -304,6 +336,9 @@ export async function listAdminStudentsPage(options: {
     track,
     entryYear,
     intakeCode,
+    loa,
+    loaQuarter,
+    loaYear,
   });
   const base = rows.map((row) => mapRowToListItem(row as Record<string, unknown>));
   let items: AdminStudentListItem[];
@@ -391,6 +426,9 @@ export type BuildAdminStudentsCsvInput =
       track: AdminStudentRosterTrackFilter;
       entryYear: string | null;
       intakeCode: string | null;
+      loa: AdminStudentRosterLoaFilter;
+      loaQuarter: "Winter" | "Spring" | "Summer" | "Fall" | null;
+      loaYear: number | null;
       view: "roster" | "new-enrollment";
     };
 
@@ -413,6 +451,9 @@ export async function buildAdminStudentsCsv(
           track: input.track,
           entryYear: input.entryYear,
           intakeCode: input.intakeCode,
+          loa: input.loa,
+          loaQuarter: input.loaQuarter,
+          loaYear: input.loaYear,
         });
 
   const items = rows.map((row) =>
@@ -535,6 +576,105 @@ export async function getAdminStudentDetail(
     console.error("[admin] buildClinicalProgress failed", studentId, e);
     return base;
   }
+}
+
+export type AdminStudentCreateLoaResult =
+  | { ok: true; detail: AdminStudentDetail }
+  | { ok: false; status: 400 | 404 | 409; message: string };
+
+export async function createAdminStudentLoa(
+  studentIdRaw: string,
+  body: AdminStudentCreateLoaBody,
+): Promise<AdminStudentCreateLoaResult> {
+  const studentId = studentIdRaw.trim();
+  if (studentId === "") {
+    return { ok: false, status: 400, message: "Missing student id." };
+  }
+
+  const absentQuarter = normalizeAdminLoaQuarter(body.loaQuarter);
+  if (!absentQuarter) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Validation: LOA Quarter is required.",
+    };
+  }
+  const absentYear = normalizeAdminLoaYear(body.loaYear);
+  if (absentYear == null) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Validation: LOA Year is required.",
+    };
+  }
+  const returnQuarter = normalizeAdminLoaQuarter(body.plannedReturnQuarter);
+  if (!returnQuarter) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Validation: Planned Return Quarter is required.",
+    };
+  }
+  const returnYear = normalizeAdminLoaYear(body.plannedReturnYear);
+  if (returnYear == null) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Validation: Planned Return Year is required.",
+    };
+  }
+
+  const reason = str(body.reason);
+  const absentStartingDate = deriveAdminLoaQuarterStartDate(
+    absentQuarter,
+    absentYear,
+  );
+  const returnDate = deriveAdminLoaQuarterStartDate(returnQuarter, returnYear);
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    if (!(await legacyStudentMasterExists(connection, studentId))) {
+      await connection.rollback();
+      return { ok: false, status: 404, message: "Student not found." };
+    }
+
+    const existingLoa = await findLatestLegacyStudentLoaRow(connection, studentId);
+    if (existingLoa) {
+      await connection.rollback();
+      return {
+        ok: false,
+        status: 409,
+        message:
+          "This student already has an LOA record on file. Editing existing LOA is not supported here yet.",
+      };
+    }
+
+    await createLegacyStudentLoaRow(connection, {
+      studentId,
+      absentQuarter,
+      absentYear,
+      absentStartingDate,
+      returnQuarter,
+      returnYear,
+      returnDate,
+      reason,
+    });
+
+    await connection.commit();
+  } catch (e) {
+    await connection.rollback();
+    throw e;
+  } finally {
+    connection.release();
+  }
+
+  const detail = await getAdminStudentDetail(studentId);
+  if (!detail) {
+    return { ok: false, status: 404, message: "Student not found." };
+  }
+  return { ok: true, detail };
 }
 
 const DATE_VALIDATION_PREFIX = "Validation:";
