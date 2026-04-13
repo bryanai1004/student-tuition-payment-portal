@@ -2720,6 +2720,7 @@ export async function updateAcademicTerm(
 
 /** GET /api/courses — catalog rows for admin scheduling pickers. */
 export type CourseCatalogItem = {
+  course_id: string
   code: string
   eng_name: string | null
   chi_name: string | null
@@ -2736,11 +2737,20 @@ function parseCourseCatalogList(data: unknown): CourseCatalogItem[] {
   for (const row of data) {
     if (row == null || typeof row !== 'object') continue
     const o = row as Record<string, unknown>
-    if (typeof o.code !== 'string' || o.code.trim() === '') continue
+    const courseId = o.course_id ?? o.courseId
+    if (
+      typeof courseId !== 'string' ||
+      courseId.trim() === '' ||
+      typeof o.code !== 'string' ||
+      o.code.trim() === ''
+    ) {
+      continue
+    }
     const eng = o.eng_name
     const chi = o.chi_name
     const cat = o.category
     const item: CourseCatalogItem = {
+      course_id: courseId.trim(),
       code: o.code.trim(),
       eng_name: typeof eng === 'string' ? eng : null,
       chi_name: typeof chi === 'string' ? chi : null,
@@ -2896,6 +2906,7 @@ export async function fetchCourses(options?: {
 export type AdminCourseSection = {
   id: number
   course_code: string
+  prerequisite_course_id: string | null
   /** `portal_courses.title` when returned by enrolled-sections; otherwise null. */
   course_title: string | null
   term: string
@@ -2986,6 +2997,12 @@ function parseAdminCourseSectionRow(
     ctRaw == null || String(ctRaw).trim() === ''
       ? null
       : String(ctRaw).trim()
+  const prerequisiteRaw =
+    row.prerequisite_course_id ?? row.prerequisiteCourseId
+  const prerequisite_course_id =
+    prerequisiteRaw == null || String(prerequisiteRaw).trim() === ''
+      ? null
+      : String(prerequisiteRaw).trim()
   const unitsRaw = row.units
   let units: number | null = null
   if (typeof unitsRaw === 'number' && Number.isFinite(unitsRaw)) {
@@ -2997,6 +3014,7 @@ function parseAdminCourseSectionRow(
   return {
     id,
     course_code: course_code.trim(),
+    prerequisite_course_id,
     course_title,
     units,
     term: term.trim(),
@@ -3384,6 +3402,7 @@ export async function fetchAdminCourseSectionEnrollments(params: {
 export type AdminCourseSectionCreatePayload = {
   academic_term_id: string
   course_code: string
+  prerequisite_course_id?: string | null
   section_code: string
   schedule_track?: 'EN' | 'CN'
   weekday: string

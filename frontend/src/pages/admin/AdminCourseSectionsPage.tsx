@@ -53,6 +53,7 @@ function displayCell(value: string | null | undefined): string {
 type FormState = {
   section_code: string
   schedule_track: 'EN' | 'CN'
+  prerequisite_course_id: string
   weekdays: WeekdayFull[]
   start_time: string
   end_time: string
@@ -65,6 +66,7 @@ type FormState = {
 const emptyForm = (): FormState => ({
   section_code: '',
   schedule_track: 'EN',
+  prerequisite_course_id: '',
   weekdays: ['Monday'],
   start_time: '',
   end_time: '',
@@ -91,6 +93,7 @@ function AdminCourseSectionsTableHead() {
       <tr>
         <th scope="col">Section</th>
         <th scope="col">Course title</th>
+        <th scope="col">Prerequisite</th>
         <th scope="col">CREDITS</th>
         <th scope="col">Track</th>
         <th scope="col">Weekday</th>
@@ -115,6 +118,7 @@ type AdminCourseSectionGroupTableProps = {
   emptyMessage: string
   /** Per-row title from catalog (eng/chi) and section track + optional legacy `course_title`. */
   resolveRowTitle: (row: AdminCourseSection) => string
+  resolvePrerequisiteCode: (row: AdminCourseSection) => string
   busy: boolean
   csvExportSectionId: number | null
   onViewStudents: (row: AdminCourseSection) => void
@@ -129,6 +133,7 @@ function AdminCourseSectionGroupTable({
   rows,
   emptyMessage,
   resolveRowTitle,
+  resolvePrerequisiteCode,
   busy,
   csvExportSectionId,
   onViewStudents,
@@ -151,7 +156,7 @@ function AdminCourseSectionGroupTable({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={14}
+                  colSpan={15}
                   className="admin-course-sections-table__empty-row"
                 >
                   {emptyMessage}
@@ -162,6 +167,7 @@ function AdminCourseSectionGroupTable({
                 <tr key={row.id}>
                   <td>{row.section_code}</td>
                   <td>{resolveRowTitle(row)}</td>
+                  <td>{resolvePrerequisiteCode(row)}</td>
                   <td className="admin-course-sections-table__numeric">
                     {formatCatalogCredits(row.units)}
                   </td>
@@ -438,6 +444,14 @@ export function AdminCourseSectionsPage() {
     })
   }, [sortedCourses, courseSearch])
 
+  const courseCatalogById = useMemo(() => {
+    const m = new Map<string, CourseCatalogItem>()
+    for (const row of sortedCourses) {
+      m.set(row.course_id, row)
+    }
+    return m
+  }, [sortedCourses])
+
   const selectedCourseCatalog = useMemo(
     () => sortedCourses.find((c) => c.code === courseCode) ?? null,
     [sortedCourses, courseCode],
@@ -485,6 +499,14 @@ export function AdminCourseSectionsPage() {
         row.course_title ?? metaLegacyTitleForCourse,
       ),
     [catalogTitleFields, metaLegacyTitleForCourse],
+  )
+
+  const resolvePrerequisiteCode = useCallback(
+    (row: AdminCourseSection) => {
+      if (row.prerequisite_course_id == null) return '—'
+      return courseCatalogById.get(row.prerequisite_course_id)?.code ?? '—'
+    },
+    [courseCatalogById],
   )
 
   useEffect(() => {
@@ -549,6 +571,7 @@ export function AdminCourseSectionsPage() {
     setForm({
       section_code: row.section_code,
       schedule_track: row.schedule_track === 'CN' ? 'CN' : 'EN',
+      prerequisite_course_id: row.prerequisite_course_id ?? '',
       weekdays: parsed.length > 0 ? parsed : ['Monday'],
       start_time: timeToInputValue(row.start_time),
       end_time: timeToInputValue(row.end_time),
@@ -694,6 +717,7 @@ export function AdminCourseSectionsPage() {
       await createAdminCourseSection({
         academic_term_id: tid,
         course_code: code,
+        prerequisite_course_id: form.prerequisite_course_id.trim() || null,
         section_code: form.section_code.trim(),
         schedule_track: form.schedule_track,
         weekday: wd,
@@ -736,6 +760,7 @@ export function AdminCourseSectionsPage() {
       await updateAdminCourseSection(editingId, {
         academic_term_id: tid,
         course_code: courseCode.trim(),
+        prerequisite_course_id: form.prerequisite_course_id.trim() || null,
         section_code: form.section_code.trim(),
         schedule_track: form.schedule_track,
         weekday: wd,
@@ -1006,6 +1031,7 @@ export function AdminCourseSectionsPage() {
             rows={enSectionRows}
             emptyMessage="None for this course in this term."
             resolveRowTitle={resolveSectionRowTitle}
+            resolvePrerequisiteCode={resolvePrerequisiteCode}
             busy={busy}
             csvExportSectionId={csvExportSectionId}
             onViewStudents={openRosterForSection}
@@ -1019,6 +1045,7 @@ export function AdminCourseSectionsPage() {
             rows={cnSectionRows}
             emptyMessage="None for this course in this term."
             resolveRowTitle={resolveSectionRowTitle}
+            resolvePrerequisiteCode={resolvePrerequisiteCode}
             busy={busy}
             csvExportSectionId={csvExportSectionId}
             onViewStudents={openRosterForSection}
@@ -1063,6 +1090,34 @@ export function AdminCourseSectionsPage() {
               title="Defaults from catalog English/Chinese names for the selected timetable track; edit to override without changing the catalog."
               autoComplete="off"
             />
+          </label>
+          <label className="admin-field admin-field--span-2">
+            <span className="admin-field__label">Prerequisite course</span>
+            <select
+              className="admin-input"
+              value={form.prerequisite_course_id}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  prerequisite_course_id: e.target.value,
+                }))
+              }
+              disabled={busy || sortedCourses.length === 0}
+              aria-label="Prerequisite course"
+            >
+              <option value="">None</option>
+              {sortedCourses.map((c) => (
+                <option key={c.course_id} value={c.course_id}>
+                  {formatCourseCatalogSelectLabel(c)}
+                </option>
+              ))}
+              {form.prerequisite_course_id.trim() !== '' &&
+                !courseCatalogById.has(form.prerequisite_course_id) && (
+                  <option value={form.prerequisite_course_id}>
+                    {form.prerequisite_course_id} (unavailable)
+                  </option>
+                )}
+            </select>
           </label>
           <label className="admin-field">
             <span className="admin-field__label">Section code</span>

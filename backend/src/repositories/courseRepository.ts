@@ -3,6 +3,7 @@ import { pool } from "../lib/db.js";
 
 /** API output keys (fixed contract). */
 export const COURSE_LIST_KEYS = [
+  "course_id",
   "code",
   "eng_name",
   "chi_name",
@@ -117,6 +118,7 @@ export async function listCoursesFromMysql(): Promise<CourseListItem[]> {
   }
 
   const selections: string[] = [];
+  const codePhysical = pickColumn(cols, ["code"]);
 
   for (const spec of COLUMN_SPECS) {
     const physical = pickColumn(cols, spec.candidates);
@@ -126,16 +128,31 @@ export async function listCoursesFromMysql(): Promise<CourseListItem[]> {
     );
   }
 
+  if (codePhysical) {
+    selections.unshift("pc.course_id AS `course_id`");
+  }
+
   if (selections.length === 0) {
     return [];
   }
 
   const orderCol = pickColumn(cols, ORDER_BY_CANDIDATES);
   const orderClause = orderCol
-    ? `ORDER BY ${quoteIdent(orderCol)} ASC`
+    ? `ORDER BY c.${quoteIdent(orderCol)} ASC`
+    : "";
+  const joinClause = codePhysical
+    ? `LEFT JOIN (
+         SELECT
+           course_code,
+           MIN(course_id) AS course_id
+         FROM portal_courses
+         GROUP BY course_code
+       ) pc
+         ON CONVERT(TRIM(pc.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+            CONVERT(TRIM(c.${quoteIdent(codePhysical)}) USING utf8mb4) COLLATE utf8mb4_unicode_ci`
     : "";
 
-  const sql = `SELECT ${selections.join(", ")} FROM ${quoteIdent("courses")} ${orderClause}`.trim();
+  const sql = `SELECT ${selections.join(", ")} FROM ${quoteIdent("courses")} c ${joinClause} ${orderClause}`.trim();
 
   try {
     const [rows] = await pool.query<RowDataPacket[]>(sql);
