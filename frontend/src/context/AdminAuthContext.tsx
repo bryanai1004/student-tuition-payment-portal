@@ -6,47 +6,102 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import type { AdminRole } from '../lib/adminAccess'
 
 const ADMIN_SESSION_KEY = 'amu_admin_session'
 
-const ADMIN_EMAILS = [
-  'wanpanelami@gmail.com',
-  'bingchen.li@wanpanel.ai',
-  'clinic@amu.edu',
-  'clinicdean@amu.edu',
-] as const
-const ADMIN_PASSWORD = 'amuadmin123'
-
-const ADMIN_EMAIL_SET = new Set(
-  ADMIN_EMAILS.map((e) => e.toLowerCase()),
-)
-
-function isAllowedAdminEmail(email: string): boolean {
-  return ADMIN_EMAIL_SET.has(email.trim().toLowerCase())
+type AdminAccount = {
+  email: string
+  password: string
+  role: AdminRole
 }
 
 type AdminLoginResult =
   | { ok: true }
   | { ok: false; error: string }
 
+type StoredAdminSession = {
+  email: string
+  role: AdminRole
+}
+
 type AdminAuthContextValue = {
   isAuthenticated: boolean
+  role: AdminRole | null
   login: (email: string, password: string) => AdminLoginResult
   logout: () => void
 }
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null)
 
-function readSession(): boolean {
+const ADMIN_ACCOUNTS: readonly AdminAccount[] = [
+  {
+    email: 'wanpanelami@gmail.com',
+    password: 'amuadmin123',
+    role: 'admin',
+  },
+  {
+    email: 'bingchen.li@wanpanel.ai',
+    password: 'amuadmin123',
+    role: 'admin',
+  },
+  {
+    email: 'clinic@amu.edu',
+    password: 'amuadmin123',
+    role: 'admin',
+  },
+  {
+    email: 'clinicdean@amu.edu',
+    password: 'amuadmin123',
+    role: 'admin',
+  },
+  {
+    email: 'teacher@amu.edu',
+    password: 'teacher123',
+    role: 'teacher',
+  },
+  {
+    email: 'clinical@amu.edu',
+    password: 'clinical123',
+    role: 'clinical_teacher',
+  },
+] as const
+
+const ADMIN_ACCOUNT_MAP = new Map(
+  ADMIN_ACCOUNTS.map((account) => [account.email.toLowerCase(), account] as const),
+)
+
+function readSession(): StoredAdminSession | null {
   try {
-    return sessionStorage.getItem(ADMIN_SESSION_KEY) === '1'
+    const raw = sessionStorage.getItem(ADMIN_SESSION_KEY)
+    if (raw === '1') {
+      return {
+        email: '',
+        role: 'admin',
+      }
+    }
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<StoredAdminSession>
+    if (
+      typeof parsed.role === 'string' &&
+      (parsed.role === 'admin' ||
+        parsed.role === 'teacher' ||
+        parsed.role === 'clinical_teacher')
+    ) {
+      return {
+        email: typeof parsed.email === 'string' ? parsed.email : '',
+        role: parsed.role,
+      }
+    }
+    return null
   } catch {
-    return false
+    return null
   }
 }
 
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(readSession)
+  const [session, setSession] = useState<StoredAdminSession | null>(readSession)
+  const isAuthenticated = session !== null
 
   const login = useCallback((email: string, password: string): AdminLoginResult => {
     const trimmedEmail = email.trim()
@@ -56,15 +111,20 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     if (password === '') {
       return { ok: false, error: 'Password is required' }
     }
-    if (!isAllowedAdminEmail(trimmedEmail) || password !== ADMIN_PASSWORD) {
+    const account = ADMIN_ACCOUNT_MAP.get(trimmedEmail.toLowerCase())
+    if (!account || password !== account.password) {
       return { ok: false, error: 'Invalid email or password.' }
     }
+    const nextSession: StoredAdminSession = {
+      email: account.email,
+      role: account.role,
+    }
     try {
-      sessionStorage.setItem(ADMIN_SESSION_KEY, '1')
+      sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(nextSession))
     } catch {
       /* ignore */
     }
-    setIsAuthenticated(true)
+    setSession(nextSession)
     return { ok: true }
   }, [])
 
@@ -74,12 +134,12 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-    setIsAuthenticated(false)
+    setSession(null)
   }, [])
 
   const value = useMemo(
-    () => ({ isAuthenticated, login, logout }),
-    [isAuthenticated, login, logout],
+    () => ({ isAuthenticated, role: session?.role ?? null, login, logout }),
+    [isAuthenticated, login, logout, session?.role],
   )
 
   return (

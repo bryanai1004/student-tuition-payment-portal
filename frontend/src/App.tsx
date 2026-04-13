@@ -46,6 +46,11 @@ import { DocumentsLayout } from './pages/documents/DocumentsLayout'
 import { DocumentsHomePage } from './pages/documents/DocumentsHomePage'
 import { ProfilePage } from './pages/ProfilePage'
 import { DashboardPage } from './pages/DashboardPage'
+import {
+  getFirstAccessibleAdminPath,
+  hasAdminModuleAccess,
+  type AdminModuleKey,
+} from './lib/adminAccess'
 import './styles/portal.css'
 
 function RequireAuth() {
@@ -65,6 +70,31 @@ function RequireAdminAuth() {
     return <Navigate to="/admin/login" replace />
   }
   return <Outlet />
+}
+
+function RequireAdminModule({ module }: { module: AdminModuleKey }) {
+  const { isAuthenticated, role } = useAdminAuth()
+  if (process.env.NODE_ENV === 'development' && !isAuthenticated) {
+    return <Outlet />
+  }
+  if (!role) {
+    return <Navigate to="/admin/login" replace />
+  }
+  if (!hasAdminModuleAccess(role, module)) {
+    return <Navigate to={getFirstAccessibleAdminPath(role)} replace />
+  }
+  return <Outlet />
+}
+
+function AdminIndexRedirect() {
+  const { isAuthenticated, role } = useAdminAuth()
+  if (process.env.NODE_ENV === 'development' && !isAuthenticated) {
+    return <Navigate to="/admin/students" replace />
+  }
+  if (!role) {
+    return <Navigate to="/admin/login" replace />
+  }
+  return <Navigate to={getFirstAccessibleAdminPath(role)} replace />
 }
 
 function RegistrationIndexRedirect() {
@@ -89,28 +119,42 @@ export default function App() {
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route element={<RequireAdminAuth />}>
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Navigate to="students" replace />} />
-          <Route path="students/:studentId/edit" element={<AdminStudentEditPage />} />
-          <Route path="students/new" element={<AdminStudentCreatePage />} />
-          <Route path="students/:studentId" element={<AdminStudentDetailPage />} />
-          <Route path="students" element={<AdminStudentsPage />} />
-          <Route
-            path="clinical/:studentId"
-            element={<AdminClinicalStudentDetailPage />}
-          />
-          <Route path="clinical" element={<AdminClinicalPage />} />
-          <Route path="courses" element={<AdminCoursesPage />} />
-          <Route path="academic-terms" element={<AdminAcademicTermsPage />} />
-          <Route path="course-sections" element={<AdminCourseSectionsPage />} />
-          <Route
-            path="course-sections/roster"
-            element={<AdminCourseSectionRosterPage />}
-          />
-          <Route
-            path="course-sections/timetable"
-            element={<AdminSchedulingTimetablePage />}
-          />
-          <Route path="finance" element={<AdminFinancePage />} />
+          <Route index element={<AdminIndexRedirect />} />
+          <Route element={<RequireAdminModule module="students" />}>
+            <Route path="students/:studentId/edit" element={<AdminStudentEditPage />} />
+            <Route path="students/new" element={<AdminStudentCreatePage />} />
+            <Route path="students/:studentId" element={<AdminStudentDetailPage />} />
+            <Route path="students" element={<AdminStudentsPage />} />
+          </Route>
+          <Route element={<RequireAdminModule module="clinical" />}>
+            <Route
+              path="clinical/:studentId"
+              element={<AdminClinicalStudentDetailPage />}
+            />
+            <Route path="clinical" element={<AdminClinicalPage />} />
+          </Route>
+          <Route element={<RequireAdminModule module="courses" />}>
+            <Route path="courses" element={<AdminCoursesPage />} />
+          </Route>
+          <Route element={<RequireAdminModule module="academic_terms" />}>
+            <Route path="academic-terms" element={<AdminAcademicTermsPage />} />
+          </Route>
+          <Route element={<RequireAdminModule module="course_sections" />}>
+            <Route path="course-sections" element={<AdminCourseSectionsPage />} />
+            <Route
+              path="course-sections/roster"
+              element={<AdminCourseSectionRosterPage />}
+            />
+          </Route>
+          <Route element={<RequireAdminModule module="scheduling_timetable" />}>
+            <Route
+              path="course-sections/timetable"
+              element={<AdminSchedulingTimetablePage />}
+            />
+          </Route>
+          <Route element={<RequireAdminModule module="finance" />}>
+            <Route path="finance" element={<AdminFinancePage />} />
+          </Route>
         </Route>
       </Route>
       <Route element={<StudentAccountScope />}>
