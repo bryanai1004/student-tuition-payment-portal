@@ -1,0 +1,30 @@
+LOAD DATABASE
+    FROM mysql://admin@school-db.cd6o8awqe4ig.us-east-2.rds.amazonaws.com:3306/school
+    INTO postgresql://postgres:YOUR_SUPABASE_PASSWORD@db.hffpwguupjiffaltbjri.supabase.co:5432/postgres?sslmode=require
+
+WITH include drop,
+     create tables,
+     create indexes,
+     reset sequences,
+     foreign keys,
+     downcase identifiers,
+     workers = 4,
+     concurrency = 1,
+     batch rows = 1000,
+     prefetch rows = 1000
+
+SET PostgreSQL PARAMETERS
+    search_path to 'public'
+
+SET MySQL PARAMETERS
+    net_read_timeout = '120',
+    net_write_timeout = '120'
+
+CAST
+    type tinyint when (= precision 1) to boolean using tinyint-to-boolean,
+    type datetime to timestamptz drop default drop not null using zero-dates-to-null,
+    type timestamp to timestamptz drop default drop not null using zero-dates-to-null,
+    type date to date drop default drop not null using zero-dates-to-null,
+    type enum to text,
+    type set to text,
+    type json to jsonb;
