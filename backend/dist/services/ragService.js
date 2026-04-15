@@ -11,6 +11,8 @@ const STUDENT_GROUNDED_RULES = `Use only:
 Do not invent school policy, enrollment status, grades, prerequisites, deadlines, exceptions, completed courses, or missing student records.
 Treat the student context as verified student-specific facts.
 Treat the retrieved AMU document excerpts as the only allowed source for school rules, policy claims, requirements, prerequisites, deadlines, or official interpretations.
+Never treat a missing course, term, grade, or enrollment in the student context as proof that it never happened unless the student context explicitly shows academic history coverage is full for the relevant period.
+If the student context says academic history coverage is partial, you must not say the student definitely did not take, complete, or register for something in the past. Instead say you cannot confirm it from the available records.
 When discussing policy, clearly distinguish:
 - what the school documents say,
 - what the student's available records show,
@@ -499,6 +501,8 @@ function buildStudentRecordSystemPrompt(question) {
 The current request is about the student's verified record. Stay in HIGH PRECISION MODE.
 Use only the verified student record facts provided in the user message.
 Do not infer missing enrollments, credits, grades, courses, terms, or other AMU-specific facts.
+If the student record facts say academic history coverage is partial, do not turn a missing record into a definitive "no".
+Use "I cannot confirm from the available records" for historical negatives when coverage is partial.
 If the facts do not support the answer, say "I don't have enough information from your records to confirm this."
 Keep the answer natural, concise, and grounded.
 ${languageInstructionForLlm(question)}`;

@@ -59,6 +59,17 @@ export function detectStudentRecordQuestion(question) {
         /\b(did i|have i|was i|do i)\s+(register|registered|enroll|enrolled)\b/i.test(normalized)) {
         return { kind: "registration_in_year", year };
     }
+    if (year != null &&
+        (/\b(what|which)\s+(courses|classes)\s+(did i|have i|i have)\s+(take|taken|took|complete|completed|register(?:ed)?\s+for|enroll(?:ed)?\s+in)\b/i.test(normalized) ||
+            /\bwhat\s+did\s+i\s+(take|took|complete|completed|register(?:ed)?\s+for|enroll(?:ed)?\s+in)\b/i.test(normalized) ||
+            /我.{0,8}(在|于)?.{0,8}\b(19|20)\d{2}\b.{0,8}(修了|上了|选了|注册了|完成了).{0,8}(什么课|哪些课|哪些课程)/.test(normalized))) {
+        return { kind: "courses_in_year", year };
+    }
+    if (courseCode != null &&
+        /\b(did i|have i|do i|was i)\b/i.test(normalized) &&
+        /\b(take|taken|took|register(?:ed)?\s+for|enroll(?:ed)?\s+in)\b/i.test(normalized)) {
+        return { kind: "took_course", courseCode };
+    }
     if (/\b(do i|did i|have i|my)\b/i.test(normalized) &&
         /\b(withdrawal|withdrawn|withdrew)\b/i.test(normalized)) {
         return { kind: "withdrawal_history" };
