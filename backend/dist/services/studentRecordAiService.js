@@ -4,6 +4,7 @@ import { evaluateStudentGraduation, } from "./graduationEvaluationService.js";
 import { detectStudentRecordQuestion, extractCourseCode, } from "./studentAiQuestionRouter.js";
 import { getStudentAcademicsPayload } from "./studentAcademicsService.js";
 import { termSortOrder, termsMatch } from "./studentAcademicCourseRecords.js";
+import { getStudentTranscriptPreviewPayload } from "./studentTranscriptService.js";
 function createLoader(studentId) {
     return { studentId: studentId.trim() };
 }
@@ -12,6 +13,12 @@ async function getAcademics(loader) {
         loader.academicsPromise = getStudentAcademicsPayload(loader.studentId);
     }
     return loader.academicsPromise;
+}
+async function getTranscriptPreview(loader) {
+    if (loader.transcriptPreviewPromise == null) {
+        loader.transcriptPreviewPromise = getStudentTranscriptPreviewPayload(loader.studentId);
+    }
+    return loader.transcriptPreviewPromise;
 }
 async function getRegistrationTerms(loader) {
     if (loader.registrationTermsPromise == null) {
@@ -81,9 +88,9 @@ function sourceLabel(source) {
             return source;
     }
 }
-function buildHistoricalAcademicRecordSummary(academics, registrationTerms) {
+function buildHistoricalAcademicRecordSummary(transcriptPreview, registrationTerms) {
     const grouped = new Map();
-    for (const record of academics.courseRecords) {
+    for (const record of transcriptPreview.transcript) {
         const term = record.term.trim();
         const year = Math.trunc(record.year);
         if (term === "" || !Number.isFinite(year))
@@ -102,24 +109,30 @@ function buildHistoricalAcademicRecordSummary(academics, registrationTerms) {
         existing.courses.push(record);
     }
     const terms = [...grouped.values()].sort(compareTermsDesc);
-    const academicTerms = uniqueSortedTerms(terms.map((item) => ({ term: item.term, year: item.year })));
+    const transcriptTerms = transcriptPreview.availableTerms.length > 0
+        ? uniqueSortedTerms(transcriptPreview.availableTerms.map((item) => ({
+            term: item.term,
+            year: item.year,
+        })))
+        : uniqueSortedTerms(terms.map((item) => ({ term: item.term, year: item.year })));
+    const academicTerms = transcriptTerms;
     const normalizedRegistrationTerms = uniqueSortedTerms(registrationTerms);
     const academicTermKeys = new Set(academicTerms.map((item) => termYearKey(item.term, item.year)));
     const registrationOnlyTerms = normalizedRegistrationTerms.filter((item) => !academicTermKeys.has(termYearKey(item.term, item.year)));
     const knownTerms = uniqueSortedTerms([...academicTerms, ...normalizedRegistrationTerms]);
     let coverage = "partial";
     let coverageNote = "Course-level academic history is unavailable or limited in the current verified sources.";
-    if (academics.courseRecords.length > 0 && registrationOnlyTerms.length === 0) {
+    if (transcriptPreview.transcript.length > 0 && registrationOnlyTerms.length === 0) {
         coverage = "full";
         coverageNote =
-            "Course-level history is available for every known term in the verified marks and portal enrollment sources.";
+            "Course-level history is available for every known term in the verified transcript preview sources.";
     }
     else if (registrationOnlyTerms.length > 0) {
         coverageNote = `Some known term${registrationOnlyTerms.length === 1 ? "" : "s"} appear only in legacy registration data without course-level detail: ${registrationOnlyTerms
             .map((item) => formatTermLabel(item.term, item.year))
             .join("; ")}.`;
     }
-    else if (academics.courseRecords.length > 0) {
+    else if (transcriptPreview.transcript.length > 0) {
         coverageNote =
             "Course-level history exists, but the available sources do not guarantee complete lifetime coverage for every historical term.";
     }
@@ -136,18 +149,60 @@ function buildHistoricalAcademicRecordSummary(academics, registrationTerms) {
 async function getHistoricalSummary(loader) {
     if (loader.historicalSummaryPromise == null) {
         loader.historicalSummaryPromise = Promise.all([
-            getAcademics(loader),
+            getTranscriptPreview(loader),
             getRegistrationTerms(loader),
-        ]).then(([academics, registrationTerms]) => buildHistoricalAcademicRecordSummary(academics, registrationTerms));
+        ]).then(([transcriptPreview, registrationTerms]) => buildHistoricalAcademicRecordSummary(transcriptPreview, registrationTerms));
     }
     return loader.historicalSummaryPromise;
+}
+export async function getHistoricalAcademicRecord(studentId) {
+    return getHistoricalSummary(createLoader(studentId));
+}
+export async function getCoursesByYear(studentId, year) {
+    const summary = await getHistoricalAcademicRecord(studentId);
+    return summary.terms
+        .filter((term) => term.year === year)
+        .flatMap((term) => term.courses);
+}
+export async function getCoursesByTerm(studentId, term, year) {
+    const summary = await getHistoricalAcademicRecord(studentId);
+    return summary.terms
+        .filter((item) => item.year === year && termsMatch(item.term, term))
+        .flatMap((item) => item.courses);
+}
+function logHistoricalLookup(args) {
+    console.debug("[student-record] historical lookup", {
+        studentId: args.studentId,
+        detectedYear: args.year,
+        detectedTerm: args.term,
+        historicalQueryResultCount: args.resultCount,
+        coverage: args.coverage,
+    });
 }
 function formatHistoricalCourseEntry(record) {
     const details = [
         formatCourseLabel(record),
-        `status: ${record.status}`,
         `source: ${sourceLabel(record.source)}`,
     ];
+    if (record.status != null) {
+        details.push(`status: ${record.status}`);
+    }
+    if (record.grade?.trim()) {
+        details.push(`grade: ${record.grade.trim()}`);
+    }
+    if (record.credits != null) {
+        details.push(`credits: ${record.credits}`);
+    }
+    return details.join(" | ");
+}
+function formatHistoricalTranscriptEntry(record) {
+    const details = [
+        formatCourseLabel(record),
+        `source: ${sourceLabel(record.source)}`,
+    ];
+    if (record.status != null) {
+        details.push(`status: ${record.status}`);
+    }
     if (record.grade?.trim()) {
         details.push(`grade: ${record.grade.trim()}`);
     }
@@ -191,9 +246,9 @@ export async function getCurrentTermCourseCount(studentId) {
     return courses.length;
 }
 export async function getRegisteredTerms(studentId) {
-    const academics = await getStudentAcademicsPayload(studentId.trim());
+    const transcriptPreview = await getStudentTranscriptPreviewPayload(studentId.trim());
     const registrationTerms = await listLegacyRegistrationTermsForStudent(pool, studentId.trim());
-    return buildHistoricalAcademicRecordSummary(academics, registrationTerms).knownTerms;
+    return buildHistoricalAcademicRecordSummary(transcriptPreview, registrationTerms).knownTerms;
 }
 export async function getRegisteredTermCount(studentId) {
     const terms = await getRegisteredTerms(studentId.trim());
@@ -382,9 +437,17 @@ function buildRegistrationInYearAnswer(question, year, summary) {
         usedHelpers: ["getRegisteredTerms", "hasRegistrationInYear"],
     };
 }
-function buildCoursesInYearAnswer(question, year, summary) {
-    const matchingTerms = summary.terms.filter((term) => term.year === year);
+function buildHistoricalTermLookupAnswer(question, studentId, year, term, summary) {
+    const matchingTerms = summary.terms.filter((item) => item.year === year && (term == null || termsMatch(item.term, term)));
     const registrationOnlyTerms = summary.registrationOnlyTerms.filter((term) => term.year === year);
+    const scopeLabel = term == null ? String(year) : formatTermLabel(term, year);
+    logHistoricalLookup({
+        studentId,
+        year,
+        term,
+        resultCount: matchingTerms.reduce((count, item) => count + item.courses.length, 0),
+        coverage: summary.coverage,
+    });
     if (matchingTerms.length === 0) {
         if (registrationOnlyTerms.length > 0 || summary.coverage === "partial") {
             const partialNote = registrationOnlyTerms.length > 0
@@ -395,23 +458,32 @@ function buildCoursesInYearAnswer(question, year, summary) {
             return {
                 result: {
                     question,
-                    answer: `I cannot confirm the full list of courses you took in ${year} from the available records because academic history coverage is partial.${partialNote}`,
+                    answer: `I cannot confirm the full list of courses for ${scopeLabel} from the available transcript-history records because coverage is partial.${partialNote}`,
                     sources: [],
                 },
-                usedHelpers: ["getStudentAcademicsPayload", "getRegisteredTerms"],
+                usedHelpers: [
+                    term == null ? "getCoursesByYear" : "getCoursesByTerm",
+                    "getHistoricalAcademicRecord",
+                    "getRegisteredTerms",
+                ],
             };
         }
         return {
             result: {
                 question,
-                answer: `I did not find any course-level academic records for ${year}.`,
+                answer: `I did not find any transcript-history course records for ${scopeLabel}.`,
                 sources: [],
             },
-            usedHelpers: ["getStudentAcademicsPayload"],
+            usedHelpers: [
+                term == null ? "getCoursesByYear" : "getCoursesByTerm",
+                "getHistoricalAcademicRecord",
+            ],
         };
     }
     const details = matchingTerms
-        .map((term) => `${term.label}: ${term.courses.map((record) => formatHistoricalCourseEntry(record)).join("; ")}`)
+        .map((term) => `${term.label}: ${term.courses
+        .map((record) => formatHistoricalTranscriptEntry(record))
+        .join("; ")}`)
         .join(" | ");
     const extraNote = registrationOnlyTerms.length > 0
         ? ` I also found registration-only term records without course detail: ${registrationOnlyTerms
@@ -421,10 +493,14 @@ function buildCoursesInYearAnswer(question, year, summary) {
     return {
         result: {
             question,
-            answer: `Here is the course-level history I found for ${year}: ${details}.${summary.coverage === "partial" ? " Academic history coverage is partial, so there may be additional records not shown." : ""}${extraNote}`,
+            answer: `Here is the exact transcript-history course list I found for ${scopeLabel}: ${details}.${summary.coverage === "partial" ? " Transcript-history coverage is partial, so there may be additional records not shown." : ""}${extraNote}`,
             sources: [],
         },
-        usedHelpers: ["getStudentAcademicsPayload", "getRegisteredTerms"],
+        usedHelpers: [
+            term == null ? "getCoursesByYear" : "getCoursesByTerm",
+            "getHistoricalAcademicRecord",
+            "getRegisteredTerms",
+        ],
     };
 }
 function buildAllCoursesHistoryAnswer(question, summary) {
@@ -435,23 +511,25 @@ function buildAllCoursesHistoryAnswer(question, summary) {
                     question,
                     answer: `I found historical registration term${summary.registrationOnlyTerms.length === 1 ? "" : "s"} without course-level detail: ${summary.registrationOnlyTerms
                         .map((term) => formatTermLabel(term.term, term.year))
-                        .join("; ")}. I could not find verified course rows in marks or portal enrollments for this request.`,
+                        .join("; ")}. I could not find verified transcript-preview course rows for this request.`,
                     sources: [],
                 },
-                usedHelpers: ["getStudentAcademicsPayload", "getRegisteredTerms"],
+                usedHelpers: ["getHistoricalAcademicRecord", "getRegisteredTerms"],
             };
         }
         return {
             result: {
                 question,
-                answer: "I could not find any verified course-level academic history in marks or portal enrollments for your account.",
+                answer: "I could not find any verified transcript-preview course history for your account.",
                 sources: [],
             },
-            usedHelpers: ["getStudentAcademicsPayload", "getRegisteredTerms"],
+            usedHelpers: ["getHistoricalAcademicRecord", "getRegisteredTerms"],
         };
     }
     const details = summary.terms
-        .map((term) => `${term.label}: ${term.courses.map((record) => formatHistoricalCourseEntry(record)).join("; ")}`)
+        .map((term) => `${term.label}: ${term.courses
+        .map((record) => formatHistoricalTranscriptEntry(record))
+        .join("; ")}`)
         .join(" | ");
     const coverageNote = summary.coverage === "partial" ? ` ${summary.coverageNote}` : "";
     return {
@@ -460,7 +538,7 @@ function buildAllCoursesHistoryAnswer(question, summary) {
             answer: `Here is your verified academic course history: ${details}.${coverageNote}`,
             sources: [],
         },
-        usedHelpers: ["getStudentAcademicsPayload", "getRegisteredTerms"],
+        usedHelpers: ["getHistoricalAcademicRecord", "getRegisteredTerms"],
     };
 }
 function buildWithdrawalHistoryAnswer(question, history) {
@@ -546,7 +624,7 @@ function buildCompletedCreditsTotalAnswer(question, evaluation) {
     return {
         result: {
             question,
-            answer: `You currently have ${evaluation.totalCredits} earned credit${evaluation.totalCredits === 1 ? "" : "s"} based on your latest completed transcript records.${transferNote}`,
+            answer: `You currently have ${evaluation.earnedCredits} earned credit${evaluation.earnedCredits === 1 ? "" : "s"} counted toward graduation based on your latest completed transcript records.${transferNote}`,
             sources: [],
         },
         usedHelpers: ["evaluateStudentGraduation", "getStudentAcademicsPayload"],
@@ -557,6 +635,12 @@ export async function answerDeterministicStudentRecordQuestion(studentId, questi
     if (match == null)
         return null;
     const loader = createLoader(studentId);
+    console.debug("[student-record] deterministic question matched", {
+        studentId: loader.studentId,
+        questionKind: match.kind,
+        detectedYear: "year" in match ? match.year : null,
+        detectedTerm: "term" in match ? match.term : null,
+    });
     switch (match.kind) {
         case "current_term_courses": {
             const academics = await getAcademics(loader);
@@ -581,9 +665,9 @@ export async function answerDeterministicStudentRecordQuestion(studentId, questi
             const summary = await getHistoricalSummary(loader);
             return buildRegistrationInYearAnswer(question, match.year, summary);
         }
-        case "courses_in_year": {
+        case "historical_term_lookup": {
             const summary = await getHistoricalSummary(loader);
-            return buildCoursesInYearAnswer(question, match.year, summary);
+            return buildHistoricalTermLookupAnswer(question, loader.studentId, match.year, match.term, summary);
         }
         case "all_courses_history": {
             const summary = await getHistoricalSummary(loader);
@@ -671,7 +755,7 @@ function buildHistoricalAcademicRecordFacts(summary) {
         for (const term of summary.terms) {
             lines.push(`  - ${term.label}`);
             for (const record of term.courses) {
-                lines.push(`    - ${formatHistoricalCourseEntry(record)}`);
+                lines.push(`    - ${formatHistoricalTranscriptEntry(record)}`);
             }
         }
     }
@@ -704,27 +788,28 @@ function needsWithdrawalFacts(question) {
 function needsRegisteredTermFacts(question) {
     return /\b(register|registered|enroll|enrolled)\b/i.test(question);
 }
-function buildCoursesInYearFacts(year, summary) {
-    const matchingTerms = summary.terms.filter((term) => term.year === year);
+function buildHistoricalTermLookupFacts(year, term, summary) {
+    const matchingTerms = summary.terms.filter((item) => item.year === year && (term == null || termsMatch(item.term, term)));
     const registrationOnlyTerms = summary.registrationOnlyTerms.filter((term) => term.year === year);
+    const scopeLabel = term == null ? String(year) : formatTermLabel(term, year);
     if (matchingTerms.length === 0) {
         if (registrationOnlyTerms.length > 0) {
             return [
-                `- Courses in ${year}: Registration-only term records found without course detail: ${registrationOnlyTerms
+                `- Historical lookup ${scopeLabel}: Registration-only term records found without course detail: ${registrationOnlyTerms
                     .map((term) => formatTermLabel(term.term, term.year))
                     .join("; ")}`,
             ];
         }
         return [
             summary.coverage === "full"
-                ? `- Courses in ${year}: No course-level academic records found`
-                : `- Courses in ${year}: Cannot confirm from the available records because academic history coverage is partial`,
+                ? `- Historical lookup ${scopeLabel}: No transcript-history course records found`
+                : `- Historical lookup ${scopeLabel}: Cannot confirm from the available records because transcript-history coverage is partial`,
         ];
     }
     return [
-        `- Courses in ${year}: ${matchingTerms
+        `- Historical lookup ${scopeLabel}: ${matchingTerms
             .map((term) => `${term.label}: ${term.courses
-            .map((record) => formatHistoricalCourseEntry(record))
+            .map((record) => formatHistoricalTranscriptEntry(record))
             .join("; ")}`)
             .join(" | ")}`,
     ];
@@ -759,7 +844,7 @@ export async function buildStudentRecordFactsForQuestion(studentId, question) {
     const courseCode = extractCourseCode(question);
     const historySummary = await getHistoricalSummary(loader);
     pushUnique(lines, buildHistoricalAcademicRecordFacts(historySummary));
-    usedHelpers.add("getStudentAcademicsPayload");
+    usedHelpers.add("getHistoricalAcademicRecord");
     usedHelpers.add("getRegisteredTerms");
     if (recordMatch != null) {
         switch (recordMatch.kind) {
@@ -777,9 +862,9 @@ export async function buildStudentRecordFactsForQuestion(studentId, question) {
                 usedHelpers.add("getRegisteredTerms");
                 break;
             }
-            case "courses_in_year": {
-                pushUnique(lines, buildCoursesInYearFacts(recordMatch.year, historySummary));
-                usedHelpers.add("getStudentAcademicsPayload");
+            case "historical_term_lookup": {
+                pushUnique(lines, buildHistoricalTermLookupFacts(recordMatch.year, recordMatch.term, historySummary));
+                usedHelpers.add(recordMatch.term == null ? "getCoursesByYear" : "getCoursesByTerm");
                 usedHelpers.add("getRegisteredTerms");
                 break;
             }
@@ -809,7 +894,8 @@ export async function buildStudentRecordFactsForQuestion(studentId, question) {
             }
             case "completed_credits_total": {
                 const evaluation = await evaluateStudentGraduation(loader.studentId);
-                lines.push(`- Total earned credits: ${evaluation.totalCredits}`);
+                lines.push(`- Earned credits: ${evaluation.earnedCredits}`);
+                lines.push(`- Transcript credits: ${evaluation.transcriptCredits}`);
                 lines.push(`- Transfer / admission credits counted: ${evaluation.transferCredits}`);
                 lines.push(`- Missing credits toward graduation rules: ${evaluation.missingCredits}`);
                 usedHelpers.add("evaluateStudentGraduation");

@@ -127,7 +127,9 @@ export function evaluateGraduation(studentRecord) {
         track: studentRecord.profile?.track ?? null,
         ruleSetId: requirements.ruleSetId,
         ruleSetSource: requirements.sourceLabel,
+        earnedCredits: totalCredits,
         totalCredits,
+        transcriptCredits,
         transferCredits,
         requiredCredits,
         missingCredits,
@@ -159,7 +161,8 @@ export function formatGraduationEvaluationFacts(evaluation) {
     lines.push(`- Track: ${evaluation.track ?? "Unavailable"}`);
     lines.push(`- Rule set ID: ${evaluation.ruleSetId}`);
     lines.push(`- Rule set source: ${evaluation.ruleSetSource}`);
-    lines.push(`- Total earned credits: ${evaluation.totalCredits}`);
+    lines.push(`- Earned credits: ${evaluation.earnedCredits}`);
+    lines.push(`- Transcript credits: ${evaluation.transcriptCredits}`);
     lines.push(`- Transfer / admission credits counted: ${evaluation.transferCredits}`);
     lines.push(`- Required credits: ${evaluation.requiredCredits}`);
     lines.push(`- Missing credits: ${evaluation.missingCredits}`);

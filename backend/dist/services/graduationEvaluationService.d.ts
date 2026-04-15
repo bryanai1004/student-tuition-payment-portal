@@ -10,7 +10,9 @@ export type GraduationEvaluationResult = {
     track: string | null;
     ruleSetId: string;
     ruleSetSource: string;
+    earnedCredits: number;
     totalCredits: number;
+    transcriptCredits: number;
     transferCredits: number;
     requiredCredits: number;
     missingCredits: number;

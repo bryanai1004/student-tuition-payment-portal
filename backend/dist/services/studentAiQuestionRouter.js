@@ -22,6 +22,10 @@ function hasAmuIdentityCue(value) {
     return (/\b(amu|alhambra medical university)\b/i.test(value) ||
         /AMU|阿罕布拉医科大学|阿罕布拉醫科大學/.test(value));
 }
+function hasExplicitSchoolIdentityQuestionCue(value) {
+    return (/\b(what\s+is\s+amu|which\s+school\s+is\s+amu|what\s+does\s+amu\s+mean|full\s+name\s+of\s+amu|where\s+is\s+amu|amu\s+(address|location|phone|email|contact))\b/i.test(value) ||
+        /AMU.{0,8}(是什么|是什麼|哪所学校|哪所學校|哪个学校|哪個學校|全名|地址|位置|电话|電話|邮箱|郵箱|联系|聯繫)|是什么学校|是什麼學校|学校名称|學校名稱|学校全名|學校全名/.test(value));
+}
 function hasSchoolContextCue(value) {
     return (/\b(school|campus|university|college)\b/i.test(value) ||
         /学校|學校|校区|校區|校园|校園|大学|大學/.test(value));
@@ -31,8 +35,9 @@ function hasInstitutionFactCue(value) {
         /地址|位置|地点|地點|电话|電話|邮箱|郵箱|邮件|郵件|联系|聯繫|联系方式|聯繫方式|宿舍|住宿|住校|在哪里|在哪裡|在哪/.test(value));
 }
 function hasSchoolFactCue(value) {
-    const hasAmu = hasAmuIdentityCue(value);
-    return hasAmu || (hasSchoolContextCue(value) && hasInstitutionFactCue(value));
+    return (hasExplicitSchoolIdentityQuestionCue(value) ||
+        (hasInstitutionFactCue(value) &&
+            (hasAmuIdentityCue(value) || hasSchoolContextCue(value))));
 }
 function hasLocalSearchCue(value) {
     const explicitPhraseCue = /\b(near me|nearby|around here|close by|good places near|best places near|recommend places|recommend restaurants|restaurant recommendations|food recommendations)\b/i.test(value) ||
@@ -59,10 +64,60 @@ function extractYear(question) {
     const year = Number(match[0]);
     return Number.isFinite(year) ? year : null;
 }
+function normalizeHistoricalLookupTerm(raw) {
+    const normalized = raw.trim().toLowerCase();
+    switch (normalized) {
+        case "fall":
+        case "autumn":
+        case "秋":
+        case "秋季":
+        case "秋天":
+        case "秋学期":
+            return "Fall";
+        case "summer":
+        case "夏":
+        case "夏季":
+        case "夏天":
+        case "夏学期":
+            return "Summer";
+        case "spring":
+        case "春":
+        case "春季":
+        case "春天":
+        case "春学期":
+            return "Spring";
+        case "winter":
+        case "冬":
+        case "冬季":
+        case "冬天":
+        case "冬学期":
+            return "Winter";
+        default:
+            return null;
+    }
+}
+export function extractHistoricalLookupTerm(question) {
+    const patterns = [
+        /\b(fall|autumn|summer|spring|winter)\s+(?:19|20)\d{2}\b/i,
+        /\b(?:19|20)\d{2}\s+(fall|autumn|summer|spring|winter)\b/i,
+        /(?:19|20)\d{2}年.{0,4}(秋季|秋天|秋学期|秋|夏季|夏天|夏学期|夏|春季|春天|春学期|春|冬季|冬天|冬学期|冬)/,
+        /(秋季|秋天|秋学期|秋|夏季|夏天|夏学期|夏|春季|春天|春学期|春|冬季|冬天|冬学期|冬).{0,4}(?:19|20)\d{2}年?/,
+    ];
+    for (const pattern of patterns) {
+        const match = pattern.exec(question);
+        if (match?.[1] != null) {
+            const term = normalizeHistoricalLookupTerm(match[1]);
+            if (term != null)
+                return term;
+        }
+    }
+    return null;
+}
 export function detectStudentRecordQuestion(question) {
     const normalized = lower(question);
     const courseCode = extractCourseCode(question);
     const year = extractYear(question);
+    const historicalTerm = extractHistoricalLookupTerm(question);
     if (/\b(what|which)\s+(courses|classes)\s+(am i|i am|i'm)\s+(taking|enrolled in)\b/i.test(normalized) ||
         /\bwhat\s+am\s+i\s+taking\s+(this term|now|currently)\b/i.test(normalized) ||
         /我(现在|目前|当前).{0,8}(在上|在修|在读|选).{0,8}(什么课|哪些课|哪些课程)/.test(normalized)) {
@@ -90,8 +145,10 @@ export function detectStudentRecordQuestion(question) {
     if (year != null &&
         (/\b(what|which)\s+(courses|classes)\s+(did i|have i|i have)\s+(take|taken|took|complete|completed|register(?:ed)?\s+for|enroll(?:ed)?\s+in)\b/i.test(normalized) ||
             /\bwhat\s+did\s+i\s+(take|took|complete|completed|register(?:ed)?\s+for|enroll(?:ed)?\s+in)\b/i.test(normalized) ||
-            /我.{0,8}(在|于)?.{0,8}\b(19|20)\d{2}\b.{0,8}(修了|上了|选了|注册了|完成了).{0,8}(什么课|哪些课|哪些课程)/.test(normalized))) {
-        return { kind: "courses_in_year", year };
+            /我.{0,8}(在|于)?.{0,8}\b(19|20)\d{2}\b.{0,8}(修了|上了|选了|注册了|完成了).{0,8}(什么课|哪些课|哪些课程)/.test(normalized) ||
+            /我.{0,6}\b(19|20)\d{2}\b年.{0,8}(修过|上过|学过|选过).{0,8}(什么课|哪些课|哪些课程)/.test(normalized) ||
+            /\b(?:fall|autumn|spring|summer|winter)\s+\b(19|20)\d{2}\b.{0,20}\b(courses|classes)\b/i.test(normalized))) {
+        return { kind: "historical_term_lookup", year, term: historicalTerm };
     }
     if (/\b(what|which)\s+(courses|classes)\s+(have i|i have|i've|did i)\s+(take|taken|took|completed|finished|studied)\b/i.test(normalized) ||
         /\bwhat\s+(courses|classes)\s+have\s+i\s+(taken|completed)\b/i.test(normalized) ||
@@ -136,6 +193,12 @@ export function detectGraduationEligibilityQuestion(question) {
         /我.{0,8}(有没有|是否已经).{0,12}(达到|满足|符合).{0,8}毕业要求/.test(normalized) ||
         /毕业要求.{0,8}(达到|满足|符合)/.test(normalized) ||
         /我.{0,8}还缺.{0,8}(什么课|哪些课|什么要求|多少学分).{0,6}毕业/.test(normalized));
+}
+export function detectGraduationRequirementCreditsQuestion(question) {
+    const normalized = lower(question);
+    return (/\b(how\s+many\s+credits?\s+are\s+required\s+to\s+graduate|how\s+many\s+credits?\s+do\s+i\s+need\s+to\s+graduate|what\s+are\s+the\s+graduation\s+credit\s+requirements?)\b/i.test(normalized) ||
+        /毕业要求.{0,6}(多少|几).{0,4}学分/.test(normalized) ||
+        /(毕业|毕业要求).{0,8}(学分).{0,6}(多少|几|是多少)/.test(normalized));
 }
 export function classifyStudentAiIntent(question) {
     const normalized = lower(question);

@@ -12,7 +12,7 @@ export type StudentRecordQuestionKind =
   | "current_term_credits"
   | "registered_term_count"
   | "registration_in_year"
-  | "courses_in_year"
+  | "historical_term_lookup"
   | "all_courses_history"
   | "withdrawal_history"
   | "took_course"
@@ -25,7 +25,7 @@ export type StudentRecordQuestionMatch =
   | { kind: "current_term_credits" }
   | { kind: "registered_term_count" }
   | { kind: "registration_in_year"; year: number }
-  | { kind: "courses_in_year"; year: number }
+  | { kind: "historical_term_lookup"; year: number; term: string | null }
   | { kind: "all_courses_history" }
   | { kind: "withdrawal_history" }
   | { kind: "took_course"; courseCode: string }
@@ -83,6 +83,17 @@ function hasAmuIdentityCue(value: string): boolean {
   );
 }
 
+function hasExplicitSchoolIdentityQuestionCue(value: string): boolean {
+  return (
+    /\b(what\s+is\s+amu|which\s+school\s+is\s+amu|what\s+does\s+amu\s+mean|full\s+name\s+of\s+amu|where\s+is\s+amu|amu\s+(address|location|phone|email|contact))\b/i.test(
+      value,
+    ) ||
+    /AMU.{0,8}(是什么|是什麼|哪所学校|哪所學校|哪个学校|哪個學校|全名|地址|位置|电话|電話|邮箱|郵箱|联系|聯繫)|是什么学校|是什麼學校|学校名称|學校名稱|学校全名|學校全名/.test(
+      value,
+    )
+  );
+}
+
 function hasSchoolContextCue(value: string): boolean {
   return (
     /\b(school|campus|university|college)\b/i.test(value) ||
@@ -102,8 +113,11 @@ function hasInstitutionFactCue(value: string): boolean {
 }
 
 function hasSchoolFactCue(value: string): boolean {
-  const hasAmu = hasAmuIdentityCue(value);
-  return hasAmu || (hasSchoolContextCue(value) && hasInstitutionFactCue(value));
+  return (
+    hasExplicitSchoolIdentityQuestionCue(value) ||
+    (hasInstitutionFactCue(value) &&
+      (hasAmuIdentityCue(value) || hasSchoolContextCue(value)))
+  );
 }
 
 function hasLocalSearchCue(value: string): boolean {
@@ -154,12 +168,65 @@ function extractYear(question: string): number | null {
   return Number.isFinite(year) ? year : null;
 }
 
+function normalizeHistoricalLookupTerm(raw: string): string | null {
+  const normalized = raw.trim().toLowerCase();
+  switch (normalized) {
+    case "fall":
+    case "autumn":
+    case "秋":
+    case "秋季":
+    case "秋天":
+    case "秋学期":
+      return "Fall";
+    case "summer":
+    case "夏":
+    case "夏季":
+    case "夏天":
+    case "夏学期":
+      return "Summer";
+    case "spring":
+    case "春":
+    case "春季":
+    case "春天":
+    case "春学期":
+      return "Spring";
+    case "winter":
+    case "冬":
+    case "冬季":
+    case "冬天":
+    case "冬学期":
+      return "Winter";
+    default:
+      return null;
+  }
+}
+
+export function extractHistoricalLookupTerm(question: string): string | null {
+  const patterns = [
+    /\b(fall|autumn|summer|spring|winter)\s+(?:19|20)\d{2}\b/i,
+    /\b(?:19|20)\d{2}\s+(fall|autumn|summer|spring|winter)\b/i,
+    /(?:19|20)\d{2}年.{0,4}(秋季|秋天|秋学期|秋|夏季|夏天|夏学期|夏|春季|春天|春学期|春|冬季|冬天|冬学期|冬)/,
+    /(秋季|秋天|秋学期|秋|夏季|夏天|夏学期|夏|春季|春天|春学期|春|冬季|冬天|冬学期|冬).{0,4}(?:19|20)\d{2}年?/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(question);
+    if (match?.[1] != null) {
+      const term = normalizeHistoricalLookupTerm(match[1]);
+      if (term != null) return term;
+    }
+  }
+
+  return null;
+}
+
 export function detectStudentRecordQuestion(
   question: string,
 ): StudentRecordQuestionMatch | null {
   const normalized = lower(question);
   const courseCode = extractCourseCode(question);
   const year = extractYear(question);
+  const historicalTerm = extractHistoricalLookupTerm(question);
 
   if (
     /\b(what|which)\s+(courses|classes)\s+(am i|i am|i'm)\s+(taking|enrolled in)\b/i.test(
@@ -228,9 +295,15 @@ export function detectStudentRecordQuestion(
       ) ||
       /我.{0,8}(在|于)?.{0,8}\b(19|20)\d{2}\b.{0,8}(修了|上了|选了|注册了|完成了).{0,8}(什么课|哪些课|哪些课程)/.test(
         normalized,
+      ) ||
+      /我.{0,6}\b(19|20)\d{2}\b年.{0,8}(修过|上过|学过|选过).{0,8}(什么课|哪些课|哪些课程)/.test(
+        normalized,
+      ) ||
+      /\b(?:fall|autumn|spring|summer|winter)\s+\b(19|20)\d{2}\b.{0,20}\b(courses|classes)\b/i.test(
+        normalized,
       ))
   ) {
-    return { kind: "courses_in_year", year };
+    return { kind: "historical_term_lookup", year, term: historicalTerm };
   }
 
   if (
@@ -318,6 +391,19 @@ export function detectGraduationEligibilityQuestion(question: string): boolean {
     /我.{0,8}还缺.{0,8}(什么课|哪些课|什么要求|多少学分).{0,6}毕业/.test(
       normalized,
     )
+  );
+}
+
+export function detectGraduationRequirementCreditsQuestion(
+  question: string,
+): boolean {
+  const normalized = lower(question);
+  return (
+    /\b(how\s+many\s+credits?\s+are\s+required\s+to\s+graduate|how\s+many\s+credits?\s+do\s+i\s+need\s+to\s+graduate|what\s+are\s+the\s+graduation\s+credit\s+requirements?)\b/i.test(
+      normalized,
+    ) ||
+    /毕业要求.{0,6}(多少|几).{0,4}学分/.test(normalized) ||
+    /(毕业|毕业要求).{0,8}(学分).{0,6}(多少|几|是多少)/.test(normalized)
   );
 }
 

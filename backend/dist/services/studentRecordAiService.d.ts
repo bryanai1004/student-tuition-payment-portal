@@ -1,8 +1,25 @@
 import { type RagAnswerResult } from "./ragService.js";
 import type { StudentAcademicCourseRecord } from "../types/studentAcademics.js";
+import type { StudentTranscriptRow } from "../types/studentTranscript.js";
 type TermYear = {
     term: string;
     year: number;
+};
+type AcademicHistoryCoverage = "full" | "partial";
+type HistoricalAcademicRecordTerm = {
+    term: string;
+    year: number;
+    label: string;
+    courses: StudentTranscriptRow[];
+};
+type HistoricalAcademicRecordSummary = {
+    coverage: AcademicHistoryCoverage;
+    coverageNote: string;
+    knownTerms: TermYear[];
+    academicTerms: TermYear[];
+    registrationTerms: TermYear[];
+    registrationOnlyTerms: TermYear[];
+    terms: HistoricalAcademicRecordTerm[];
 };
 export type StudentRecordAnswerResult = {
     result: RagAnswerResult;
@@ -12,6 +29,9 @@ export type StudentRecordFactsResult = {
     contextText: string;
     usedHelpers: string[];
 };
+export declare function getHistoricalAcademicRecord(studentId: string): Promise<HistoricalAcademicRecordSummary>;
+export declare function getCoursesByYear(studentId: string, year: number): Promise<StudentTranscriptRow[]>;
+export declare function getCoursesByTerm(studentId: string, term: string, year: number): Promise<StudentTranscriptRow[]>;
 export declare function getCurrentTermCourses(studentId: string): Promise<{
     courseCode: string;
     courseTitle: string;

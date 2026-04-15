@@ -1,10 +1,11 @@
 import { verifyStudentAccessToken } from "../lib/studentAuthToken.js";
-import { RagQuestionValidationError, answerGeneralQuestion, answerAmuQuestion, answerGraduationQuestion, answerLocalSearchQuestion, answerSchoolFactQuestion, answerStudentRecordQuestionFromFacts, planShortConversationMemory, } from "../services/ragService.js";
-import { classifyStudentAiIntent, detectGraduationEligibilityQuestion, } from "../services/studentAiQuestionRouter.js";
+import { RagQuestionValidationError, answerGeneralQuestion, answerAmuQuestion, answerGraduationQuestion, answerLocalSearchQuestion, answerSchoolFactQuestion, answerStudentRecordQuestionFromFacts, buildTransientAssistantFailureReply, planShortConversationMemory, } from "../services/ragService.js";
+import { classifyStudentAiIntent, detectGraduationEligibilityQuestion, detectGraduationRequirementCreditsQuestion, } from "../services/studentAiQuestionRouter.js";
 import { evaluateStudentGraduation, formatGraduationEvaluationFacts, } from "../services/graduationEvaluationService.js";
 import { answerDeterministicStudentRecordQuestion, buildStudentRecordFactsForQuestion, } from "../services/studentRecordAiService.js";
 import { getStudentAcademicsPayload } from "../services/studentAcademicsService.js";
 import { getLegacyStudentProfile } from "../services/studentProfileService.js";
+import { getStudentTranscriptPreviewPayload } from "../services/studentTranscriptService.js";
 import { answerSelfReferentialQuestion, buildSafeLoggedInUserContext, sanitizeConversationFacts, } from "../services/conversationFactsService.js";
 function readQuestion(req) {
     const body = req.body;
@@ -94,6 +95,7 @@ export async function postAiAsk(req, res) {
         const memoryPlan = planShortConversationMemory(q, rawHistory, initialIntent);
         const routedIntent = memoryPlan.effectiveIntent;
         const isGraduationQuestion = detectGraduationEligibilityQuestion(q);
+        const isGraduationRequirementCreditsQuestion = detectGraduationRequirementCreditsQuestion(q);
         console.debug("[ai/ask] detected intent", {
             initialIntent,
             effectiveIntent: routedIntent,
@@ -101,26 +103,44 @@ export async function postAiAsk(req, res) {
             isTopicSwitch: memoryPlan.isTopicSwitch,
             previousDomain: memoryPlan.previousDomain,
             retainedHistoryMessages: memoryPlan.history?.length ?? 0,
+            isGraduationQuestion,
+            isGraduationRequirementCreditsQuestion,
         });
         if (isGraduationQuestion ||
             routedIntent === "student_record" ||
             routedIntent === "mixed") {
             const academics = await getStudentAcademicsPayload(authStudent.studentId);
-            console.log("[AI DEBUG] Authorization header exists:", hasAuthorizationHeader);
-            console.log("[AI DEBUG] studentId:", authStudent.studentId);
-            console.log("[AI DEBUG] academics payload:", academics);
+            let transcriptPreviewCount = 0;
             if (!hasVerifiedAcademicData(academics)) {
+                const transcriptPreview = await getStudentTranscriptPreviewPayload(authStudent.studentId);
+                transcriptPreviewCount = transcriptPreview.transcript.length;
+            }
+            console.debug("[ai/ask] verified academic source summary", {
+                hasAuthorizationHeader,
+                resolvedStudentId: authStudent.studentId,
+                currentTerm: academics.currentTerm,
+                availableTerms: academics.availableTerms.length,
+                currentScheduleCount: academics.currentSchedule.length,
+                transcriptCount: academics.transcript.length,
+                enrollmentHistoryCount: academics.enrollmentHistory.length,
+                courseRecordCount: academics.courseRecords.length,
+                transcriptPreviewCount,
+            });
+            if (!hasVerifiedAcademicData(academics) &&
+                transcriptPreviewCount <= 0) {
                 console.error("[AI DEBUG] missing student academic data", {
                     studentId: authStudent.studentId,
                     question: q,
                     routedIntent,
                     isGraduationQuestion,
+                    isGraduationRequirementCreditsQuestion,
                     currentTerm: academics.currentTerm,
                     availableTerms: academics.availableTerms.length,
                     currentScheduleCount: academics.currentSchedule.length,
                     transcriptCount: academics.transcript.length,
                     enrollmentHistoryCount: academics.enrollmentHistory.length,
                     courseRecordCount: academics.courseRecords.length,
+                    transcriptPreviewCount,
                 });
                 res.status(200).json({
                     question: q,
@@ -132,6 +152,15 @@ export async function postAiAsk(req, res) {
         }
         if (isGraduationQuestion) {
             const evaluation = await evaluateStudentGraduation(authStudent.studentId);
+            console.debug("[ai/ask] graduation evaluation summary", {
+                resolvedStudentId: authStudent.studentId,
+                eligible: evaluation.eligible,
+                earnedCredits: evaluation.earnedCredits,
+                requiredCredits: evaluation.requiredCredits,
+                missingCredits: evaluation.missingCredits,
+                missingCourseCount: evaluation.missingCourses.length,
+                ruleSetId: evaluation.ruleSetId,
+            });
             const result = await answerGraduationQuestion(q, memoryPlan.history, {
                 graduationEvaluation: formatGraduationEvaluationFacts(evaluation),
                 identityContext,
@@ -144,6 +173,21 @@ export async function postAiAsk(req, res) {
                 missingCredits: evaluation.missingCredits,
             });
             res.status(200).json(result);
+            return;
+        }
+        if (isGraduationRequirementCreditsQuestion) {
+            const evaluation = await evaluateStudentGraduation(authStudent.studentId);
+            console.debug("[ai/ask] graduation requirement summary", {
+                resolvedStudentId: authStudent.studentId,
+                requiredCredits: evaluation.requiredCredits,
+                earnedCredits: evaluation.earnedCredits,
+                ruleSetId: evaluation.ruleSetId,
+            });
+            res.status(200).json({
+                question: q,
+                answer: `Your current graduation rule set requires ${evaluation.requiredCredits} credits. Based on the same backend evaluator, you currently have ${evaluation.earnedCredits} counted credits and are missing ${evaluation.missingCredits}.`,
+                sources: [],
+            });
             return;
         }
         if (routedIntent === "general") {
@@ -248,7 +292,11 @@ export async function postAiAsk(req, res) {
             return;
         }
         console.error("[ai/ask]", e);
-        res.status(500).json({ error: "Internal processing failed" });
+        res.status(200).json({
+            question: typeof q === "string" ? q : "",
+            answer: typeof q === "string" ? buildTransientAssistantFailureReply(q) : "Internal processing failed",
+            sources: [],
+        });
     }
 }
 //# sourceMappingURL=aiAskController.js.map

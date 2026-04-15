@@ -9,6 +9,7 @@ const MAX_HISTORY_MESSAGES = 4;
 const MAX_HISTORY_USER_TURNS = 2;
 const MAX_HISTORY_CONTENT_CHARS = 500;
 const MAX_REWRITE_OUTPUT_CHARS = 320;
+const OPENAI_MAX_ATTEMPTS = 2;
 const STUDENT_GROUNDED_RULES = `Use only:
 1. the verified student context provided below,
 2. the retrieved AMU handbook / policy / catalog / course-material excerpts provided below.
@@ -47,10 +48,81 @@ export class RagQuestionValidationError extends Error {
         this.name = "RagQuestionValidationError";
     }
 }
+function isRetryableOpenAiError(error) {
+    if (error == null || typeof error !== "object")
+        return false;
+    const maybeError = error;
+    const status = maybeError.status;
+    if (status === 408 || status === 409 || status === 429)
+        return true;
+    if (typeof status === "number" && status >= 500)
+        return true;
+    const code = `${maybeError.code ?? maybeError.cause?.code ?? ""}`.toLowerCase();
+    if (code === "etimedout" ||
+        code === "econnreset" ||
+        code === "eai_again" ||
+        code === "rate_limit_exceeded") {
+        return true;
+    }
+    const message = `${maybeError.message ?? maybeError.cause?.message ?? ""}`.toLowerCase();
+    return (message.includes("timeout") ||
+        message.includes("temporarily unavailable") ||
+        message.includes("rate limit") ||
+        message.includes("connection reset"));
+}
+async function withOpenAiRetry(label, operation) {
+    let lastError;
+    for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt += 1) {
+        try {
+            return await operation();
+        }
+        catch (error) {
+            lastError = error;
+            const canRetry = attempt < OPENAI_MAX_ATTEMPTS && isRetryableOpenAiError(error);
+            console.warn("[rag] openai request failed", {
+                label,
+                attempt,
+                canRetry,
+                error: error instanceof Error
+                    ? error.message
+                    : typeof error === "string"
+                        ? error
+                        : "unknown error",
+            });
+            if (!canRetry)
+                throw error;
+        }
+    }
+    throw lastError instanceof Error ? lastError : new Error("OpenAI request failed");
+}
 let cachedChunks = null;
 const DUAL_MODE_SYSTEM_PROMPT = `You are AMU's AI assistant.
 
 You operate under STRICT safety rules:
+
+### CONVERSATION CONTINUITY
+
+Treat the latest user message as part of the ongoing conversation, not as an isolated FAQ.
+- Resolve pronouns and omitted references using the recent conversation whenever possible.
+- Keep the current topic unless the user clearly changes topics.
+- If the user asks a follow-up about previously discussed people, things, or options, continue talking about that same subject.
+- Do NOT pivot to defining "AMU" or another keyword just because it appears in the latest turn unless the user explicitly asks for that definition.
+- Do NOT change the user's intent during fallback, uncertainty, or clarification.
+
+### REAL-WORLD SANITY CHECK
+
+Before answering, check whether the scenario is logically possible in the real world.
+- If the scenario is impossible or unrealistic, say that clearly.
+- Example: deceased or ancient historical figures cannot teach modern AMU classes.
+- When something is impossible, explain the limitation and, if helpful, redirect to a realistic modern equivalent.
+
+### FAILURE / FALLBACK BEHAVIOR
+
+If information is missing, ambiguous, or something seems to have gone wrong:
+- stay on the same topic,
+- do not switch to an unrelated explanation,
+- do not redefine AMU unless that is the user's actual question,
+- briefly acknowledge the issue and continue with the same intent or ask a focused clarification.
 
 ### ACADEMIC / FINANCIAL / ADMINISTRATIVE TOPICS (HIGH PRECISION MODE)
 
@@ -289,8 +361,14 @@ function extractTopicKeywords(text) {
     }
     return out;
 }
+function hasEntityCarryoverCue(trimmed, lower) {
+    if (/\b(it|its|them|their|they|those|these|this|that|he|him|his|she|her|hers|the\s+same\s+one|the\s+same\s+people|those\s+people|these\s+people|the\s+three|three\s+people)\b/i.test(lower)) {
+        return true;
+    }
+    return (/他|她|它|他们|她们|它们|他们的|她们的|它们的|这三个人|那三个人|这几个人|那几个人|这些人|那些人|同一个|同一批|上他们的课|上她们的课|上它们的课/.test(trimmed));
+}
 function looksLikeFollowUpMessage(trimmed, lower) {
-    if (/\b(that|this|those|these|it|them|they|he|she)\b/i.test(lower))
+    if (hasEntityCarryoverCue(trimmed, lower))
         return true;
     if (/\b(what\s+about|how\s+about|and\s+what\s+about|but\s+if|why\s+is\s+that|why\s+did\s+that\s+happen|can\s+you\s+recommend)\b/i.test(lower)) {
         return true;
@@ -316,7 +394,10 @@ function detectTopicSwitch(question, currentDomain, previousUserQuestion, previo
     const lower = trimmed.toLowerCase();
     const prevTrimmed = previousUserQuestion.trim();
     const prevLower = prevTrimmed.toLowerCase();
+    const hasCarryoverCue = hasEntityCarryoverCue(trimmed, lower);
     if (currentDomain === "academic" && previousDomain === "general") {
+        if (isFollowUp && hasCarryoverCue)
+            return false;
         return true;
     }
     const currentAcademicTags = extractAcademicTopicTags(trimmed, lower);
@@ -336,8 +417,12 @@ function detectTopicSwitch(question, currentDomain, previousUserQuestion, previo
             return true;
         return !isFollowUp;
     }
-    if (currentDomain !== previousDomain)
+    if (currentDomain !== previousDomain) {
+        if (previousDomain === "general" && isFollowUp && hasCarryoverCue) {
+            return false;
+        }
         return true;
+    }
     if (!isFollowUp && currentKeywords.size > 0 && previousKeywords.size > 0) {
         return !hasSharedKeywords;
     }
@@ -373,6 +458,7 @@ export function planShortConversationMemory(question, rawHistory, initialIntent)
         : null;
     const previousDomain = previousIntent == null ? null : intentToConversationDomain(previousIntent);
     const isFollowUp = looksLikeFollowUpMessage(trimmed, lower);
+    const hasCarryoverCue = hasEntityCarryoverCue(trimmed, lower);
     const isTopicSwitch = detectTopicSwitch(question, currentDomain, previousUser?.content, previousDomain, isFollowUp);
     let effectiveIntent = initialIntent;
     if (initialIntent === "general" &&
@@ -380,6 +466,12 @@ export function planShortConversationMemory(question, rawHistory, initialIntent)
         !isTopicSwitch &&
         previousDomain === "academic") {
         effectiveIntent = previousIntent === "school_fact" ? "school_fact" : "policy";
+    }
+    else if (previousDomain === "general" &&
+        isFollowUp &&
+        hasCarryoverCue &&
+        !isTopicSwitch) {
+        effectiveIntent = "general";
     }
     const effectiveDomain = intentToConversationDomain(effectiveIntent);
     let selectedHistory = [];
@@ -460,7 +552,7 @@ async function rewriteQuestionForRetrieval(client, question, history, intent, gu
         ? REWRITE_SYSTEM_SUPPORT
         : REWRITE_SYSTEM_ACADEMIC_STRICT;
     try {
-        const completion = await client.chat.completions.create({
+        const completion = await withOpenAiRetry("rewriteQuestionForRetrieval", () => client.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
                 {
@@ -474,7 +566,7 @@ async function rewriteQuestionForRetrieval(client, question, history, intent, gu
             ],
             temperature: 0.2,
             max_tokens: 200,
-        });
+        }));
         const raw = completion.choices[0]?.message?.content?.trim() ?? "";
         const oneLine = raw.replace(/\s+/g, " ").trim();
         if (oneLine.length === 0)
@@ -725,7 +817,37 @@ function languageInstructionForLlm(question, identityContext) {
         : "Respond in English.";
 }
 function buildGeneralSystemPrompt(question, identityContext) {
-    return `${DUAL_MODE_SYSTEM_PROMPT}\n\nThe current request is general or casual, so use FLEXIBLE MODE.\n${languageInstructionForLlm(question, identityContext)}`;
+    return `${DUAL_MODE_SYSTEM_PROMPT}
+
+The current request has already been classified as general or casual, so use FLEXIBLE MODE.
+Do not reinterpret it as an AMU school-fact lookup just because the message contains "AMU".
+If the message is a follow-up, keep answering the same subject from the recent conversation unless the user clearly changes topic.
+${languageInstructionForLlm(question, identityContext)}`;
+}
+function asksAboutTakingSomeonesClass(question) {
+    const trimmed = question.trim();
+    const lower = trimmed.toLowerCase();
+    return (/\b(can\s+i|could\s+i|would\s+i\s+be\s+able\s+to)\s+(take|get\s+into|attend)\s+(his|her|their)\s+class(es)?\b/i.test(lower) ||
+        /\b(can|could)\s+(he|she|they)\s+teach\s+(at\s+)?amu\b/i.test(lower) ||
+        /\b(study\s+under|be\s+taught\s+by)\s+(him|her|them)\b/i.test(lower) ||
+        /在AMU.{0,10}(上|修).{0,6}(他们|她们|他|她).{0,4}的课|在AMU能上他们的课|能上他们的课吗|能上他的课吗|能上她的课吗|跟他们上课|跟他上课|跟她上课/.test(trimmed));
+}
+function recentConversationSuggestsHistoricalPeople(history) {
+    if (history == null || history.length === 0)
+        return false;
+    const haystack = history.map((item) => item.content).join("\n");
+    return (/\b(ancient|historical\s+figure|history|historian|deceased|dead|century|bce|bc|ce|dynasty|emperor|king|queen|general|philosopher|strategist|warlord)\b/i.test(haystack) ||
+        /古代|历史人物|歷史人物|历史上|歷史上|已故|去世|朝代|皇帝|国王|國王|将军|將軍|哲学家|哲學家|军事家|軍事家|谋略家|謀略家/.test(haystack));
+}
+function buildGeneralRealityCheckReply(question, history) {
+    if (asksAboutTakingSomeonesClass(question) &&
+        recentConversationSuggestsHistoricalPeople(history)) {
+        if (isMostlyChinese(question)) {
+            return "如果你说的还是刚才那几位历史人物，那当然不能。因为他们是历史人物，不可能在现在的 AMU 亲自开课或给学生上课。要是你想学和他们相关的内容，我可以继续帮你看看 AMU 目录里有没有相关的历史、思想或人文类课程。";
+        }
+        return "If you mean the same historical figures from the previous turn, then no. Historical figures cannot literally teach classes at modern-day AMU. If you want, I can help check whether AMU offers courses related to their history, ideas, or influence instead.";
+    }
+    return null;
 }
 function buildGroundedAcademicSystemPrompt(question, pipeline, identityContext) {
     const pipelineLine = pipeline === "mixed"
@@ -1212,6 +1334,11 @@ export function answerLocalSearchQuestion(question) {
         sources: [],
     };
 }
+export function buildTransientAssistantFailureReply(question) {
+    return isMostlyChinese(question)
+        ? "刚刚好像出了点问题，我再帮你看一下"
+        : "Something seems to have gone wrong just now. Let me check that again for you.";
+}
 function getOpenAiClient() {
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {
@@ -1222,12 +1349,20 @@ function getOpenAiClient() {
 export async function answerGeneralQuestion(question, rawHistory, options) {
     const q = validateQuestion(question);
     const history = sanitizeChatHistory(rawHistory);
+    const realityCheckReply = buildGeneralRealityCheckReply(q, history);
+    if (realityCheckReply != null) {
+        return {
+            question: q,
+            answer: realityCheckReply,
+            sources: [],
+        };
+    }
     const client = getOpenAiClient();
     const identityBlock = formatIdentityContextForPrompt(options?.identityContext);
     const historyPrefix = history != null && history.length > 0
-        ? `${formatRecentConversationBlock(history)}\n\n`
+        ? `Continue the same conversation topic using the recent context below. Resolve omitted references before answering.\n\n${formatRecentConversationBlock(history)}\n\n`
         : "";
-    const completion = await client.chat.completions.create({
+    const completion = await withOpenAiRetry("answerGeneralQuestion", () => client.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
             { role: "system", content: buildGeneralSystemPrompt(q, options?.identityContext) },
@@ -1237,7 +1372,7 @@ export async function answerGeneralQuestion(question, rawHistory, options) {
             },
         ],
         temperature: 0.7,
-    });
+    }));
     return {
         question: q,
         answer: completion.choices[0]?.message?.content?.trim() ?? "(no response)",
@@ -1249,7 +1384,7 @@ export async function answerStudentRecordQuestionFromFacts(question, studentFact
     const client = getOpenAiClient();
     const facts = studentFacts.trim();
     const identityBlock = formatIdentityContextForPrompt(identityContext);
-    const completion = await client.chat.completions.create({
+    const completion = await withOpenAiRetry("answerStudentRecordQuestionFromFacts", () => client.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
             { role: "system", content: buildStudentRecordSystemPrompt(q, identityContext) },
@@ -1265,7 +1400,7 @@ ${q}`,
             },
         ],
         temperature: 0.2,
-    });
+    }));
     return {
         question: q,
         answer: completion.choices[0]?.message?.content?.trim() ?? "(no response)",
@@ -1278,10 +1413,10 @@ export async function answerGraduationQuestion(question, rawHistory, options) {
     const client = getOpenAiClient();
     const chunks = await getKnowledgeChunks();
     const retrievalQuery = await rewriteQuestionForRetrieval(client, q, history, "strict", undefined);
-    const embedRes = await client.embeddings.create({
+    const embedRes = await withOpenAiRetry("answerGraduationQuestion.embedding", () => client.embeddings.create({
         model: "text-embedding-3-small",
         input: retrievalQuery,
-    });
+    }));
     const questionEmbedding = embedRes.data[0]?.embedding;
     if (!questionEmbedding) {
         throw new Error("No embedding in OpenAI response");
@@ -1298,7 +1433,7 @@ export async function answerGraduationQuestion(question, rawHistory, options) {
     const evaluationBlock = options?.graduationEvaluation?.trim() ?? "No evaluation available.";
     const identityBlock = formatIdentityContextForPrompt(options?.identityContext);
     const contextBlock = formatRetrievedDocumentContextBlock(top);
-    const completion = await client.chat.completions.create({
+    const completion = await withOpenAiRetry("answerGraduationQuestion.chat", () => client.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
             {
@@ -1320,7 +1455,7 @@ ${q}`,
             },
         ],
         temperature: 0.2,
-    });
+    }));
     return {
         question: q,
         answer: completion.choices[0]?.message?.content?.trim() ?? "(no response)",
@@ -1338,10 +1473,10 @@ export async function answerAmuQuestion(question, rawHistory, options) {
     const client = getOpenAiClient();
     const chunks = await getKnowledgeChunks();
     const retrievalQuery = await rewriteQuestionForRetrieval(client, q, history, "strict", undefined);
-    const embedRes = await client.embeddings.create({
+    const embedRes = await withOpenAiRetry("answerAmuQuestion.embedding", () => client.embeddings.create({
         model: "text-embedding-3-small",
         input: retrievalQuery,
-    });
+    }));
     const questionEmbedding = embedRes.data[0]?.embedding;
     if (!questionEmbedding) {
         throw new Error("No embedding in OpenAI response");
@@ -1389,7 +1524,7 @@ ${q}`;
         retrievedSourceCount: top.length,
         topRetrievedSource: top[0]?.chunk.source ?? null,
     });
-    const completion = await client.chat.completions.create({
+    const completion = await withOpenAiRetry("answerAmuQuestion.chat", () => client.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
             {
@@ -1399,7 +1534,7 @@ ${q}`;
             { role: "user", content: userPreamble },
         ],
         temperature: 0.2,
-    });
+    }));
     return {
         question: q,
         answer: completion.choices[0]?.message?.content?.trim() ?? "(no response)",
