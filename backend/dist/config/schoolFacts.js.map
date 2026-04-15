@@ -1,0 +1,1 @@
+{"version":3,"file":"schoolFacts.js","sourceRoot":"","sources":["../../src/config/schoolFacts.ts"],"names":[],"mappings":"AAYA;;;GAGG;AACH,MAAM,CAAC,MAAM,gBAAgB,GAAmB;IAC9C,eAAe,EAAE,6BAA6B;IAC9C,WAAW,EAAE,oCAAoC;IACjD,OAAO,EAAE,IAAI;IACb,QAAQ,EAAE,IAAI;IACd,KAAK,EAAE,IAAI;IACX,KAAK,EAAE,IAAI;IACX,UAAU,EAAE,IAAI;IAChB,gBAAgB,EAAE,IAAI;IACtB,WAAW,EAAE,IAAI;CAClB,CAAC"}

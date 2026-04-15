@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { AMU_SCHOOL_FACTS } from "../config/schoolFacts.js";
 import { cosineSimilarity, loadKnowledgeChunks, } from "../lib/ragKnowledge.js";
 import { classifyStudentAiIntent, } from "./studentAiQuestionRouter.js";
 const TOP_K = 5;
@@ -87,7 +88,14 @@ If a question is AMU-related:
 
 NEVER mix the two:
 - do NOT use general knowledge to answer AMU-specific questions
-- do NOT invent AMU facts`;
+- do NOT invent AMU facts
+
+### HARD IDENTITY RULE
+
+In this product, "AMU" always means "Alhambra Medical University".
+Never reinterpret "AMU" as any other institution.
+Never use general knowledge to answer AMU-specific institutional facts such as address, location, phone, email, contact information, campus details, or housing.
+If an AMU-specific institutional fact is not present in controlled AMU sources, say clearly that you cannot confirm it from AMU sources.`;
 async function getKnowledgeChunks() {
     if (cachedChunks !== null)
         return cachedChunks;
@@ -348,7 +356,7 @@ export function planShortConversationMemory(question, rawHistory, initialIntent)
         isFollowUp &&
         !isTopicSwitch &&
         previousDomain === "academic") {
-        effectiveIntent = "policy";
+        effectiveIntent = previousIntent === "school_fact" ? "school_fact" : "policy";
     }
     const effectiveDomain = intentToConversationDomain(effectiveIntent);
     let selectedHistory = [];
@@ -855,6 +863,164 @@ function appendSupportContactBlocks(answer, question, intent, guidanceSubtype) {
     if (parts.length === 1)
         return answer;
     return parts.join("\n\n");
+}
+function detectSchoolFactKinds(question) {
+    const trimmed = question.trim();
+    const lower = trimmed.toLowerCase();
+    const kinds = new Set();
+    if (/\b(amu|alhambra medical university|what is amu|which school)\b/i.test(lower) ||
+        /AMU|是什么学校|哪所学校|哪个学校|学校名称|学校全名/.test(trimmed)) {
+        kinds.add("identity");
+    }
+    if (/\b(address|where\s+is|where'?s|located|location)\b/i.test(lower) ||
+        /地址|在哪里|在哪裡|在哪|位置|地点|地點/.test(trimmed)) {
+        kinds.add("address");
+        kinds.add("location");
+    }
+    if (/\b(phone|telephone|tel)\b/i.test(lower) || /电话|電話/.test(trimmed)) {
+        kinds.add("phone");
+        kinds.add("contact");
+    }
+    if (/\b(email|e-mail|mail)\b/i.test(lower) || /邮箱|郵箱|邮件|郵件/.test(trimmed)) {
+        kinds.add("email");
+        kinds.add("contact");
+    }
+    if (/\b(contact)\b/i.test(lower) || /联系|聯繫|联系方式|聯繫方式/.test(trimmed)) {
+        kinds.add("contact");
+    }
+    if (/\b(campus)\b/i.test(lower) || /校区|校區|校园|校園/.test(trimmed)) {
+        kinds.add("campus");
+    }
+    if (/\b(housing|dorm|dormitory)\b/i.test(lower) || /宿舍|住宿|住校/.test(trimmed)) {
+        kinds.add("housing");
+    }
+    if (kinds.size === 0) {
+        kinds.add("identity");
+    }
+    return kinds;
+}
+function buildSchoolFactSourceContent() {
+    const lines = [`Institution: ${AMU_SCHOOL_FACTS.institutionName}`];
+    if (AMU_SCHOOL_FACTS.address)
+        lines.push(`Address: ${AMU_SCHOOL_FACTS.address}`);
+    if (AMU_SCHOOL_FACTS.location)
+        lines.push(`Location: ${AMU_SCHOOL_FACTS.location}`);
+    if (AMU_SCHOOL_FACTS.phone)
+        lines.push(`Phone: ${AMU_SCHOOL_FACTS.phone}`);
+    if (AMU_SCHOOL_FACTS.email)
+        lines.push(`Email: ${AMU_SCHOOL_FACTS.email}`);
+    if (AMU_SCHOOL_FACTS.campusInfo)
+        lines.push(`Campus: ${AMU_SCHOOL_FACTS.campusInfo}`);
+    if (AMU_SCHOOL_FACTS.housingAvailable != null) {
+        lines.push(`Housing: ${AMU_SCHOOL_FACTS.housingAvailable ? "Available" : "Not confirmed as available"}`);
+    }
+    if (AMU_SCHOOL_FACTS.housingNote)
+        lines.push(`Housing note: ${AMU_SCHOOL_FACTS.housingNote}`);
+    return lines.join("\n");
+}
+export function answerSchoolFactQuestion(question) {
+    const q = validateQuestion(question);
+    const zh = isMostlyChinese(q);
+    const requested = detectSchoolFactKinds(q);
+    const lines = [
+        zh
+            ? `在这个产品里，AMU 指的是 ${AMU_SCHOOL_FACTS.institutionName}。`
+            : `In this product, AMU means ${AMU_SCHOOL_FACTS.institutionName}.`,
+    ];
+    if (requested.has("address") || requested.has("location")) {
+        if (AMU_SCHOOL_FACTS.address || AMU_SCHOOL_FACTS.location) {
+            const addressOrLocation = AMU_SCHOOL_FACTS.address ?? AMU_SCHOOL_FACTS.location ?? "";
+            lines.push(zh
+                ? `我能从受控的 AMU 信息源确认的地址/位置是：${addressOrLocation}`
+                : `The controlled AMU source confirms this address/location: ${addressOrLocation}`);
+        }
+        else {
+            lines.push(zh
+                ? "我目前无法从受控的 AMU 信息源确认学校地址或位置，因此不能提供未验证的信息。"
+                : "I cannot confirm AMU's address or location from controlled AMU sources, so I won't provide an unverified answer.");
+        }
+    }
+    if (requested.has("phone")) {
+        lines.push(AMU_SCHOOL_FACTS.phone
+            ? zh
+                ? `我能确认的电话是：${AMU_SCHOOL_FACTS.phone}`
+                : `The confirmed phone number is: ${AMU_SCHOOL_FACTS.phone}`
+            : zh
+                ? "我目前无法从受控的 AMU 信息源确认学校电话。"
+                : "I cannot confirm an AMU phone number from controlled AMU sources.");
+    }
+    if (requested.has("email")) {
+        lines.push(AMU_SCHOOL_FACTS.email
+            ? zh
+                ? `我能确认的邮箱是：${AMU_SCHOOL_FACTS.email}`
+                : `The confirmed email address is: ${AMU_SCHOOL_FACTS.email}`
+            : zh
+                ? "我目前无法从受控的 AMU 信息源确认学校邮箱。"
+                : "I cannot confirm an AMU email address from controlled AMU sources.");
+    }
+    if (requested.has("contact") &&
+        !requested.has("phone") &&
+        !requested.has("email")) {
+        if (AMU_SCHOOL_FACTS.phone || AMU_SCHOOL_FACTS.email) {
+            const contactParts = [
+                AMU_SCHOOL_FACTS.phone ? `phone: ${AMU_SCHOOL_FACTS.phone}` : null,
+                AMU_SCHOOL_FACTS.email ? `email: ${AMU_SCHOOL_FACTS.email}` : null,
+            ].filter((part) => part != null);
+            lines.push(zh
+                ? `我能确认的联系方式是：${contactParts.join("；")}`
+                : `The confirmed contact information is: ${contactParts.join("; ")}`);
+        }
+        else {
+            lines.push(zh
+                ? "我目前无法从受控的 AMU 信息源确认学校联系方式。"
+                : "I cannot confirm AMU contact information from controlled AMU sources.");
+        }
+    }
+    if (requested.has("campus")) {
+        lines.push(AMU_SCHOOL_FACTS.campusInfo
+            ? zh
+                ? `我能确认的校区信息是：${AMU_SCHOOL_FACTS.campusInfo}`
+                : `The confirmed campus information is: ${AMU_SCHOOL_FACTS.campusInfo}`
+            : zh
+                ? "我目前无法从受控的 AMU 信息源确认校区信息。"
+                : "I cannot confirm campus information from controlled AMU sources.");
+    }
+    if (requested.has("housing")) {
+        if (AMU_SCHOOL_FACTS.housingAvailable == null && !AMU_SCHOOL_FACTS.housingNote) {
+            lines.push(zh
+                ? "我目前无法从受控的 AMU 信息源确认学校是否提供宿舍或住房。"
+                : "I cannot confirm from controlled AMU sources whether the school provides housing or dorms.");
+        }
+        else if (AMU_SCHOOL_FACTS.housingAvailable === true) {
+            lines.push(zh
+                ? `受控的 AMU 信息源显示学校提供住房。${AMU_SCHOOL_FACTS.housingNote ?? ""}`.trim()
+                : `The controlled AMU source indicates the school provides housing. ${AMU_SCHOOL_FACTS.housingNote ?? ""}`.trim());
+        }
+        else if (AMU_SCHOOL_FACTS.housingAvailable === false) {
+            lines.push(zh
+                ? `受控的 AMU 信息源显示学校不提供住房。${AMU_SCHOOL_FACTS.housingNote ?? ""}`.trim()
+                : `The controlled AMU source indicates the school does not provide housing. ${AMU_SCHOOL_FACTS.housingNote ?? ""}`.trim());
+        }
+        else if (AMU_SCHOOL_FACTS.housingNote) {
+            lines.push(zh
+                ? `我能确认的住房说明是：${AMU_SCHOOL_FACTS.housingNote}`
+                : `The confirmed housing note is: ${AMU_SCHOOL_FACTS.housingNote}`);
+        }
+    }
+    const answer = lines.join("\n");
+    return {
+        question: q,
+        answer,
+        sources: [
+            {
+                id: "amu-school-facts",
+                source: AMU_SCHOOL_FACTS.sourceLabel,
+                chunkIndex: 0,
+                content: buildSchoolFactSourceContent(),
+                score: 1,
+            },
+        ],
+    };
 }
 function getOpenAiClient() {
     const apiKey = process.env.OPENAI_API_KEY?.trim();

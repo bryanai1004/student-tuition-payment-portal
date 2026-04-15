@@ -80,12 +80,19 @@ function hasAmuIdentityCue(value: string): boolean {
   );
 }
 
+function hasSchoolContextCue(value: string): boolean {
+  return (
+    /\b(school|campus|university|college)\b/i.test(value) ||
+    /学校|學校|校区|校區|校园|校園|大学|大學/.test(value)
+  );
+}
+
 function hasInstitutionFactCue(value: string): boolean {
   return (
-    /\b(school|campus|address|location|located|phone|email|contact|housing|dorm|where\s+is)\b/i.test(
+    /\b(address|location|located|phone|email|contact|housing|dorm|where\s+is)\b/i.test(
       value,
     ) ||
-    /学校|學校|校区|校區|校园|校園|地址|位置|地点|地點|电话|電話|邮箱|郵箱|邮件|郵件|联系|聯繫|联系方式|聯繫方式|宿舍|住宿|住校|在哪里|在哪裡|在哪/.test(
+    /地址|位置|地点|地點|电话|電話|邮箱|郵箱|邮件|郵件|联系|聯繫|联系方式|聯繫方式|宿舍|住宿|住校|在哪里|在哪裡|在哪/.test(
       value,
     )
   );
@@ -93,9 +100,7 @@ function hasInstitutionFactCue(value: string): boolean {
 
 function hasSchoolFactCue(value: string): boolean {
   const hasAmu = hasAmuIdentityCue(value);
-  const hasInstitutionFact = hasInstitutionFactCue(value);
-  const shortFollowUp = value.length <= 80;
-  return hasAmu || hasInstitutionFact || (shortFollowUp && hasInstitutionFact);
+  return hasAmu || (hasSchoolContextCue(value) && hasInstitutionFactCue(value));
 }
 
 export function extractCourseCode(question: string): string | null {

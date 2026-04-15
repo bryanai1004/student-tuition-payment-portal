@@ -18,6 +18,22 @@ function hasPolicyCue(value) {
 function hasMixedApplicabilityCue(value) {
     return (/\b(apply to me|apply in my case|how does it apply to me|based on my current record|based on my record|what should i pay attention to|for my situation|given my record)\b/i.test(value) || /对我适用吗|适用于我吗|根据我的情况|结合我的情况|按我的情况|看我的记录/.test(value));
 }
+function hasAmuIdentityCue(value) {
+    return (/\b(amu|alhambra medical university)\b/i.test(value) ||
+        /AMU|阿罕布拉医科大学|阿罕布拉醫科大學/.test(value));
+}
+function hasSchoolContextCue(value) {
+    return (/\b(school|campus|university|college)\b/i.test(value) ||
+        /学校|學校|校区|校區|校园|校園|大学|大學/.test(value));
+}
+function hasInstitutionFactCue(value) {
+    return (/\b(address|location|located|phone|email|contact|housing|dorm|where\s+is)\b/i.test(value) ||
+        /地址|位置|地点|地點|电话|電話|邮箱|郵箱|邮件|郵件|联系|聯繫|联系方式|聯繫方式|宿舍|住宿|住校|在哪里|在哪裡|在哪/.test(value));
+}
+function hasSchoolFactCue(value) {
+    const hasAmu = hasAmuIdentityCue(value);
+    return hasAmu || (hasSchoolContextCue(value) && hasInstitutionFactCue(value));
+}
 export function extractCourseCode(question) {
     const match = COURSE_CODE_RE.exec(question);
     if (match == null)
@@ -113,6 +129,9 @@ export function classifyStudentAiIntent(question) {
     }
     if (policyCue || courseCode != null) {
         return "policy";
+    }
+    if (hasSchoolFactCue(normalized)) {
+        return "school_fact";
     }
     return "general";
 }

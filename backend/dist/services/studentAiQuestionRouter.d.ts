@@ -1,4 +1,4 @@
-export type StudentAiIntent = "student_record" | "policy" | "mixed" | "general";
+export type StudentAiIntent = "student_record" | "policy" | "mixed" | "school_fact" | "general";
 export type StudentRecordQuestionKind = "current_term_courses" | "current_term_course_count" | "current_term_credits" | "registered_term_count" | "registration_in_year" | "courses_in_year" | "withdrawal_history" | "took_course" | "completed_course" | "completed_credits_total";
 export type StudentRecordQuestionMatch = {
     kind: "current_term_courses";
