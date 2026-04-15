@@ -3,17 +3,19 @@ from pathlib import Path
 
 CSV_DIR = Path("/Users/alt./Desktop/mysql_exports_all")
 
+# ✅ 扩展后的字段（补齐所有漏掉的 zero-date 列）
 targets = {
-    "admin.csv": ["date_from2"],
+    "admin.csv": ["date_from2", "date_to2"],
     "course_withdraw_date.csv": ["date"],
-    "daim_students_info.csv": ["daim_grad_date"],
-    "loa.csv": ["actual_return"],
+    "daim_students_info.csv": ["daim_grad_date", "daim_signed_date"],
+    "loa.csv": ["actual_return", "return_date"],
     "seniority.csv": ["date"],
-    "students.csv": ["withdraw_date"],
+    "students.csv": ["withdraw_date", "EnrollStartDate"],
     "term_order.csv": ["start_date"],
 }
 
-bad_values = {"0000-00-00", "0000-01-02"}
+# ✅ 扩展非法日期
+bad_values = {"0000-00-00", "0000-01-02", "0000-04-01"}
 
 for filename, columns in targets.items():
     path = CSV_DIR / filename
