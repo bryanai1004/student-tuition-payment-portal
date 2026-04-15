@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 type StudentTokenPayload = {
   sub: string;
@@ -11,7 +11,8 @@ export type AuthenticatedStudent = {
   studentId: string;
 };
 
-const DEV_FALLBACK_SECRET = randomBytes(32).toString("hex");
+const DEV_FALLBACK_SECRET =
+  "student-auth-dev-fallback-secret-set-student-auth-secret";
 const TOKEN_HEADER = { alg: "HS256", typ: "JWT" } as const;
 const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60 * 12;
 
@@ -110,20 +111,49 @@ export function verifyStudentAccessToken(
   const raw = authorizationHeader?.trim() ?? "";
   const match = /^Bearer\s+(.+)$/i.exec(raw);
   const token = match?.[1]?.trim() ?? "";
-  if (token === "") return null;
+  if (token === "") {
+    console.debug("[student-auth] verification failed", {
+      reason: "missing-bearer-token",
+    });
+    return null;
+  }
 
   const parts = token.split(".");
-  if (parts.length !== 3) return null;
+  if (parts.length !== 3) {
+    console.debug("[student-auth] verification failed", {
+      reason: "invalid-token-format",
+    });
+    return null;
+  }
   const [encodedHeader, encodedPayload, signature] = parts;
   const unsigned = `${encodedHeader}.${encodedPayload}`;
   const expected = sign(unsigned);
-  if (!safeEqualBase64Url(signature, expected)) return null;
+  if (!safeEqualBase64Url(signature, expected)) {
+    console.debug("[student-auth] verification failed", {
+      reason: "signature-mismatch",
+    });
+    return null;
+  }
 
   const payload = parsePayload(encodedPayload);
-  if (payload == null) return null;
+  if (payload == null) {
+    console.debug("[student-auth] verification failed", {
+      reason: "invalid-payload",
+    });
+    return null;
+  }
 
   const now = Math.floor(Date.now() / 1000);
-  if (payload.exp <= now) return null;
+  if (payload.exp <= now) {
+    console.debug("[student-auth] verification failed", {
+      reason: "token-expired",
+    });
+    return null;
+  }
 
-  return { studentId: payload.sub };
+  const authenticatedStudent = { studentId: payload.sub };
+  console.debug("[student-auth] verification succeeded", {
+    studentId: authenticatedStudent.studentId,
+  });
+  return authenticatedStudent;
 }

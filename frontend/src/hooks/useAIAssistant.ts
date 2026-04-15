@@ -278,6 +278,10 @@ export function useAIAssistant(pageContext: AIAssistantPageContext) {
       if (authToken) {
         headers.Authorization = `Bearer ${authToken}`
       }
+      console.debug('[ai/ask] frontend request', {
+        hasAuthToken: Boolean(authToken),
+        hasAuthorizationHeader: typeof headers.Authorization === 'string',
+      })
       const res = await fetch(buildApiUrl('/api/ai/ask'), {
         method: 'POST',
         headers,

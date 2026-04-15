@@ -17,8 +17,19 @@ function readQuestion(req: Request): unknown {
  * Body: { question: string, history?: { role: 'user' | 'assistant', content: string }[] }
  */
 export async function postAiAsk(req: Request, res: Response): Promise<void> {
+  const rawAuthorization = req.headers.authorization?.trim() ?? "";
+  const bearerMatch = /^Bearer\s+(.+)$/i.exec(rawAuthorization);
+  const hasAuthorizationHeader = rawAuthorization.length > 0;
+  const hasBearerToken = (bearerMatch?.[1]?.trim() ?? "") !== "";
+
+  console.debug("[ai/ask] request entered", {
+    hasAuthorizationHeader,
+    hasBearerToken,
+  });
+
   const authStudent = verifyStudentAccessToken(req.headers.authorization);
   if (authStudent == null) {
+    console.debug("[ai/ask] authentication required");
     res.status(401).json({ error: "Authentication required" });
     return;
   }
