@@ -21,6 +21,12 @@ import {
   answerDeterministicStudentRecordQuestion,
   buildStudentRecordFactsForQuestion,
 } from "../services/studentRecordAiService.js";
+import { getLegacyStudentProfile } from "../services/studentProfileService.js";
+import {
+  answerSelfReferentialQuestion,
+  buildSafeLoggedInUserContext,
+  sanitizeConversationFacts,
+} from "../services/conversationFactsService.js";
 
 function readQuestion(req: Request): unknown {
   const body = req.body as Record<string, unknown> | null | undefined;
@@ -30,7 +36,11 @@ function readQuestion(req: Request): unknown {
 
 /**
  * POST /api/ai/ask
- * Body: { question: string, history?: { role: 'user' | 'assistant', content: string }[] }
+ * Body: {
+ *   question: string,
+ *   history?: { role: 'user' | 'assistant', content: string }[],
+ *   conversationFacts?: { statedName?: string, preferredLanguage?: 'en' | 'zh' }
+ * }
  */
 export async function postAiAsk(req: Request, res: Response): Promise<void> {
   const rawAuthorization = req.headers.authorization?.trim() ?? "";
@@ -76,8 +86,40 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
     Object.prototype.hasOwnProperty.call(body, "history")
       ? body.history
       : undefined;
+  const rawConversationFacts =
+    body != null &&
+    typeof body === "object" &&
+    Object.prototype.hasOwnProperty.call(body, "conversationFacts")
+      ? body.conversationFacts
+      : undefined;
 
   try {
+    const [profile, conversationFacts] = await Promise.all([
+      getLegacyStudentProfile(authStudent.studentId),
+      Promise.resolve(sanitizeConversationFacts(rawConversationFacts)),
+    ]);
+    const identityContext = {
+      conversationFacts,
+      safeProfile: buildSafeLoggedInUserContext(authStudent.studentId, profile),
+    };
+    const selfReferentialAnswer = answerSelfReferentialQuestion(
+      q,
+      identityContext,
+    );
+    if (selfReferentialAnswer != null) {
+      console.debug("[ai/ask] pipeline used", {
+        pipeline: "self_referential_identity",
+        hasConversationName: Boolean(conversationFacts?.statedName),
+        hasSafeDisplayName: Boolean(identityContext.safeProfile?.displayName),
+      });
+      res.status(200).json({
+        question: q,
+        answer: selfReferentialAnswer,
+        sources: [],
+      });
+      return;
+    }
+
     const initialIntent = classifyStudentAiIntent(q);
     const memoryPlan = planShortConversationMemory(q, rawHistory, initialIntent);
     const routedIntent = memoryPlan.effectiveIntent;
@@ -94,6 +136,7 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
       const evaluation = await evaluateStudentGraduation(authStudent.studentId);
       const result = await answerGraduationQuestion(q, memoryPlan.history, {
         graduationEvaluation: formatGraduationEvaluationFacts(evaluation),
+        identityContext,
       });
       console.debug("[ai/ask] pipeline used", {
         pipeline: "graduation_evaluation",
@@ -108,7 +151,9 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
 
     if (routedIntent === "general") {
       console.debug("[ai/ask] pipeline used", { pipeline: "general" });
-      const result = await answerGeneralQuestion(q, memoryPlan.history);
+      const result = await answerGeneralQuestion(q, memoryPlan.history, {
+        identityContext,
+      });
       res.status(200).json(result);
       return;
     }
@@ -149,6 +194,7 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
         const result = await answerStudentRecordQuestionFromFacts(
           q,
           recordFacts.contextText,
+          identityContext,
         );
         res.status(200).json(result);
         return;
@@ -170,6 +216,7 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
       console.debug("[ai/ask] pipeline used", { pipeline: "policy" });
       const result = await answerAmuQuestion(q, memoryPlan.history, {
         pipeline: "policy",
+        identityContext,
       });
       res.status(200).json(result);
       return;
@@ -194,6 +241,7 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
     const result = await answerAmuQuestion(q, memoryPlan.history, {
       pipeline: "mixed",
       studentContext: studentContextText,
+      identityContext,
     });
     res.status(200).json(result);
   } catch (e) {

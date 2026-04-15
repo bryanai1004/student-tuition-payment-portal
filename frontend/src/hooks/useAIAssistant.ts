@@ -3,6 +3,7 @@ import type { AIAssistantPageContext } from '../data/aiMockReplies'
 import { getWelcomeLines } from '../data/aiMockReplies'
 import { useLanguage } from '../LanguageContext'
 import { useAccount } from '../context/AccountContext'
+import { extractConversationFacts } from '../lib/aiConversationFacts'
 import { buildApiUrl } from '../lib/api'
 import { t as portalT, type PortalLocale } from '../lib/i18n'
 import type { SendAssistantAttachmentPayload } from '../lib/sendAssistantMessage'
@@ -249,6 +250,7 @@ export function useAIAssistant(pageContext: AIAssistantPageContext) {
     const outgoingAttachments = attachments
     const userLine =
       text || (outgoingAttachments.length > 0 ? portalT(locale, 'sentFiles') : '')
+    const pendingMessages = userLine ? [...messages, { role: 'user' as const, content: userLine }] : messages
 
     if (userLine) {
       setMessages((m) => [...m, userMessage(userLine)])
@@ -277,6 +279,7 @@ export function useAIAssistant(pageContext: AIAssistantPageContext) {
         body: JSON.stringify({
           question: userLine,
           history: buildRecentHistoryPayload(messages),
+          conversationFacts: extractConversationFacts(pendingMessages),
         }),
         signal: ac.signal,
       })

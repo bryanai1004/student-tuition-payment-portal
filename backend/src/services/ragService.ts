@@ -9,6 +9,10 @@ import {
   classifyStudentAiIntent,
   type StudentAiIntent,
 } from "./studentAiQuestionRouter.js";
+import {
+  formatIdentityContextBlock,
+  type IdentityContext,
+} from "./conversationFactsService.js";
 
 const TOP_K = 5;
 const MAX_QUESTION_CHARS = 2000;
@@ -94,10 +98,16 @@ export type GroundedAmuPipeline = "policy" | "mixed";
 export type AnswerAmuQuestionOptions = {
   studentContext?: string | null;
   pipeline?: GroundedAmuPipeline;
+  identityContext?: IdentityContext | null;
+};
+
+export type AnswerGeneralQuestionOptions = {
+  identityContext?: IdentityContext | null;
 };
 
 export type AnswerGraduationQuestionOptions = {
   graduationEvaluation: string;
+  identityContext?: IdentityContext | null;
 };
 
 type SchoolFactKind =
@@ -161,6 +171,14 @@ If a question is AMU-related:
 NEVER mix the two:
 - do NOT use general knowledge to answer AMU-specific questions
 - do NOT invent AMU facts
+
+### SELF-REFERENTIAL USER FACTS
+
+For self-referential questions about the user:
+- use only the explicit conversation facts and safe logged-in profile context provided in the prompt
+- prefer explicit conversation facts over safe logged-in profile context
+- if neither source confirms the answer, say you cannot confirm it
+- never infer gender or any other sensitive trait from names, language, profile fields, or stereotypes
 
 ### HARD IDENTITY RULE
 
@@ -231,6 +249,12 @@ function formatStudentContextBlock(studentContext: string | null | undefined): s
 - Student data: Unavailable
 - Notes:
   - No verified student context was available for this request.`;
+}
+
+function formatIdentityContextForPrompt(
+  identityContext: IdentityContext | null | undefined,
+): string {
+  return formatIdentityContextBlock(identityContext);
 }
 
 function intentToConversationDomain(intent: StudentAiIntent): ConversationDomain {
@@ -1476,10 +1500,12 @@ function getOpenAiClient(): OpenAI {
 export async function answerGeneralQuestion(
   question: string,
   rawHistory?: unknown,
+  options?: AnswerGeneralQuestionOptions,
 ): Promise<RagAnswerResult> {
   const q = validateQuestion(question);
   const history = sanitizeChatHistory(rawHistory);
   const client = getOpenAiClient();
+  const identityBlock = formatIdentityContextForPrompt(options?.identityContext);
   const historyPrefix =
     history != null && history.length > 0
       ? `${formatRecentConversationBlock(history)}\n\n`
@@ -1491,7 +1517,7 @@ export async function answerGeneralQuestion(
       { role: "system", content: buildGeneralSystemPrompt(q) },
       {
         role: "user",
-        content: `${historyPrefix}Current user message:\n${q}`,
+        content: `${historyPrefix}${identityBlock}\n\nCurrent user message:\n${q}`,
       },
     ],
     temperature: 0.7,
@@ -1507,10 +1533,12 @@ export async function answerGeneralQuestion(
 export async function answerStudentRecordQuestionFromFacts(
   question: string,
   studentFacts: string,
+  identityContext?: IdentityContext | null,
 ): Promise<RagAnswerResult> {
   const q = validateQuestion(question);
   const client = getOpenAiClient();
   const facts = studentFacts.trim();
+  const identityBlock = formatIdentityContextForPrompt(identityContext);
 
   const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",
@@ -1518,7 +1546,9 @@ export async function answerStudentRecordQuestionFromFacts(
       { role: "system", content: buildStudentRecordSystemPrompt(q) },
       {
         role: "user",
-        content: `VERIFIED STUDENT RECORD FACTS:
+        content: `${identityBlock}
+
+VERIFIED STUDENT RECORD FACTS:
 ${facts}
 
 USER QUESTION:
@@ -1574,6 +1604,7 @@ export async function answerGraduationQuestion(
       ? `${formatRecentConversationBlock(history)}\n\n`
       : "";
   const evaluationBlock = options?.graduationEvaluation?.trim() ?? "No evaluation available.";
+  const identityBlock = formatIdentityContextForPrompt(options?.identityContext);
   const contextBlock = formatRetrievedDocumentContextBlock(top);
   const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",
@@ -1581,7 +1612,9 @@ export async function answerGraduationQuestion(
       { role: "system", content: buildGraduationEvaluationSystemPrompt(q) },
       {
         role: "user",
-        content: `${historyPrefix}STRUCTURED GRADUATION EVALUATION:
+        content: `${historyPrefix}${identityBlock}
+
+STRUCTURED GRADUATION EVALUATION:
 ${evaluationBlock}
 
 RETRIEVED AMU DOCUMENT CONTEXT:
@@ -1651,13 +1684,16 @@ export async function answerAmuQuestion(
 
   const studentContextBlock = formatStudentContextBlock(options?.studentContext);
   const contextBlock = formatRetrievedDocumentContextBlock(top);
+  const identityBlock = formatIdentityContextForPrompt(options?.identityContext);
   const historyPrefix =
     history != null && history.length > 0
       ? `${formatRecentConversationBlock(history)}\n\n`
       : "";
   const userPreamble =
     pipeline === "mixed"
-      ? `${historyPrefix}VERIFIED STUDENT RECORD FACTS:
+      ? `${historyPrefix}${identityBlock}
+
+VERIFIED STUDENT RECORD FACTS:
 ${studentContextBlock}
 
 RETRIEVED AMU DOCUMENT CONTEXT:
@@ -1665,7 +1701,9 @@ ${contextBlock}
 
 USER QUESTION:
 ${q}`
-      : `${historyPrefix}RETRIEVED AMU DOCUMENT CONTEXT:
+      : `${historyPrefix}${identityBlock}
+
+RETRIEVED AMU DOCUMENT CONTEXT:
 ${contextBlock}
 
 USER QUESTION:
