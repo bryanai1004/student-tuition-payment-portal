@@ -1,5 +1,5 @@
 LOAD DATABASE
-    FROM mysql://admin:School123%21aws@school-db.cd6o8awqe4ig.us-east-2.rds.amazonaws.com:3306/school
+    FROM mysql://admin:School123%21aws@school-db.cd6o8awqe4ig.us-east-2.rds.amazonaws.com:3306/school?sslmode=require
     INTO pgsql://postgres.hffpwguupjiffaltbjri@aws-1-us-west-2.pooler.supabase.com:5432/postgres
 
  WITH include drop, create tables, create indexes, reset sequences,
