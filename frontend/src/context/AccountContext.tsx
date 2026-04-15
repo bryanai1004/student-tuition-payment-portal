@@ -19,6 +19,7 @@ import type {
 import type { BillingCategory, ScheduleRow } from '../types/billing'
 
 const PORTAL_STUDENT_ID_KEY = 'portal_student_id'
+const PORTAL_STUDENT_AUTH_TOKEN_KEY = 'portal_student_auth_token'
 
 /** Unauthenticated preview routes (e.g. `/plan`) still use the static demo catalog. */
 const UNAUTHENTICATED_FALLBACK = mahmAccountMock
@@ -26,6 +27,16 @@ const UNAUTHENTICATED_FALLBACK = mahmAccountMock
 function readStoredStudentId(): string | null {
   try {
     const raw = localStorage.getItem(PORTAL_STUDENT_ID_KEY)
+    const trimmed = raw?.trim() ?? ''
+    return trimmed.length > 0 ? trimmed : null
+  } catch {
+    return null
+  }
+}
+
+function readStoredStudentAuthToken(): string | null {
+  try {
+    const raw = localStorage.getItem(PORTAL_STUDENT_AUTH_TOKEN_KEY)
     const trimmed = raw?.trim() ?? ''
     return trimmed.length > 0 ? trimmed : null
   } catch {
@@ -479,8 +490,9 @@ type AccountContextValue = {
   error: string | null
   reload: () => void
   currentStudentId: string | null
+  authToken: string | null
   /** Call only after the backend login endpoint succeeds; does not validate credentials. */
-  login: (studentId: string) => void
+  login: (studentId: string, accessToken?: string | null) => void
   logout: () => void
   isAuthenticated: boolean
 }
@@ -491,6 +503,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(() =>
     readStoredStudentId(),
   )
+  const [authToken, setAuthToken] = useState<string | null>(() => readStoredStudentAuthToken())
   const [fetchedAccount, setFetchedAccount] = useState<MahmAccountMock | null>(null)
   const [loading, setLoading] = useState(
     () => Boolean(readStoredStudentId()?.trim()),
@@ -498,11 +511,18 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
 
-  const login = useCallback((studentId: string) => {
+  const login = useCallback((studentId: string, accessToken?: string | null) => {
     const trimmed = studentId.trim()
+    const token = accessToken?.trim() ?? ''
     setCurrentStudentId(trimmed)
+    setAuthToken(token || null)
     try {
       localStorage.setItem(PORTAL_STUDENT_ID_KEY, trimmed)
+      if (token) {
+        localStorage.setItem(PORTAL_STUDENT_AUTH_TOKEN_KEY, token)
+      } else {
+        localStorage.removeItem(PORTAL_STUDENT_AUTH_TOKEN_KEY)
+      }
     } catch {
       /* ignore quota / private mode */
     }
@@ -510,8 +530,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     setCurrentStudentId(null)
+    setAuthToken(null)
     try {
       localStorage.removeItem(PORTAL_STUDENT_ID_KEY)
+      localStorage.removeItem(PORTAL_STUDENT_AUTH_TOKEN_KEY)
     } catch {
       /* ignore */
     }
@@ -610,12 +632,14 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       error,
       reload,
       currentStudentId,
+      authToken,
       login,
       logout,
       isAuthenticated,
     }),
     [
       account,
+      authToken,
       currentStudentId,
       error,
       fetchedAccount,

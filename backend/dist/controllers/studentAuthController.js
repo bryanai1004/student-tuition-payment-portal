@@ -1,3 +1,4 @@
+import { issueStudentAccessToken } from "../lib/studentAuthToken.js";
 import { pool } from "../lib/db.js";
 import { authenticateLegacyStudent } from "../services/studentLegacyAuthService.js";
 function readLoginBody(req) {
@@ -30,6 +31,7 @@ export async function postStudentLogin(req, res) {
         res.status(200).json({
             studentId: result.studentId,
             displayName: result.displayName,
+            accessToken: issueStudentAccessToken(result.studentId),
         });
     }
     catch (e) {

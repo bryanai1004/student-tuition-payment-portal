@@ -1063,6 +1063,7 @@ export async function fetchStudentProfile(
 export type LoginStudentSuccess = {
   studentId: string
   displayName: string
+  accessToken?: string
 }
 
 /**
@@ -1091,7 +1092,13 @@ export async function loginStudent(
     typeof (data as { displayName?: unknown }).displayName === 'string'
   ) {
     const o = data as LoginStudentSuccess
-    return { studentId: o.studentId, displayName: o.displayName }
+    return {
+      studentId: o.studentId,
+      displayName: o.displayName,
+      ...(typeof o.accessToken === 'string' && o.accessToken.trim() !== ''
+        ? { accessToken: o.accessToken }
+        : {}),
+    }
   }
 
   throw new Error('Unexpected login response shape')

@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { verifyStudentAccessToken } from "../lib/studentAuthToken.js";
+import { buildStudentAiContext } from "../services/studentAiContextService.js";
 import {
   RagQuestionValidationError,
   answerAmuQuestion,
@@ -15,6 +17,12 @@ function readQuestion(req: Request): unknown {
  * Body: { question: string, history?: { role: 'user' | 'assistant', content: string }[] }
  */
 export async function postAiAsk(req: Request, res: Response): Promise<void> {
+  const authStudent = verifyStudentAccessToken(req.headers.authorization);
+  if (authStudent == null) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
   const body = req.body as Record<string, unknown> | null | undefined;
   const q = readQuestion(req);
   if (typeof q !== "string") {
@@ -43,7 +51,18 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
       : undefined;
 
   try {
-    const result = await answerAmuQuestion(q, rawHistory);
+    console.debug("[ai/ask] authenticated student resolved", {
+      studentId: authStudent.studentId,
+    });
+    const studentContext = await buildStudentAiContext(authStudent.studentId);
+    console.debug("[ai/ask] student context built", {
+      studentId: authStudent.studentId,
+      dataSources: studentContext.dataSources,
+      ...studentContext.meta,
+    });
+    const result = await answerAmuQuestion(q, rawHistory, {
+      studentContext: studentContext.contextText,
+    });
     res.status(200).json(result);
   } catch (e) {
     if (e instanceof RagQuestionValidationError) {

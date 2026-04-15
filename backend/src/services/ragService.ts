@@ -15,28 +15,39 @@ type RagIntent = "direct" | "strict" | "guidance" | "out_of_scope";
 
 type DirectKind = "greeting" | "language" | "capability" | "thanks";
 
-const STRICT_SYSTEM_PROMPT_BASE = `You are an assistant for Alhambra Medical University (AMU).
-Answer ONLY using the retrieved AMU catalog excerpts provided.
-Do NOT use outside knowledge or guess beyond the excerpts.
-If the answer is not clearly supported by the provided excerpts, say:
-"I could not find a clear answer in the AMU catalog excerpts provided."
-When possible, mention which catalog/source the answer came from (using the source labels shown in the excerpts).`;
+const STUDENT_GROUNDED_RULES = `Use only:
+1. the verified student context provided below,
+2. the retrieved AMU handbook / policy / catalog / course-material excerpts provided below.
+Do not invent school policy, enrollment status, grades, prerequisites, deadlines, exceptions, completed courses, or missing student records.
+Treat the student context as verified student-specific facts.
+Treat the retrieved AMU document excerpts as the only allowed source for school rules, policy claims, requirements, prerequisites, deadlines, or official interpretations.
+When discussing policy, clearly distinguish:
+- what the school documents say,
+- what the student's available records show,
+- what remains uncertain.
+If the answer is not supported by the verified student context or the retrieved AMU document excerpts, say you do not have enough information.
+Use cautious language such as "Based on the available records..." or "I only see..." when student data is incomplete.
+If policy applicability is uncertain, say you cannot confirm it from the retrieved policy and available records.
+Keep the answer concise, helpful, and student-facing.
+When useful, organize the answer as:
+- What I found in your record
+- What the handbook/policy says
+- What that likely means for you`;
 
-const GUIDANCE_ACADEMIC_SYSTEM_PROMPT_BASE = `You are assisting with AMU catalog-based academic guidance.
-Use ONLY the retrieved catalog excerpts as evidence.
-You may provide cautious, general planning guidance when the excerpts support it (e.g. prerequisites, program structure, sequencing themes).
-Do NOT invent official semester-by-semester schedules, deadlines, or requirements unless they are explicitly stated in the excerpts.
-Clearly separate what the excerpts state as facts from general suggestions when the excerpts are incomplete for the student's situation.
-When stating facts, tie them to the source labels in the excerpts.
-If the question asks for planning or sequencing advice, give a conservative summary and include a brief reminder that the student should confirm final course selection with the AMU registrar or their academic advisor.
-If the excerpts do not clearly support a direct answer, do NOT end with only a short refusal like "I could not find a clear answer." Instead give an honest, helpful bounded reply: say the excerpts do not state enough explicitly, briefly list related catalog topics you can still discuss if they appear in the excerpts (e.g. tuition payment rules, installments, refunds, program structure), and remind the student to confirm with the AMU registrar or advisor. Stay grounded—do not invent financial aid or policies not in the excerpts.`;
+const STRICT_SYSTEM_PROMPT_BASE = `You are AMU's academic advisor assistant.
+${STUDENT_GROUNDED_RULES}
+When possible, mention which AMU source label supports a policy or handbook statement.`;
 
-const GUIDANCE_SUPPORT_SYSTEM_PROMPT_BASE = `You are helping with AMU catalog-based support and admissions-style guidance.
-Use only the retrieved AMU catalog excerpts as evidence.
-You may give cautious, general guidance when the excerpts support it (e.g. tuition and fees, payment-related catalog language, references to financial aid or FAFSA if present, admissions or applicant requirements stated in the catalog).
-Do not invent admissions guarantees, financial aid guarantees, specific payment plans, or eligibility decisions unless clearly supported by the excerpts.
-If the catalog excerpts are insufficient, explain what is known from them, what is not clearly stated, and what the student should confirm with AMU admissions, registrar, or financial aid office.
-If the user writes in Chinese, answer in Chinese. If the user writes in English, answer in English.`;
+const GUIDANCE_ACADEMIC_SYSTEM_PROMPT_BASE = `You are assisting with AMU student-specific academic guidance.
+${STUDENT_GROUNDED_RULES}
+You may provide cautious planning guidance when the verified records and retrieved AMU excerpts support it.
+Do not invent semester-by-semester schedules, prerequisites, or requirements that are not supported by the provided sources.
+If the question asks for planning or sequencing advice, give a conservative summary and remind the student to confirm final course selection with the AMU registrar or academic advisor when needed.`;
+
+const GUIDANCE_SUPPORT_SYSTEM_PROMPT_BASE = `You are helping with AMU student-specific support and admissions-style guidance.
+${STUDENT_GROUNDED_RULES}
+You may give cautious, general guidance when the retrieved AMU excerpts support it, including tuition and fees, payment-related catalog language, admissions requirements, or financial-aid references that explicitly appear in the documents.
+Do not invent admissions guarantees, payment plans, eligibility decisions, or financial aid outcomes that are not clearly supported by the provided sources.`;
 
 /** Internal only: guidance path splits academic planning vs support/admissions-style questions. */
 type GuidanceSubtype = "academic" | "support";
@@ -58,6 +69,10 @@ export type RagAnswerResult = {
 export type ChatHistoryItem = {
   role: "user" | "assistant";
   content: string;
+};
+
+export type AnswerAmuQuestionOptions = {
+  studentContext?: string | null;
 };
 
 export class RagQuestionValidationError extends Error {
@@ -122,6 +137,24 @@ function formatRecentConversationBlock(history: ChatHistoryItem[]): string {
     return `- ${who}: ${h.content}`;
   });
   return `Recent conversation context (for resolving follow-ups only; not a factual source):\n${lines.join("\n")}`;
+}
+
+function formatStudentContextBlock(studentContext: string | null | undefined): string {
+  const trimmed = studentContext?.trim() ?? "";
+  if (trimmed.length > 0) return trimmed;
+  return `Student Context
+- Student data: Unavailable
+- Notes:
+  - No verified student context was available for this request.`;
+}
+
+function formatRetrievedDocumentContextBlock(
+  items: { chunk: KnowledgeChunkRow; score: number }[],
+): string {
+  if (items.length === 0) {
+    return "No retrieved AMU handbook or policy excerpts were available.";
+  }
+  return buildContextBlock(items);
 }
 
 /** True when the latest question looks like a follow-up or vague reference (with history present). */
@@ -835,6 +868,7 @@ function appendSupportContactBlocks(
 export async function answerAmuQuestion(
   question: string,
   rawHistory?: unknown,
+  options?: AnswerAmuQuestionOptions,
 ): Promise<RagAnswerResult> {
   const q = validateQuestion(question);
   const history = sanitizeChatHistory(rawHistory);
@@ -893,7 +927,8 @@ export async function answerAmuQuestion(
   scored.sort((x, y) => y.score - x.score);
   const top = scored.slice(0, TOP_K);
 
-  const contextBlock = buildContextBlock(top);
+  const studentContextBlock = formatStudentContextBlock(options?.studentContext);
+  const contextBlock = formatRetrievedDocumentContextBlock(top);
   const langLine = languageInstructionForLlm(q);
 
   const systemPrompt =
@@ -910,18 +945,28 @@ export async function answerAmuQuestion(
 
   const userPreamble =
     intent === "guidance"
-      ? `${historyPrefix}Use the following AMU catalog excerpts as the basis for cautious, helpful guidance. Synthesize what they support; note gaps where the user's situation is not fully covered.
+      ? `${historyPrefix}STUDENT CONTEXT:
+${studentContextBlock}
 
+RETRIEVED SCHOOL DOCUMENT CONTEXT:
 ${contextBlock}
 
-Question:
+USER QUESTION:
 ${q}`
-      : `Use ONLY the following AMU catalog excerpts to answer the question.
+      : `STUDENT CONTEXT:
+${studentContextBlock}
 
+RETRIEVED SCHOOL DOCUMENT CONTEXT:
 ${contextBlock}
 
-Question:
+USER QUESTION:
 ${q}`;
+
+  console.debug("[ai/ask] retrieval context prepared", {
+    hasStudentContext: (options?.studentContext?.trim()?.length ?? 0) > 0,
+    retrievedSourceCount: top.length,
+    topRetrievedSource: top[0]?.chunk.source ?? null,
+  });
 
   const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",

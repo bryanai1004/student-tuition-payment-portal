@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AIAssistantPageContext } from '../data/aiMockReplies'
 import { getWelcomeLines } from '../data/aiMockReplies'
 import { useLanguage } from '../LanguageContext'
+import { useAccount } from '../context/AccountContext'
 import { buildApiUrl } from '../lib/api'
 import { t as portalT, type PortalLocale } from '../lib/i18n'
 import type { SendAssistantAttachmentPayload } from '../lib/sendAssistantMessage'
@@ -155,6 +156,7 @@ function buildInitialMessages(
 
 export function useAIAssistant(pageContext: AIAssistantPageContext) {
   const { locale } = useLanguage()
+  const { authToken } = useAccount()
   const [panelState, setPanelState] = useState<AIAssistantPanelState>(() => readPanelOpen())
   const [messages, setMessages] = useState<AIAssistantChatMessage[]>(() =>
     buildInitialMessages(pageContext, readPanelOpen(), readStoredLocale()),
@@ -272,9 +274,13 @@ export function useAIAssistant(pageContext: AIAssistantPageContext) {
     abortRef.current = ac
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`
+      }
       const res = await fetch(buildApiUrl('/api/ai/ask'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ question: userLine }),
         signal: ac.signal,
       })
@@ -319,7 +325,7 @@ export function useAIAssistant(pageContext: AIAssistantPageContext) {
         setIsAwaitingReply(false)
       }
     }
-  }, [attachments, draft, isAwaitingReply, locale, revokeAttachmentUrls])
+  }, [attachments, authToken, draft, isAwaitingReply, locale, revokeAttachmentUrls])
 
   useEffect(() => {
     setMessages((prev) => {

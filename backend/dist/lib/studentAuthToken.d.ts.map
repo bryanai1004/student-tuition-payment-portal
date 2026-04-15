@@ -1,0 +1,1 @@
+{"version":3,"file":"studentAuthToken.d.ts","sourceRoot":"","sources":["../../src/lib/studentAuthToken.ts"],"names":[],"mappings":"AASA,MAAM,MAAM,oBAAoB,GAAG;IACjC,SAAS,EAAE,MAAM,CAAC;CACnB,CAAC;AA6EF,wBAAgB,uBAAuB,CAAC,SAAS,EAAE,MAAM,GAAG,MAAM,CAgBjE;AAED,wBAAgB,wBAAwB,CACtC,mBAAmB,EAAE,MAAM,GAAG,SAAS,GACtC,oBAAoB,GAAG,IAAI,CAoB7B"}

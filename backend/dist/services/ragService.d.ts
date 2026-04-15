@@ -14,6 +14,9 @@ export type ChatHistoryItem = {
     role: "user" | "assistant";
     content: string;
 };
+export type AnswerAmuQuestionOptions = {
+    studentContext?: string | null;
+};
 export declare class RagQuestionValidationError extends Error {
     constructor(message: string);
 }
@@ -25,5 +28,5 @@ export declare function sanitizeChatHistory(raw: unknown): ChatHistoryItem[] | u
  * End-to-end AMU catalog RAG: intent routing, optional retrieval, grounded chat completion.
  * @param rawHistory - Optional recent turns; sanitized (capped, invalid entries dropped).
  */
-export declare function answerAmuQuestion(question: string, rawHistory?: unknown): Promise<RagAnswerResult>;
+export declare function answerAmuQuestion(question: string, rawHistory?: unknown, options?: AnswerAmuQuestionOptions): Promise<RagAnswerResult>;
 //# sourceMappingURL=ragService.d.ts.map

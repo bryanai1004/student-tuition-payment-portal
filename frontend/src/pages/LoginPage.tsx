@@ -26,7 +26,7 @@ export function LoginPage() {
     setSubmitting(true)
     try {
       const result = await loginStudent(id, password)
-      login(result.studentId)
+      login(result.studentId, result.accessToken ?? null)
       navigate('/dashboard')
     } catch (e) {
       const message =

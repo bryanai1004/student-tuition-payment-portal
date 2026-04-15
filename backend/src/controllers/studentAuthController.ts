@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { issueStudentAccessToken } from "../lib/studentAuthToken.js";
 import { pool } from "../lib/db.js";
 import { authenticateLegacyStudent } from "../services/studentLegacyAuthService.js";
 
@@ -40,6 +41,7 @@ export async function postStudentLogin(
     res.status(200).json({
       studentId: result.studentId,
       displayName: result.displayName,
+      accessToken: issueStudentAccessToken(result.studentId),
     });
   } catch (e) {
     console.error("[auth] login database error:", e);
