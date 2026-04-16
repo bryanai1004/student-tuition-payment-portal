@@ -17,6 +17,8 @@ export type AcademicTermDetail = {
     lock_registration_if_overdue: boolean;
     status: AcademicTermStatus;
     is_visible: boolean;
+    /** When true, this term is the one published on the student dashboard (at most one row). */
+    is_posted_to_dashboard: boolean;
 };
 export type CreateAcademicTermInput = {
     year: number;

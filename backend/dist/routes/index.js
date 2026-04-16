@@ -15,7 +15,7 @@ import { getStudentTranscriptPreview } from "../controllers/studentTranscriptCon
 import { getDemoAccount, getDemoActivity, getStudentAccount, getStudentActivity, getStudentProfile, } from "../controllers/studentAccountController.js";
 import { postStudentLogin } from "../controllers/studentAuthController.js";
 import { getStudentEnrolledSections, postStudentEnroll, postStudentWithdraw, } from "../controllers/studentEnrollmentController.js";
-import { getAcademicTerms, getAcademicTermsCurrent, getAcademicTermsRecent, patchAdminAcademicTerm, postAdminAcademicTerm, } from "../controllers/academicTermController.js";
+import { getAcademicTerms, getAcademicTermsCurrent, getAcademicTermsCurrentPosted, getAcademicTermsRecent, patchAdminAcademicTerm, postAdminAcademicTerm, postAdminAcademicTermPost, } from "../controllers/academicTermController.js";
 import { postAiAsk } from "../controllers/aiAskController.js";
 import { getAdminClinicalRequestsHandler, getStudentClinicalRequestsHandler, postApproveClinicalRequestHandler, postRejectClinicalRequestHandler, postStudentClinicalRequestHandler, } from "../controllers/clinicalRequestController.js";
 import { deleteStudentClinicalEnrollmentHandler, getStudentClinicalEnrollmentsHandler, getStudentOpenClinicalEnrollmentSlotsHandler, postStudentClinicalEnrollmentHandler, } from "../controllers/clinicalEnrollmentController.js";
@@ -34,6 +34,7 @@ apiRouter.get("/courses", getCourses);
 apiRouter.get("/courses/:code/sections", getCourseSections);
 apiRouter.get("/academic-terms/recent", getAcademicTermsRecent);
 apiRouter.get("/academic-terms/current", getAcademicTermsCurrent);
+apiRouter.get("/academic-terms/current-posted", getAcademicTermsCurrentPosted);
 apiRouter.get("/academic-terms", getAcademicTerms);
 /** Course bin (per student); requires `student_course_bin` table when used. */
 apiRouter.get("/course-bin/:studentId", getCourseBin);
@@ -74,6 +75,7 @@ adminRouter.delete("/finance/payment/:id", deleteAdminFinancePaymentByIdHandler)
 adminRouter.get("/finance/:studentId/quarters", getAdminFinanceQuartersHandler);
 adminRouter.get("/finance/:studentId/ledger", getAdminFinanceLedgerHandler);
 adminRouter.post("/academic-terms", postAdminAcademicTerm);
+adminRouter.post("/academic-terms/:id/post", postAdminAcademicTermPost);
 adminRouter.patch("/academic-terms/:id", patchAdminAcademicTerm);
 adminRouter.get("/clinical/timetable", getAdminClinicalTimetableHandler);
 adminRouter.get("/clinical/slots", getAdminClinicalSlotsHandler);

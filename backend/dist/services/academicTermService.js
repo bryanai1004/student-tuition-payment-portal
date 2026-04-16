@@ -1,4 +1,4 @@
-import { academicTermSchemaCaps, getAcademicTermById, insertAcademicTerm, listAcademicTerms, listRecentVisibleAcademicTerms, listVisibleAcademicTerms, getCurrentRegistrationOpenTerm as repoGetCurrentRegistrationOpenTerm, updateAcademicTermRow, } from "../repositories/academicTermRepository.js";
+import { academicTermSchemaCaps, getAcademicTermById, insertAcademicTerm, listAcademicTerms, listRecentVisibleAcademicTerms, listVisibleAcademicTerms, getCurrentRegistrationOpenTerm as repoGetCurrentRegistrationOpenTerm, getPostedToDashboardTerm as repoGetPostedToDashboardTerm, postAcademicTermToDashboard as repoPostAcademicTermToDashboard, updateAcademicTermRow, } from "../repositories/academicTermRepository.js";
 const TERM_NAMES = [
     "Winter",
     "Spring",
@@ -66,6 +66,12 @@ export async function listRecentVisibleTerms(limit = 3) {
 export async function getCurrentRegistrationOpenTerm() {
     return repoGetCurrentRegistrationOpenTerm();
 }
+export async function getPostedToDashboardTerm() {
+    return repoGetPostedToDashboardTerm();
+}
+export async function postAcademicTermToDashboard(id) {
+    return repoPostAcademicTermToDashboard(id);
+}
 /** For response headers: whether `academic_terms` persists payment DDL / overdue-lock fields. */
 export async function academicTermPaymentPolicyColumnsAvailable() {
     return (await academicTermSchemaCaps()).hasPaymentPolicyColumns;
@@ -101,6 +107,7 @@ export async function createAcademicTerm(input) {
         lock_registration_if_overdue: input.lock_registration_if_overdue === true,
         status: input.status,
         is_visible: input.is_visible !== false,
+        is_posted_to_dashboard: false,
     });
     try {
         return await insertAcademicTerm(row);
@@ -172,6 +179,7 @@ export async function updateAcademicTerm(id, patch) {
             : existing.lock_registration_if_overdue,
         status,
         is_visible,
+        is_posted_to_dashboard: existing.is_posted_to_dashboard,
     });
     if (nextId !== currentId) {
         const clash = await getAcademicTermById(nextId);

@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { academicTermPaymentPolicyColumnsAvailable, createAcademicTerm, getCurrentRegistrationOpenTerm, listAllAcademicTerms, listRecentVisibleTerms, isAcademicTermName, isAcademicTermStatus, updateAcademicTerm, } from "../services/academicTermService.js";
+import { academicTermPaymentPolicyColumnsAvailable, createAcademicTerm, getCurrentRegistrationOpenTerm, getPostedToDashboardTerm, listAllAcademicTerms, listRecentVisibleTerms, isAcademicTermName, isAcademicTermStatus, postAcademicTermToDashboard, updateAcademicTerm, } from "../services/academicTermService.js";
 function devMessage(e) {
     return e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
 }
@@ -229,6 +229,20 @@ export async function getAcademicTermsCurrent(_req, res) {
         });
     }
 }
+/** GET /api/academic-terms/current-posted — manually posted dashboard term, or `null`. */
+export async function getAcademicTermsCurrentPosted(_req, res) {
+    try {
+        const term = await getPostedToDashboardTerm();
+        await setAcademicTermPaymentColumnsHeader(res);
+        res.json(term);
+    }
+    catch (e) {
+        console.error("[academic-terms/current-posted] failed:", e);
+        res.status(500).json({
+            error: "Unable to load academic terms.",
+        });
+    }
+}
 export async function postAdminAcademicTerm(req, res) {
     try {
         const input = parseCreateBody(req.body);
@@ -253,6 +267,38 @@ export async function postAdminAcademicTerm(req, res) {
         console.error("[admin/academic-terms] create failed:", e);
         const body = {
             error: "Failed to create academic term",
+        };
+        if (env.nodeEnv === "development")
+            body.message = devMessage(e);
+        res.status(500).json(body);
+    }
+}
+export async function postAdminAcademicTermPost(req, res) {
+    try {
+        const id = pathTermId(req);
+        if (!id) {
+            res.status(400).json({ error: "Invalid term id" });
+            return;
+        }
+        const term = await postAcademicTermToDashboard(id);
+        if (!term) {
+            res.status(404).json({ error: "Academic term not found" });
+            return;
+        }
+        await setAcademicTermPaymentColumnsHeader(res);
+        res.json(term);
+    }
+    catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes("is_posted_to_dashboard")) {
+            res.status(503).json({
+                error: "Posting is unavailable until the database migration for is_posted_to_dashboard is applied.",
+            });
+            return;
+        }
+        console.error("[admin/academic-terms/post] failed:", e);
+        const body = {
+            error: "Failed to post academic term",
         };
         if (env.nodeEnv === "development")
             body.message = devMessage(e);

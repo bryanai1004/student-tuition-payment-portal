@@ -8,6 +8,8 @@ export declare function listAllAcademicTerms(): Promise<AcademicTermDetail[]>;
 export declare function listVisibleTermsForStudents(limit?: number): Promise<AcademicTermDetail[]>;
 export declare function listRecentVisibleTerms(limit?: number): Promise<AcademicTermDetail[]>;
 export declare function getCurrentRegistrationOpenTerm(): Promise<AcademicTermDetail | null>;
+export declare function getPostedToDashboardTerm(): Promise<AcademicTermDetail | null>;
+export declare function postAcademicTermToDashboard(id: string): Promise<AcademicTermDetail | null>;
 /** For response headers: whether `academic_terms` persists payment DDL / overdue-lock fields. */
 export declare function academicTermPaymentPolicyColumnsAvailable(): Promise<boolean>;
 export declare function createAcademicTerm(input: CreateAcademicTermInput): Promise<AcademicTermDetail>;
