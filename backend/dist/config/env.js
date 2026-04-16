@@ -30,7 +30,10 @@ function parseDbPort(raw, fallback) {
     }
     return n;
 }
-/** Comma-separated browser origins allowed for CORS. If unset, reflects any Origin (dev-friendly). */
+/**
+ * Extra browser origins to allow for CORS (comma-separated), merged with the built-in allowlist
+ * in `app.ts` (production frontend + local Vite). If unset, only that built-in list applies.
+ */
 function parseCorsOrigins() {
     const raw = process.env.CORS_ORIGINS?.trim() ?? process.env.CORS_ORIGIN?.trim() ?? "";
     if (!raw)
