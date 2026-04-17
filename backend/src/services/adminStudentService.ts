@@ -770,6 +770,10 @@ export async function updateAdminStudent(
   if (enroll.kind === "error") {
     return { ok: false, status: 400, message: enroll.message };
   }
+  const dob = sqlDateFromBodyField("dob", body.dob);
+  if (dob.kind === "error") {
+    return { ok: false, status: 400, message: dob.message };
+  }
 
   const req = parseRequirementsIdForDb(body.requirementsId);
   if (req.kind === "error") {
@@ -796,6 +800,15 @@ export async function updateAdminStudent(
     zip: zip.value,
     signed_date_sql: signed.value,
     enroll_start_sql: enroll.value,
+    ssn: str(body.ssn),
+    visa: str(body.visa),
+    dob_sql: dob.value,
+    phone1: str(body.phone1),
+    phone2: str(body.phone2),
+    phone3: str(body.phone3),
+    citizenship: str(body.citizenship),
+    race: str(body.race),
+    marital: str(body.marital),
   };
 
   const updated = await updateLegacyStudentMasterRow(pool, studentId, patch);

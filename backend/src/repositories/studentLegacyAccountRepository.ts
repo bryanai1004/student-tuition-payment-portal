@@ -835,6 +835,15 @@ export type LegacyStudentMasterUpdate = {
   zip: number;
   signed_date_sql: string;
   enroll_start_sql: string;
+  ssn: string;
+  visa: string;
+  dob_sql: string;
+  phone1: string;
+  phone2: string;
+  phone3: string;
+  citizenship: string;
+  race: string;
+  marital: string;
 };
 
 /**
@@ -861,7 +870,16 @@ export async function updateLegacyStudentMasterRow(
        state = ?,
        zip = ?,
        signed_date = ?,
-       EnrollStartDate = ?
+       EnrollStartDate = ?,
+       ssn = ?,
+       visa = ?,
+       dob = ?,
+       phone1 = ?,
+       phone2 = ?,
+       phone3 = ?,
+       citizenship = ?,
+       race = ?,
+       marital = ?
      WHERE id = ?`,
     [
       patch.name,
@@ -878,6 +896,15 @@ export async function updateLegacyStudentMasterRow(
       patch.zip,
       patch.signed_date_sql,
       patch.enroll_start_sql,
+      patch.ssn,
+      patch.visa,
+      patch.dob_sql,
+      patch.phone1,
+      patch.phone2,
+      patch.phone3,
+      patch.citizenship,
+      patch.race,
+      patch.marital,
       studentId,
     ],
   );

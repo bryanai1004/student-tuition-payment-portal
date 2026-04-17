@@ -60,6 +60,7 @@ import {
   getStudentAccount,
   getStudentActivity,
   getStudentProfile,
+  putStudentProfile,
 } from "../controllers/studentAccountController.js";
 import { postStudentLogin } from "../controllers/studentAuthController.js";
 import {
@@ -120,6 +121,7 @@ apiRouter.post("/auth/login", postStudentLogin);
 apiRouter.post("/student/enroll", postStudentEnroll);
 apiRouter.post("/student/withdraw", postStudentWithdraw);
 apiRouter.get("/student/enrolled-sections", getStudentEnrolledSections);
+apiRouter.put("/student/profile", putStudentProfile);
 
 apiRouter.post("/ai/ask", postAiAsk);
 
