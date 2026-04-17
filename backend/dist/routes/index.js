@@ -12,7 +12,7 @@ import { getAccountingLedger, getAccountingQuarters, } from "../controllers/stud
 import { getStudentAcademics } from "../controllers/studentAcademicsController.js";
 import { getAdminStudentCourseFeedback, getStudentCourseFeedback, postStudentCourseFeedback, } from "../controllers/studentCourseFeedbackController.js";
 import { getStudentTranscriptPreview } from "../controllers/studentTranscriptController.js";
-import { getDemoAccount, getDemoActivity, getStudentAccount, getStudentActivity, getStudentProfile, } from "../controllers/studentAccountController.js";
+import { getDemoAccount, getDemoActivity, getStudentAccount, getStudentActivity, getStudentProfile, putStudentProfile, } from "../controllers/studentAccountController.js";
 import { postStudentLogin } from "../controllers/studentAuthController.js";
 import { getStudentEnrolledSections, postStudentEnroll, postStudentWithdraw, } from "../controllers/studentEnrollmentController.js";
 import { getAcademicTerms, getAcademicTermsCurrent, getAcademicTermsCurrentPosted, getAcademicTermsRecent, patchAdminAcademicTerm, postAdminAcademicTerm, postAdminAcademicTermPost, } from "../controllers/academicTermController.js";
@@ -29,6 +29,7 @@ apiRouter.post("/auth/login", postStudentLogin);
 apiRouter.post("/student/enroll", postStudentEnroll);
 apiRouter.post("/student/withdraw", postStudentWithdraw);
 apiRouter.get("/student/enrolled-sections", getStudentEnrolledSections);
+apiRouter.put("/student/profile", putStudentProfile);
 apiRouter.post("/ai/ask", postAiAsk);
 apiRouter.get("/courses", getCourses);
 apiRouter.get("/courses/:code/sections", getCourseSections);

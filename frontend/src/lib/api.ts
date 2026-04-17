@@ -293,6 +293,15 @@ export type AdminStudentDetail = {
   city: string | null
   state: string | null
   zip: string | null
+  ssn: string | null
+  visa: string | null
+  dob: string | null
+  phone1: string | null
+  phone2: string | null
+  phone3: string | null
+  citizenship: string | null
+  race: string | null
+  marital: string | null
   latestRegistrationTerm: string | null
   loaSummary: AdminStudentLoaSummary
   clinicalProgress?: ClinicalProgress
@@ -314,6 +323,15 @@ export type AdminStudentUpdatePayload = {
   zip: string | null
   signedDate: string | null
   enrollStartDate: string | null
+  ssn: string | null
+  visa: string | null
+  dob: string | null
+  phone1: string | null
+  phone2: string | null
+  phone3: string | null
+  citizenship: string | null
+  race: string | null
+  marital: string | null
 }
 
 export type AdminStudentCreateLoaPayload = {
@@ -639,6 +657,15 @@ function parseAdminStudentDetailPayload(data: unknown): AdminStudentDetail {
     city: parseNullableString(o.city),
     state: parseNullableString(o.state),
     zip: parseNullableString(o.zip),
+    ssn: parseNullableString(o.ssn),
+    visa: parseNullableString(o.visa),
+    dob: parseNullableString(o.dob),
+    phone1: parseNullableString(o.phone1),
+    phone2: parseNullableString(o.phone2),
+    phone3: parseNullableString(o.phone3),
+    citizenship: parseNullableString(o.citizenship),
+    race: parseNullableString(o.race),
+    marital: parseNullableString(o.marital),
     latestRegistrationTerm: parseNullableString(o.latestRegistrationTerm),
     loaSummary,
     ...(clinicalProgress != null ? { clinicalProgress } : {}),

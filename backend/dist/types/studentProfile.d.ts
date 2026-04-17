@@ -18,5 +18,13 @@ export type StudentProfilePayload = {
     state: string | null;
     zip: string | null;
     email: string | null;
+    dob: string | null;
+    ssn: string | null;
+    visa: string | null;
+    phone1: string | null;
+    phone2: string | null;
+    phone3: string | null;
+    citizenship: string | null;
+    marital: string | null;
 };
 //# sourceMappingURL=studentProfile.d.ts.map

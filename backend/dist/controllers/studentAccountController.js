@@ -1,7 +1,8 @@
+import { verifyStudentAccessToken } from "../lib/studentAuthToken.js";
 import { buildActivityRows } from "../services/activityView.js";
 import { getCatalogDemoAccountPayload } from "../services/demoAccountService.js";
 import { getStudentAccountPayload, } from "../services/studentAccountService.js";
-import { getLegacyStudentProfile } from "../services/studentProfileService.js";
+import { getLegacyStudentProfile, legacyDbDateToIso, updateLegacyStudentSensitiveProfile, } from "../services/studentProfileService.js";
 /**
  * Both `term` and `year` must be present for an explicit term; otherwise resolve the default term/year:
  * demo student → latest `portal_enrollments`; real students → latest legacy `registration` row.
@@ -37,6 +38,54 @@ function pathStudentId(req) {
         return v[0] ?? "";
     return v ?? "";
 }
+function isRecord(v) {
+    return v != null && typeof v === "object" && !Array.isArray(v);
+}
+const STUDENT_PROFILE_UPDATE_FIELDS = [
+    "dob",
+    "ssn",
+    "visa",
+    "address",
+    "phone1",
+    "phone2",
+    "phone3",
+    "email",
+    "citizenship",
+    "race",
+    "marital",
+];
+function parseStudentProfileUpdateBody(raw) {
+    if (!isRecord(raw))
+        return { ok: false, error: "Invalid request body." };
+    const allowed = new Set(STUDENT_PROFILE_UPDATE_FIELDS);
+    const patch = {};
+    for (const key of Object.keys(raw)) {
+        if (!allowed.has(key)) {
+            return { ok: false, error: `Unknown field: ${key}` };
+        }
+    }
+    for (const field of STUDENT_PROFILE_UPDATE_FIELDS) {
+        if (!Object.prototype.hasOwnProperty.call(raw, field))
+            continue;
+        const value = raw[field];
+        if (value !== null && typeof value !== "string") {
+            return { ok: false, error: `${field} must be a string or null.` };
+        }
+        if (field === "dob" && value != null && value.trim() !== "") {
+            if (!legacyDbDateToIso(value)) {
+                return {
+                    ok: false,
+                    error: "dob must be a valid calendar date (YYYY-MM-DD).",
+                };
+            }
+        }
+        patch[field] = value == null ? null : value.trim();
+    }
+    if (Object.keys(patch).length === 0) {
+        return { ok: false, error: "At least one updatable field is required." };
+    }
+    return { ok: true, value: patch };
+}
 export async function getStudentProfile(req, res) {
     try {
         const sid = pathStudentId(req).trim();
@@ -54,6 +103,35 @@ export async function getStudentProfile(req, res) {
     catch (e) {
         console.error(e);
         res.status(500).json({ error: "Failed to load student profile" });
+    }
+}
+export async function putStudentProfile(req, res) {
+    const authStudent = verifyStudentAccessToken(req.headers.authorization);
+    if (!authStudent) {
+        res.status(401).json({ error: "Authentication required" });
+        return;
+    }
+    const body = parseStudentProfileUpdateBody(req.body);
+    if (!body.ok) {
+        res.status(400).json({ error: body.error });
+        return;
+    }
+    try {
+        const updated = await updateLegacyStudentSensitiveProfile(authStudent.studentId, body.value);
+        if (!updated) {
+            res.status(404).json({ error: "Student profile not found" });
+            return;
+        }
+        const payload = await getLegacyStudentProfile(authStudent.studentId);
+        if (!payload) {
+            res.status(404).json({ error: "Student profile not found" });
+            return;
+        }
+        res.json(payload);
+    }
+    catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to update student profile" });
     }
 }
 export async function getStudentAccount(req, res) {

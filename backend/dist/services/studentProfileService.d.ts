@@ -14,4 +14,18 @@ export declare function combineAddressLine(address: unknown, address2: unknown):
 export declare function trackFromRequirementsId(v: unknown): string | null;
 export declare function mapLegacyStudentRowToProfile(row: RowDataPacket): StudentProfilePayload;
 export declare function getLegacyStudentProfile(studentId: string): Promise<StudentProfilePayload | null>;
+export type StudentSensitiveProfileUpdate = {
+    dob?: string | null;
+    ssn?: string | null;
+    visa?: string | null;
+    address?: string | null;
+    phone1?: string | null;
+    phone2?: string | null;
+    phone3?: string | null;
+    email?: string | null;
+    citizenship?: string | null;
+    race?: string | null;
+    marital?: string | null;
+};
+export declare function updateLegacyStudentSensitiveProfile(studentId: string, patch: StudentSensitiveProfileUpdate): Promise<boolean>;
 //# sourceMappingURL=studentProfileService.d.ts.map

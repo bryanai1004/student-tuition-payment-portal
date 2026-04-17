@@ -205,6 +205,15 @@ export type LegacyStudentMasterUpdate = {
     zip: number;
     signed_date_sql: string;
     enroll_start_sql: string;
+    ssn: string;
+    visa: string;
+    dob_sql: string;
+    phone1: string;
+    phone2: string;
+    phone3: string;
+    citizenship: string;
+    race: string;
+    marital: string;
 };
 /**
  * Update safe legacy `students` master columns only. Returns whether a row was updated.

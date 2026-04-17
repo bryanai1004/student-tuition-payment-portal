@@ -340,6 +340,7 @@ function mapProfileRowToAdminDetail(row, latestRegistrationTerm, loaSummary) {
     const gender = genderRaw.length > 0 ? genderRaw : null;
     const signedDate = legacyDbDateToIso(row.signed_date);
     const enrollStartDate = legacyDbDateToIso(readEnrollStart(row));
+    const dob = legacyDbDateToIso(row.dob);
     const resolvedEntryDate = resolveEnrollmentDate(row.signed_date, readEnrollStart(row));
     const bg = str(row.background);
     const tertiary = str(row.tertiary);
@@ -348,6 +349,22 @@ function mapProfileRowToAdminDetail(row, latestRegistrationTerm, loaSummary) {
     const city = cityRaw.length > 0 ? cityRaw : null;
     const stateRaw = str(row.state);
     const state = stateRaw.length > 0 ? stateRaw : null;
+    const ssnRaw = str(row.ssn);
+    const ssn = ssnRaw.length > 0 ? ssnRaw : null;
+    const visaRaw = str(row.visa);
+    const visa = visaRaw.length > 0 ? visaRaw : null;
+    const phone1Raw = str(row.phone1);
+    const phone1 = phone1Raw.length > 0 ? phone1Raw : null;
+    const phone2Raw = str(row.phone2);
+    const phone2 = phone2Raw.length > 0 ? phone2Raw : null;
+    const phone3Raw = str(row.phone3);
+    const phone3 = phone3Raw.length > 0 ? phone3Raw : null;
+    const citizenshipRaw = str(row.citizenship);
+    const citizenship = citizenshipRaw.length > 0 ? citizenshipRaw : null;
+    const raceRaw = str(row.race);
+    const race = raceRaw.length > 0 ? raceRaw : null;
+    const maritalRaw = str(row.marital);
+    const marital = maritalRaw.length > 0 ? maritalRaw : null;
     const zipRaw = row.zip;
     let zipStr = null;
     if (zipRaw != null && String(zipRaw).trim() !== "") {
@@ -371,6 +388,15 @@ function mapProfileRowToAdminDetail(row, latestRegistrationTerm, loaSummary) {
         city,
         state,
         zip: zipStr,
+        ssn,
+        visa,
+        dob,
+        phone1,
+        phone2,
+        phone3,
+        citizenship,
+        race,
+        marital,
         latestRegistrationTerm,
         loaSummary,
     };
@@ -556,6 +582,10 @@ export async function updateAdminStudent(studentIdRaw, body) {
     if (enroll.kind === "error") {
         return { ok: false, status: 400, message: enroll.message };
     }
+    const dob = sqlDateFromBodyField("dob", body.dob);
+    if (dob.kind === "error") {
+        return { ok: false, status: 400, message: dob.message };
+    }
     const req = parseRequirementsIdForDb(body.requirementsId);
     if (req.kind === "error") {
         return { ok: false, status: 400, message: req.message };
@@ -579,6 +609,15 @@ export async function updateAdminStudent(studentIdRaw, body) {
         zip: zip.value,
         signed_date_sql: signed.value,
         enroll_start_sql: enroll.value,
+        ssn: str(body.ssn),
+        visa: str(body.visa),
+        dob_sql: dob.value,
+        phone1: str(body.phone1),
+        phone2: str(body.phone2),
+        phone3: str(body.phone3),
+        citizenship: str(body.citizenship),
+        race: str(body.race),
+        marital: str(body.marital),
     };
     const updated = await updateLegacyStudentMasterRow(pool, studentId, patch);
     if (!updated) {

@@ -1,5 +1,4 @@
 import { pool } from "../lib/db.js";
-import { loadLegacyStudentProfileRow } from "../repositories/studentLegacyAccountRepository.js";
 const MS_PER_DAY = 86400000;
 function str(v) {
     if (v == null)
@@ -130,6 +129,13 @@ function readRow(row) {
         state: str(r.state),
         zip: str(r.zip),
         email: str(r.email),
+        ssn: str(r.ssn),
+        visa: str(r.visa),
+        phone1: str(r.phone1),
+        phone2: str(r.phone2),
+        phone3: str(r.phone3),
+        citizenship: str(r.citizenship),
+        marital: str(r.marital),
         program: r.program,
         requirements_id: r.requirements_id,
     };
@@ -155,15 +161,87 @@ export function mapLegacyStudentRowToProfile(row) {
         state: r.state.length > 0 ? r.state : null,
         zip: r.zip.length > 0 ? r.zip : null,
         email: r.email.length > 0 ? r.email : null,
+        dob: legacyDbDateToIso(r.dob),
+        ssn: r.ssn.length > 0 ? r.ssn : null,
+        visa: r.visa.length > 0 ? r.visa : null,
+        phone1: r.phone1.length > 0 ? r.phone1 : null,
+        phone2: r.phone2.length > 0 ? r.phone2 : null,
+        phone3: r.phone3.length > 0 ? r.phone3 : null,
+        citizenship: r.citizenship.length > 0 ? r.citizenship : null,
+        marital: r.marital.length > 0 ? r.marital : null,
     };
 }
 export async function getLegacyStudentProfile(studentId) {
     const trimmed = studentId.trim();
     if (trimmed === "")
         return null;
-    const row = await loadLegacyStudentProfileRow(pool, trimmed);
+    const [rows] = await pool.query(`SELECT
+       id,
+       name,
+       program,
+       gender,
+       dob,
+       signed_date,
+       EnrollStartDate,
+       background,
+       admission_credits,
+       tertiary,
+       race,
+       address,
+       address2,
+       city,
+       state,
+       zip,
+       email,
+       ssn,
+       visa,
+       phone1,
+       phone2,
+       phone3,
+       citizenship,
+       marital,
+       requirements_id
+     FROM students
+     WHERE id = ?
+     LIMIT 1`, [trimmed]);
+    const row = rows[0] ?? null;
     if (!row)
         return null;
     return mapLegacyStudentRowToProfile(row);
+}
+export async function updateLegacyStudentSensitiveProfile(studentId, patch) {
+    const id = studentId.trim();
+    if (id === "")
+        return false;
+    const updates = [];
+    const params = [];
+    const assignText = (column, raw) => {
+        if (raw === undefined)
+            return;
+        updates.push(`${column} = ?`);
+        params.push(raw == null ? "" : str(raw));
+    };
+    if (patch.dob !== undefined) {
+        const iso = legacyDbDateToIso(patch.dob);
+        updates.push("dob = ?");
+        params.push(iso ?? "0000-00-00");
+    }
+    assignText("ssn", patch.ssn);
+    assignText("visa", patch.visa);
+    assignText("address", patch.address);
+    assignText("phone1", patch.phone1);
+    assignText("phone2", patch.phone2);
+    assignText("phone3", patch.phone3);
+    assignText("email", patch.email);
+    assignText("citizenship", patch.citizenship);
+    assignText("race", patch.race);
+    assignText("marital", patch.marital);
+    if (updates.length === 0)
+        return false;
+    const [result] = await pool.execute(`UPDATE students
+     SET ${updates.join(", ")}
+     WHERE id = ?`, [...params, id]);
+    const header = result;
+    return (header.affectedRows ?? 0) > 0;
 }
 //# sourceMappingURL=studentProfileService.js.map

@@ -1046,6 +1046,53 @@ export function AdminStudentDetailPage() {
                   </div>
                 </dl>
               </section>
+
+              <section
+                className="portal-card portal-stack"
+                aria-labelledby="admin-student-sensitive"
+              >
+                <h2 id="admin-student-sensitive" className="portal-section-heading">
+                  Additional profile details
+                </h2>
+                <dl>
+                  <div className="portal-row">
+                    <dt>Date of Birth</dt>
+                    <dd>{formatUsMdY(detail.dob)}</dd>
+                  </div>
+                  <div className="portal-row">
+                    <dt>SSN</dt>
+                    <dd>{dashText(detail.ssn)}</dd>
+                  </div>
+                  <div className="portal-row">
+                    <dt>Visa</dt>
+                    <dd>{dashText(detail.visa)}</dd>
+                  </div>
+                  <div className="portal-row">
+                    <dt>Phone 1</dt>
+                    <dd>{dashText(detail.phone1)}</dd>
+                  </div>
+                  <div className="portal-row">
+                    <dt>Phone 2</dt>
+                    <dd>{dashText(detail.phone2)}</dd>
+                  </div>
+                  <div className="portal-row">
+                    <dt>Phone 3</dt>
+                    <dd>{dashText(detail.phone3)}</dd>
+                  </div>
+                  <div className="portal-row">
+                    <dt>Citizenship</dt>
+                    <dd>{dashText(detail.citizenship)}</dd>
+                  </div>
+                  <div className="portal-row">
+                    <dt>Race</dt>
+                    <dd>{dashText(detail.race)}</dd>
+                  </div>
+                  <div className="portal-row">
+                    <dt>Marital Status</dt>
+                    <dd>{dashText(detail.marital)}</dd>
+                  </div>
+                </dl>
+              </section>
             </div>
           ) : null}
 

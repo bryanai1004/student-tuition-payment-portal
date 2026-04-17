@@ -52,6 +52,15 @@ function parseUpdateBody(raw) {
             zip: parseNullableStringField(raw.zip),
             signedDate: parseNullableStringField(raw.signedDate),
             enrollStartDate: parseNullableStringField(raw.enrollStartDate),
+            ssn: parseNullableStringField(raw.ssn),
+            visa: parseNullableStringField(raw.visa),
+            dob: parseNullableStringField(raw.dob),
+            phone1: parseNullableStringField(raw.phone1),
+            phone2: parseNullableStringField(raw.phone2),
+            phone3: parseNullableStringField(raw.phone3),
+            citizenship: parseNullableStringField(raw.citizenship),
+            race: parseNullableStringField(raw.race),
+            marital: parseNullableStringField(raw.marital),
         },
     };
 }

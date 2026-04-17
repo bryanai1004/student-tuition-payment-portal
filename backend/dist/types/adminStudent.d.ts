@@ -90,6 +90,15 @@ export type AdminStudentDetail = {
     city: string | null;
     state: string | null;
     zip: string | null;
+    ssn: string | null;
+    visa: string | null;
+    dob: string | null;
+    phone1: string | null;
+    phone2: string | null;
+    phone3: string | null;
+    citizenship: string | null;
+    race: string | null;
+    marital: string | null;
     latestRegistrationTerm: string | null;
     loaSummary: AdminStudentLoaSummary;
     /** Same shape as student account `clinicalProgress` (legacy clinic + requirements). */
@@ -110,6 +119,15 @@ export type AdminStudentUpdateBody = {
     zip: string | null;
     signedDate: string | null;
     enrollStartDate: string | null;
+    ssn: string | null;
+    visa: string | null;
+    dob: string | null;
+    phone1: string | null;
+    phone2: string | null;
+    phone3: string | null;
+    citizenship: string | null;
+    race: string | null;
+    marital: string | null;
 };
 /** POST /api/admin/students/:studentId/loa — create one legacy `loa` row. */
 export type AdminStudentCreateLoaBody = {
