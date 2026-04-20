@@ -16,7 +16,9 @@
     "test:openai": "tsx scripts/testOpenAI.ts",
     "test:rag-answer": "tsx scripts/testRagAnswer.ts",
     "build:knowledge": "tsx scripts/buildKnowledgeBase.ts",
-    "pw:generate-initial": "tsx scripts/generate-initial-passwords.ts"
+    "pw:generate-initial": "tsx scripts/generate-initial-passwords.ts",
+    "pw:audit-amu-2026": "tsx scripts/audit-amu-2026-password-migration.ts",
+    "pw:repair-amu-2026": "tsx scripts/audit-amu-2026-password-migration.ts --repair"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -1,0 +1,16 @@
+AMU 2026 Spring password_stu audit
+CSV: /Users/libingchen/Desktop/student-tuition-payment-portal/backend/amu_2026_spring_initial_passwords.csv
+Output directory: /Users/libingchen/Desktop/student-tuition-payment-portal/backend/reports/amu-2026-spring-password-audit/2026-04-20T05-06-37-677Z
+
+Total CSV data rows (non-empty student_id): 150
+correct (DB hash matches CSV initial password): 150
+mismatched (password_stu row exists, wrong hash): 0
+missing (no password_stu row, CSV had initial password): 0
+no_plaintext_in_csv (empty initial_password in CSV): 0
+
+Files:
+  /Users/libingchen/Desktop/student-tuition-payment-portal/backend/reports/amu-2026-spring-password-audit/2026-04-20T05-06-37-677Z/correct.csv
+  /Users/libingchen/Desktop/student-tuition-payment-portal/backend/reports/amu-2026-spring-password-audit/2026-04-20T05-06-37-677Z/mismatched.csv
+  /Users/libingchen/Desktop/student-tuition-payment-portal/backend/reports/amu-2026-spring-password-audit/2026-04-20T05-06-37-677Z/missing.csv
+  /Users/libingchen/Desktop/student-tuition-payment-portal/backend/reports/amu-2026-spring-password-audit/2026-04-20T05-06-37-677Z/no_plaintext_in_csv.csv
+  /Users/libingchen/Desktop/student-tuition-payment-portal/backend/reports/amu-2026-spring-password-audit/2026-04-20T05-06-37-677Z/all_rows.csv
