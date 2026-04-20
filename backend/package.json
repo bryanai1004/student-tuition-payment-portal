@@ -15,7 +15,8 @@
     "db:bootstrap-portal": "node scripts/applyPortalAccountBootstrap.mjs",
     "test:openai": "tsx scripts/testOpenAI.ts",
     "test:rag-answer": "tsx scripts/testRagAnswer.ts",
-    "build:knowledge": "tsx scripts/buildKnowledgeBase.ts"
+    "build:knowledge": "tsx scripts/buildKnowledgeBase.ts",
+    "pw:generate-initial": "tsx scripts/generate-initial-passwords.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -24,7 +25,8 @@
     "mongoose": "^8.9.3",
     "mysql2": "^3.12.0",
     "openai": "^4.77.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

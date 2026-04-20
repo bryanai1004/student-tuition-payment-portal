@@ -24,10 +24,20 @@ export async function postStudentLogin(req, res) {
     try {
         const result = await authenticateLegacyStudent(pool, studentId, password);
         if (!result) {
+            // TEMP(verify rollout): no derived-password path; failures are missing/wrong `password_stu` only.
+            console.info("[auth] student login failed", {
+                studentId: idTrim,
+                verifiedVia: null,
+            });
             console.debug("[auth] invalid credentials", { studentId: idTrim });
             res.status(401).json({ error: "Invalid student ID or password" });
             return;
         }
+        // TEMP(verify rollout): success always means `password_stu` matched (MD5 hex or stored plain edge case).
+        console.info("[auth] student login ok", {
+            studentId: idTrim,
+            verifiedVia: "password_stu",
+        });
         res.status(200).json({
             studentId: result.studentId,
             displayName: result.displayName,
