@@ -224,12 +224,33 @@ export async function getStudentClinicalSchedule(
     throw new ClinicalScheduleValidationError("Student id is required");
   }
   const rows = await listStudentClinicalAssignments(sid);
-  return rows
+  const sessions = rows
     .filter((r) => {
       const st = (r.status ?? "").trim().toLowerCase();
       return st !== "dropped" && st !== "cancelled";
     })
     .map(assignmentRowToScheduleDto);
+  const termYears = rows
+    .map((r) => {
+      const term = (r.tt_term ?? r.ca_term ?? "").trim();
+      const year = r.tt_year ?? r.ca_year;
+      if (term === "" || year == null || !Number.isFinite(year)) {
+        return null;
+      }
+      return `${term} ${year}`;
+    })
+    .filter((v): v is string => v != null);
+  const uniqueTermYears = [...new Set(termYears)];
+  console.info("[clinical-trace] student upcoming assignments query", {
+    studentId: sid,
+    termYear: uniqueTermYears.length > 0 ? uniqueTermYears : ["unknown"],
+    sourceTable: "clinical_assignments LEFT JOIN clinic_timetable",
+    sourceQuery:
+      "clinicalScheduleRepository.listStudentClinicalAssignments",
+    rawRowCount: rows.length,
+    returnedRowCount: sessions.length,
+  });
+  return sessions;
 }
 
 export async function listAdminClinicalTimetable(

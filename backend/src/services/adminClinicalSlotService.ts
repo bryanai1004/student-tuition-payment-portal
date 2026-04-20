@@ -270,9 +270,35 @@ export async function listAdminClinicalSlots(options?: {
   if (rawId != null && String(rawId).trim() !== "") {
     const { year, term } = await resolveTermYear(String(rawId));
     const rows = await listClinicTimetableSlotsForAdmin({ year, term });
+    const totalActiveEnrolled = rows.reduce(
+      (sum, row) => sum + row.active_enrolled_count,
+      0,
+    );
+    console.info("[clinical-trace] admin active enrolled count query", {
+      studentId: null,
+      termYear: `${term} ${year}`,
+      sourceTable:
+        "clinic_timetable LEFT JOIN (clinical_enrollments aggregate by timetable_id)",
+      sourceQuery: "clinicalTimetableRepository.listClinicTimetableSlotsForAdmin",
+      returnedRowCount: rows.length,
+      activeEnrolledTotal: totalActiveEnrolled,
+    });
     return rows.map(rowToDto);
   }
   const rows = await listClinicTimetableSlotsForAdmin({});
+  const totalActiveEnrolled = rows.reduce(
+    (sum, row) => sum + row.active_enrolled_count,
+    0,
+  );
+  console.info("[clinical-trace] admin active enrolled count query", {
+    studentId: null,
+    termYear: "all",
+    sourceTable:
+      "clinic_timetable LEFT JOIN (clinical_enrollments aggregate by timetable_id)",
+    sourceQuery: "clinicalTimetableRepository.listClinicTimetableSlotsForAdmin",
+    returnedRowCount: rows.length,
+    activeEnrolledTotal: totalActiveEnrolled,
+  });
   return rows.map(rowToDto);
 }
 
