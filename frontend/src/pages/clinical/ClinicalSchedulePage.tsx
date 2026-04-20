@@ -290,13 +290,13 @@ export function ClinicalSchedulePage() {
     if (!h) return
     const endMs = new Date(h.holdExpiresAt).getTime()
     if (!Number.isFinite(endMs)) return
-    let id: ReturnType<typeof window.setInterval> | undefined
+    let id: number | null = null
     const tick = () => {
       const now = Date.now()
       setClinicalHoldTickMs(now)
       if (now >= endMs && id != null) {
         window.clearInterval(id)
-        id = undefined
+        id = null
       }
     }
     tick()
