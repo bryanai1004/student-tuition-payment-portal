@@ -6,10 +6,14 @@ export { formatMoney } from './formatMoney'
 
 export const CARD_CONVENIENCE_RATE = 0.0285
 
-/** Normalized base (no trailing slash). Empty → relative `/api/...` (same-origin or Vite proxy). */
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '')
+/** Normalized backend origin (no trailing slash). Never includes `/api` — paths pass `/api/...` into `api()`. */
+export const API_BASE = String(import.meta.env.VITE_API_BASE_URL ?? '')
   .trim()
   .replace(/\/$/, '')
+
+if (!API_BASE) {
+  throw new Error('VITE_API_BASE_URL is not defined')
+}
 
 const JSON_SNIPPET_MAX = 280
 
@@ -26,13 +30,23 @@ export class ApiError extends Error {
 }
 
 /**
- * Join base + path. `path` must start with `/` (e.g. `/api/students/x/account` or `...?term=Fall&year=2026`).
+ * Full URL for an API path. `path` must start with `/` (e.g. `/api/students/x/account`).
+ */
+export function api(path: string): string {
+  if (!path.startsWith('/')) {
+    throw new Error('API path must start with /')
+  }
+  return `${API_BASE}${path}`
+}
+
+/**
+ * Join base + path; adds a leading `/` if missing. Prefer `api('/api/...')` when the path is known absolute.
  */
 export function buildApiUrl(pathWithQuery: string): string {
-  const path =
-    pathWithQuery.startsWith('/') ? pathWithQuery : `/${pathWithQuery}`
-  if (!API_BASE_URL) return path
-  return `${API_BASE_URL}${path}`
+  const path = pathWithQuery.startsWith('/')
+    ? pathWithQuery
+    : `/${pathWithQuery}`
+  return api(path)
 }
 
 /**

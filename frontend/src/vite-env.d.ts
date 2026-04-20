@@ -2,10 +2,10 @@
 
 interface ImportMetaEnv {
   /**
-   * Backend origin without a trailing slash (see `.env.development` / `.env.production`).
-   * When unset, API requests use relative `/api/...` (Vite dev proxy or same-origin deployment).
+   * Backend origin without a trailing slash and without `/api` (see `.env.development` / `.env.production`).
+   * Required at build time; requests use `${VITE_API_BASE_URL}/api/...`.
    */
-  readonly VITE_API_BASE_URL?: string
+  readonly VITE_API_BASE_URL: string
 }
 
 interface ImportMeta {

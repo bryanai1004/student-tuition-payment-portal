@@ -4,7 +4,7 @@ import { getWelcomeLines } from '../data/aiMockReplies'
 import { useLanguage } from '../LanguageContext'
 import { useAccount } from '../context/AccountContext'
 import { extractConversationFacts } from '../lib/aiConversationFacts'
-import { buildApiUrl } from '../lib/api'
+import { api } from '../lib/api'
 import { t as portalT, type PortalLocale } from '../lib/i18n'
 import type { SendAssistantAttachmentPayload } from '../lib/sendAssistantMessage'
 
@@ -273,7 +273,7 @@ export function useAIAssistant(pageContext: AIAssistantPageContext) {
         hasAuthToken: Boolean(authToken),
         hasAuthorizationHeader: typeof headers.Authorization === 'string',
       })
-      const res = await fetch(buildApiUrl('/api/ai/ask'), {
+      const res = await fetch(api('/api/ai/ask'), {
         method: 'POST',
         headers,
         body: JSON.stringify({
