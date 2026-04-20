@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { dropStudentClinicalEnrollment, enrollStudentInClinicalSlot, listOpenClinicalSlotsForStudent, listStudentClinicalEnrollmentRows, } from "../services/clinicalEnrollmentService.js";
+import { adminDropClinicalEnrollmentForSlot, dropStudentClinicalEnrollment, enrollStudentInClinicalSlot, listAdminClinicalSlotRoster, listOpenClinicalSlotsForStudent, listStudentClinicalEnrollmentRows, } from "../services/clinicalEnrollmentService.js";
 import { ClinicalScheduleValidationError } from "../services/clinicalScheduleService.js";
 function devMessage(e) {
     return e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
@@ -12,6 +12,12 @@ function pathStudentId(req) {
 }
 function pathEnrollmentId(req) {
     const v = req.params.enrollmentId;
+    const raw = Array.isArray(v) ? v[0] : v;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : NaN;
+}
+function pathTimetableId(req) {
+    const v = req.params.timetableId;
     const raw = Array.isArray(v) ? v[0] : v;
     const n = Number(raw);
     return Number.isFinite(n) ? n : NaN;
@@ -34,6 +40,66 @@ function parseOptYearQuery(req) {
     if (typeof v === "number" && Number.isFinite(v))
         return v;
     return null;
+}
+/**
+ * GET /api/admin/clinical/slots/:timetableId/roster
+ */
+export async function getAdminClinicalSlotRosterHandler(req, res) {
+    try {
+        const tid = pathTimetableId(req);
+        if (!Number.isInteger(tid) || tid <= 0) {
+            res.status(400).json({ error: "Invalid timetable id" });
+            return;
+        }
+        const rows = await listAdminClinicalSlotRoster(tid);
+        res.json(rows);
+    }
+    catch (e) {
+        console.error("[admin clinical slot roster] failed:", e);
+        const body = {
+            error: "Failed to load clinical slot roster.",
+        };
+        if (env.nodeEnv === "development")
+            body.message = devMessage(e);
+        res.status(500).json(body);
+    }
+}
+/**
+ * DELETE /api/admin/clinical/slots/:timetableId/enrollments/:enrollmentId?studentId=
+ */
+export async function deleteAdminClinicalSlotEnrollmentHandler(req, res) {
+    try {
+        const tid = pathTimetableId(req);
+        if (!Number.isInteger(tid) || tid <= 0) {
+            res.status(400).json({ error: "Invalid timetable id" });
+            return;
+        }
+        const eid = pathEnrollmentId(req);
+        if (!Number.isFinite(eid) || eid <= 0) {
+            res.status(400).json({ error: "Invalid enrollment id" });
+            return;
+        }
+        const sid = parseOptQueryString(req, "studentId");
+        if (sid == null || sid === "") {
+            res.status(400).json({ error: "studentId query parameter is required" });
+            return;
+        }
+        const result = await adminDropClinicalEnrollmentForSlot(tid, sid, eid);
+        if (!result.ok) {
+            res.status(result.status).json({ error: result.error });
+            return;
+        }
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[admin clinical slot enrollment DELETE] failed:", e);
+        const body = {
+            error: "Could not remove student from this slot.",
+        };
+        if (env.nodeEnv === "development")
+            body.message = devMessage(e);
+        res.status(500).json(body);
+    }
 }
 /**
  * GET /api/students/:studentId/clinical-enrollments/open
@@ -124,6 +190,7 @@ export async function postStudentClinicalEnrollmentHandler(req, res) {
             ok: true,
             enrollmentId: result.enrollmentId,
             assignmentId: result.assignmentId,
+            billingChargePosted: result.billingChargePosted,
         });
     }
     catch (e) {

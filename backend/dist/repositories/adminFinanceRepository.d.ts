@@ -66,7 +66,7 @@ export declare function insertPortalBillingAdjustment(pool: Pool, params: {
     description: string;
     amount: number;
     category: PortalBillingCategory;
-    adjustmentSource?: "manual" | "system_late_fee";
+    adjustmentSource?: "manual" | "system_late_fee" | "system_clinical";
 }): Promise<void>;
 export declare function insertSystemLateFee(pool: Pool, params: {
     studentExternalId: string;

@@ -1,5 +1,13 @@
 import type { Request, Response } from "express";
 /**
+ * GET /api/admin/clinical/slots/:timetableId/roster
+ */
+export declare function getAdminClinicalSlotRosterHandler(req: Request, res: Response): Promise<void>;
+/**
+ * DELETE /api/admin/clinical/slots/:timetableId/enrollments/:enrollmentId?studentId=
+ */
+export declare function deleteAdminClinicalSlotEnrollmentHandler(req: Request, res: Response): Promise<void>;
+/**
  * GET /api/students/:studentId/clinical-enrollments/open
  */
 export declare function getStudentOpenClinicalEnrollmentSlotsHandler(req: Request, res: Response): Promise<void>;

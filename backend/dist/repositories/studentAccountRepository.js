@@ -10,7 +10,7 @@
  * portal_student_term_prefs (student_external_id, term, year, use_installment_plan,
  *   tuition_paid_in_full_at_reg, installment_count, registration_period_ends)
  * portal_payments (student_external_id, term, year, amount, paid_at, method, description)
- * portal_billing_adjustments (..., adjustment_source manual|system_late_fee)
+ * portal_billing_adjustments (..., adjustment_source manual|system_late_fee|system_clinical)
  */
 function formatSqlDate(value) {
     if (value instanceof Date) {
@@ -44,6 +44,8 @@ function asAdjustmentSource(raw) {
     const s = String(raw ?? "").trim().toLowerCase();
     if (s === "system_late_fee")
         return "system_late_fee";
+    if (s === "system_clinical")
+        return "system_clinical";
     return "manual";
 }
 /** In-process cache: whether `portal_billing_adjustments.adjustment_source` exists (older prod DBs may lack it). */
@@ -116,6 +118,35 @@ export async function listPortalScheduleTermsForStudent(pool, studentExternalId)
         year: Number(r.year),
     }));
 }
+/**
+ * `portal_billing_adjustments` for one student + quarter (no dependency on portal course rows).
+ * Used when merging portal-side charges into the student ledger alongside legacy `accounting`.
+ */
+export async function loadPortalBillingAdjustmentsForQuarter(pool, studentId, term, year) {
+    const adjustmentsSelectHasSource = await hasPortalBillingAdjustmentsAdjustmentSourceColumn(pool);
+    const adjustmentsSql = adjustmentsSelectHasSource
+        ? `SELECT id, description, amount, category, adjustment_source AS adjustmentSource
+       FROM portal_billing_adjustments
+       WHERE student_external_id = ? AND term = ? AND year = ?`
+        : `SELECT id, description, amount, category
+       FROM portal_billing_adjustments
+       WHERE student_external_id = ? AND term = ? AND year = ?`;
+    const [adjQ] = await pool.query(adjustmentsSql, [
+        studentId,
+        term,
+        year,
+    ]);
+    const adjustmentRowList = adjQ;
+    return adjustmentRowList.map((r) => ({
+        id: r.id != null ? Number(r.id) : undefined,
+        description: String(r.description),
+        amount: Number(r.amount),
+        category: asBillingCategory(r.category),
+        adjustmentSource: adjustmentsSelectHasSource
+            ? asAdjustmentSource(r.adjustmentSource)
+            : "manual",
+    }));
+}
 async function loadPortalTermBillingContextCore(pool, studentId, term, year, enrollmentRows) {
     const [[nameRow]] = await pool.query(`SELECT full_name AS fullName
      FROM portal_students
@@ -138,14 +169,6 @@ async function loadPortalTermBillingContextCore(pool, studentId, term, year, enr
     }));
     const courseIds = [...new Set(enrollments.map((e) => e.courseId))];
     const placeholders = courseIds.length > 0 ? courseIds.map(() => "?").join(",") : "";
-    const adjustmentsSelectHasSource = await hasPortalBillingAdjustmentsAdjustmentSourceColumn(pool);
-    const adjustmentsSql = adjustmentsSelectHasSource
-        ? `SELECT id, description, amount, category, adjustment_source AS adjustmentSource
-       FROM portal_billing_adjustments
-       WHERE student_external_id = ? AND term = ? AND year = ?`
-        : `SELECT id, description, amount, category
-       FROM portal_billing_adjustments
-       WHERE student_external_id = ? AND term = ? AND year = ?`;
     const coursesSql = courseIds.length > 0
         ? `SELECT course_id AS courseId, course_code AS courseCode, title, type,
                 units, hours
@@ -155,7 +178,7 @@ async function loadPortalTermBillingContextCore(pool, studentId, term, year, enr
                 units, hours
          FROM portal_courses
          WHERE 1 = 0`;
-    const [coursesQ, prefsQ, paymentsQ, adjQ] = await Promise.all([
+    const [coursesQ, prefsQ, paymentsQ, adjustments] = await Promise.all([
         pool.query(coursesSql, courseIds.length > 0 ? courseIds : []),
         pool.query(`SELECT use_installment_plan AS useInstallmentPlan,
               tuition_paid_in_full_at_reg AS tuitionPaidInFullDuringRegistration,
@@ -168,12 +191,11 @@ async function loadPortalTermBillingContextCore(pool, studentId, term, year, enr
        FROM portal_payments
        WHERE student_external_id = ? AND term = ? AND year = ?
        ORDER BY paid_at ASC, id ASC`, [studentId, term, year]),
-        pool.query(adjustmentsSql, [studentId, term, year]),
+        loadPortalBillingAdjustmentsForQuarter(pool, studentId, term, year),
     ]);
     const courseRowList = coursesQ[0];
     const prefRowList = prefsQ[0];
     const paymentRowList = paymentsQ[0];
-    const adjustmentRowList = adjQ[0];
     const courses = courseRowList.map((r) => ({
         courseId: String(r.courseId),
         courseCode: String(r.courseCode),
@@ -200,15 +222,6 @@ async function loadPortalTermBillingContextCore(pool, studentId, term, year, enr
         paidAt: formatSqlDate(r.paidAt),
         method: String(r.method),
         description: r.description != null ? String(r.description) : undefined,
-    }));
-    const adjustments = adjustmentRowList.map((r) => ({
-        id: r.id != null ? Number(r.id) : undefined,
-        description: String(r.description),
-        amount: Number(r.amount),
-        category: asBillingCategory(r.category),
-        adjustmentSource: adjustmentsSelectHasSource
-            ? asAdjustmentSource(r.adjustmentSource)
-            : "manual",
     }));
     return {
         studentId,

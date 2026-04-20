@@ -1,5 +1,5 @@
 import type { Pool } from "mysql2/promise";
-import type { AccountContext } from "../types/studentAccount.js";
+import type { AccountContext, BillingAdjustmentRecord } from "../types/studentAccount.js";
 /**
  * Latest term/year for which the student has at least one enrollment row.
  * Ordering: highest calendar year first, then Fall > Summer > Spring > Winter within the year.
@@ -16,6 +16,11 @@ export declare function listPortalScheduleTermsForStudent(pool: Pool, studentExt
     term: string;
     year: number;
 }[]>;
+/**
+ * `portal_billing_adjustments` for one student + quarter (no dependency on portal course rows).
+ * Used when merging portal-side charges into the student ledger alongside legacy `accounting`.
+ */
+export declare function loadPortalBillingAdjustmentsForQuarter(pool: Pool, studentId: string, term: string, year: number): Promise<BillingAdjustmentRecord[]>;
 export declare function loadAccountContext(pool: Pool, studentId: string, term: string, year: number): Promise<AccountContext | null>;
 /**
  * Portal billing context for a term/year, including empty enrollments (payments/adjustments only).

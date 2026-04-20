@@ -133,7 +133,7 @@ export type CourseRecord = {
     units?: number;
     hours?: number;
 };
-export type BillingAdjustmentSource = "manual" | "system_late_fee";
+export type BillingAdjustmentSource = "manual" | "system_late_fee" | "system_clinical";
 export type BillingAdjustmentRecord = {
     id?: number;
     description: string;
@@ -142,6 +142,7 @@ export type BillingAdjustmentRecord = {
     /**
      * From `portal_billing_adjustments.adjustment_source` when present.
      * When the column is missing (legacy schema), the repository sets `"manual"` for every row.
+     * Includes `system_clinical` for automatic clinical slot booking charges.
      */
     adjustmentSource?: BillingAdjustmentSource;
 };

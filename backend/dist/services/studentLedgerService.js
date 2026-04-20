@@ -1,6 +1,7 @@
 import { DEMO_STUDENT_ID } from "../config/constants.js";
 import { pool } from "../lib/db.js";
-import { listPortalScheduleTermsForStudent, loadPortalTermBillingContext, } from "../repositories/studentAccountRepository.js";
+import { listClinicalFinanceQuarterHintsForStudent } from "../repositories/clinicalEnrollmentRepository.js";
+import { listPortalScheduleTermsForStudent, loadPortalBillingAdjustmentsForQuarter, loadPortalTermBillingContext, } from "../repositories/studentAccountRepository.js";
 import { listLegacyAccountingQuarters, loadLegacyAccountingRows, } from "../repositories/studentLegacyAccountRepository.js";
 import { calculateCourseCharge, calculateInstallmentServiceFee, formatPortalLedgerCourseMemo, STANDARD_TERM_FEES, } from "./billingMath.js";
 import { termSortOrder } from "./studentAcademicCourseRecords.js";
@@ -84,6 +85,66 @@ function systemRowMeta() {
         isDeletable: false,
     };
 }
+function adjustmentMetaForLedger(adj) {
+    const isLateFee = adj.adjustmentSource === "system_late_fee";
+    const isSystemClinical = adj.adjustmentSource === "system_clinical";
+    const sid = adj.id != null && Number.isFinite(adj.id) ? adj.id : null;
+    if (isLateFee) {
+        return {
+            sourceType: "auto_late_fee",
+            sourceId: sid,
+            isEditable: false,
+            isDeletable: false,
+        };
+    }
+    if (isSystemClinical) {
+        return {
+            sourceType: "system",
+            sourceId: sid,
+            isEditable: false,
+            isDeletable: false,
+        };
+    }
+    return {
+        sourceType: "manual_charge",
+        sourceId: sid,
+        isEditable: sid != null,
+        isDeletable: sid != null,
+    };
+}
+/** Maps `portal_billing_adjustments` rows to ledger DTO lines (portal or legacy+portal merge). */
+function ledgerRowsFromPortalAdjustments(adjustments, chargeDate) {
+    const rows = [];
+    for (const adj of adjustments) {
+        const raw = roundMoney(adj.amount);
+        if (raw === 0)
+            continue;
+        const baseMeta = adjustmentMetaForLedger(adj);
+        if (raw > 0) {
+            rows.push({
+                date: chargeDate,
+                type: "Adjustment",
+                code: "",
+                memo: adj.description.trim() || "Adjustment",
+                debit: raw,
+                credit: 0,
+                ...baseMeta,
+            });
+        }
+        else {
+            rows.push({
+                date: chargeDate,
+                type: "Adjustment",
+                code: "",
+                memo: adj.description.trim() || "Adjustment",
+                debit: 0,
+                credit: roundMoney(Math.abs(raw)),
+                ...baseMeta,
+            });
+        }
+    }
+    return rows;
+}
 /**
  * Portal-synthesized ledger when legacy `accounting` has no rows for the quarter.
  * Charges follow AMU catalog rules; payments come from `portal_payments`.
@@ -140,48 +201,7 @@ function buildPortalLedgerRowsFromContext(ctx) {
             });
         }
     }
-    for (const adj of ctx.adjustments) {
-        const raw = roundMoney(adj.amount);
-        if (raw === 0)
-            continue;
-        const isLateFee = adj.adjustmentSource === "system_late_fee";
-        const sid = adj.id != null && Number.isFinite(adj.id) ? adj.id : null;
-        const baseMeta = isLateFee
-            ? {
-                sourceType: "auto_late_fee",
-                sourceId: sid,
-                isEditable: false,
-                isDeletable: false,
-            }
-            : {
-                sourceType: "manual_charge",
-                sourceId: sid,
-                isEditable: sid != null,
-                isDeletable: sid != null,
-            };
-        if (raw > 0) {
-            rows.push({
-                date: chargeDate,
-                type: "Adjustment",
-                code: "",
-                memo: adj.description.trim() || "Adjustment",
-                debit: raw,
-                credit: 0,
-                ...baseMeta,
-            });
-        }
-        else {
-            rows.push({
-                date: chargeDate,
-                type: "Adjustment",
-                code: "",
-                memo: adj.description.trim() || "Adjustment",
-                debit: 0,
-                credit: roundMoney(Math.abs(raw)),
-                ...baseMeta,
-            });
-        }
-    }
+    rows.push(...ledgerRowsFromPortalAdjustments(ctx.adjustments, chargeDate));
     for (const p of ctx.payments) {
         const credit = roundMoney(Math.abs(p.amount));
         if (credit <= 0)
@@ -209,11 +229,12 @@ export async function getAccountingQuartersPayload(studentId) {
     if (studentId === DEMO_STUDENT_ID) {
         return { studentId, quarters: [] };
     }
-    const [legacyRows, portalTerms] = await Promise.all([
+    const [legacyRows, portalTerms, clinicalTerms] = await Promise.all([
         listLegacyAccountingQuarters(pool, studentId),
         listPortalScheduleTermsForStudent(pool, studentId),
+        listClinicalFinanceQuarterHintsForStudent(studentId),
     ]);
-    const merged = mergeQuarterLists(legacyRows, portalTerms);
+    const merged = mergeQuarterLists(mergeQuarterLists(legacyRows, portalTerms), clinicalTerms);
     const quarters = merged.map((r) => ({
         term: r.term,
         year: r.year,
@@ -237,36 +258,30 @@ export async function getAccountingLedgerPayload(studentId, term, year) {
     }
     const legacy = await loadLegacyAccountingRows(pool, studentId, termTrim, year);
     if (legacy.length > 0) {
-        let totalCharges = 0;
-        let totalPayments = 0;
-        const rows = legacy.map((r) => {
-            totalCharges += r.debit;
-            totalPayments += r.credit;
-            return {
-                date: legacyAccountingDateToIso(r.date),
-                type: r.type,
-                code: r.code,
-                memo: r.memo,
-                debit: r.debit,
-                credit: r.credit,
-                sourceType: "system",
-                sourceId: r.seqNumber,
-                isEditable: false,
-                isDeletable: false,
-            };
-        });
+        const rows = legacy.map((r) => ({
+            date: legacyAccountingDateToIso(r.date),
+            type: r.type,
+            code: r.code,
+            memo: r.memo,
+            debit: r.debit,
+            credit: r.credit,
+            sourceType: "system",
+            sourceId: r.seqNumber,
+            isEditable: false,
+            isDeletable: false,
+        }));
         const resolvedTerm = legacy[0]?.term ?? termTrim;
         const resolvedYear = legacy[0]?.year ?? year;
+        const portalAdjustments = await loadPortalBillingAdjustmentsForQuarter(pool, studentId, resolvedTerm.trim(), resolvedYear);
+        const portalAdjRows = ledgerRowsFromPortalAdjustments(portalAdjustments, isoEffectiveDateForPortalCharges());
+        const mergedRows = [...rows, ...portalAdjRows];
+        const summary = summarizeLedgerRows(mergedRows);
         return {
             studentId,
             term: resolvedTerm,
             year: resolvedYear,
-            rows,
-            summary: {
-                totalCharges: roundMoney(totalCharges),
-                totalPayments: roundMoney(totalPayments),
-                balance: roundMoney(totalCharges - totalPayments),
-            },
+            rows: mergedRows,
+            summary,
         };
     }
     const ctx = await loadPortalTermBillingContext(pool, studentId, termTrim, year);

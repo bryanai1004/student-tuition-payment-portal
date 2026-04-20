@@ -100,6 +100,31 @@ export async function listAvailableClinicalEnrollmentSlots(options) {
         };
     });
 }
+/**
+ * Distinct term/year pairs for any `clinical_enrollments` row for this student (any status).
+ * Used so the Finance quarter picker includes terms where a clinical slot charge may exist.
+ */
+export async function listClinicalFinanceQuarterHintsForStudent(studentId) {
+    const sid = studentId.trim();
+    if (sid === "") {
+        return [];
+    }
+    const [rows] = await pool.query(`SELECT DISTINCT TRIM(term) AS term, year
+       FROM clinical_enrollments
+      WHERE TRIM(student_id) = TRIM(?)
+      ORDER BY year DESC,
+        CASE UPPER(TRIM(term))
+          WHEN 'FALL' THEN 4
+          WHEN 'SUMMER' THEN 3
+          WHEN 'SPRING' THEN 2
+          WHEN 'WINTER' THEN 1
+          ELSE 0
+        END DESC`, [sid]);
+    return rows.map((r) => ({
+        term: String(r.term ?? "").trim(),
+        year: Number(r.year),
+    }));
+}
 export async function listStudentClinicalEnrollments(studentId, options) {
     const sid = studentId.trim();
     const t = options?.term != null ? normalizeEnrollmentTerm(String(options.term)) : "";
@@ -163,6 +188,71 @@ export async function listStudentClinicalEnrollments(studentId, options) {
             createdAt,
         };
     });
+}
+/**
+ * Students with a non-dropped enrollment on this timetable slot (admin roster).
+ * Joins legacy `students` for display name and email.
+ */
+export async function listActiveClinicalRosterForTimetable(timetableId) {
+    if (!Number.isFinite(timetableId) || timetableId <= 0) {
+        return [];
+    }
+    const [rows] = await pool.query(`SELECT
+        ce.id AS enrollment_id,
+        TRIM(ce.student_id) AS student_id,
+        TRIM(ce.status) AS status,
+        ce.created_at,
+        TRIM(s.name) AS student_name,
+        TRIM(s.email) AS student_email
+     FROM clinical_enrollments ce
+     LEFT JOIN students s ON TRIM(s.id) = TRIM(ce.student_id)
+    WHERE ce.timetable_id = ?
+      AND LOWER(TRIM(ce.status)) <> 'dropped'
+    ORDER BY ce.created_at ASC, ce.id ASC`, [timetableId]);
+    return rows.map((raw) => {
+        const row = raw;
+        const sid = String(row.student_id ?? "").trim();
+        const nameRaw = String(row.student_name ?? "").trim();
+        const name = nameRaw !== "" ? nameRaw : sid;
+        const emailRaw = String(row.student_email ?? "").trim();
+        const email = emailRaw !== "" ? emailRaw : null;
+        const ca = row.created_at;
+        let createdAt;
+        if (ca instanceof Date) {
+            createdAt = ca.toISOString();
+        }
+        else {
+            createdAt = String(ca ?? "");
+        }
+        return {
+            enrollmentId: Number(row.enrollment_id),
+            studentId: sid,
+            studentName: name,
+            email,
+            status: String(row.status ?? "").trim(),
+            createdAt,
+        };
+    });
+}
+export async function getClinicalEnrollmentSlotBinding(enrollmentId, studentId) {
+    if (!Number.isFinite(enrollmentId) || enrollmentId <= 0) {
+        return null;
+    }
+    const sid = studentId.trim();
+    if (sid === "")
+        return null;
+    const [rows] = await pool.query(`SELECT ce.timetable_id, TRIM(ce.status) AS status
+       FROM clinical_enrollments ce
+      WHERE ce.id = ?
+        AND TRIM(ce.student_id) = TRIM(?)
+      LIMIT 1`, [enrollmentId, sid]);
+    if (rows.length === 0)
+        return null;
+    const r = rows[0];
+    return {
+        timetableId: Number(r.timetable_id),
+        status: String(r.status ?? "").trim().toLowerCase(),
+    };
 }
 /**
  * Locks the student's enrollment row for this slot (if any) for update.
@@ -285,6 +375,7 @@ export async function createClinicalEnrollment(studentId, timetableId, term, yea
             };
         }
         let enrollmentId;
+        let isNewEnrollmentRow;
         if (existing == null) {
             try {
                 enrollmentId = await insertClinicalEnrollmentRow(conn, {
@@ -294,6 +385,7 @@ export async function createClinicalEnrollment(studentId, timetableId, term, yea
                     year,
                     status: "enrolled",
                 });
+                isNewEnrollmentRow = true;
             }
             catch (e) {
                 if (isMysqlDupEntry(e)) {
@@ -313,10 +405,11 @@ export async function createClinicalEnrollment(studentId, timetableId, term, yea
                 return { ok: false, error: "Could not update enrollment." };
             }
             enrollmentId = existing.id;
+            isNewEnrollmentRow = false;
         }
         const assignmentId = await insertAssignment(conn);
         await conn.commit();
-        return { ok: true, enrollmentId, assignmentId };
+        return { ok: true, enrollmentId, assignmentId, isNewEnrollmentRow };
     }
     catch (e) {
         await conn.rollback();

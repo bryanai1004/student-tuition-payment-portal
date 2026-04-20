@@ -31,6 +31,15 @@ export type ClinicalEnrollmentStudentRow = {
     site: string | null;
     createdAt: string;
 };
+/** Slot roster row for admin (active = not `dropped`; remove uses student drop when `enrolled`). */
+export type ClinicalSlotRosterAdminRow = {
+    enrollmentId: number;
+    studentId: string;
+    studentName: string;
+    email: string | null;
+    status: string;
+    createdAt: string;
+};
 /**
  * Open slots from `clinic_timetable` with enrollment counts from `clinical_enrollments` (status enrolled).
  */
@@ -38,10 +47,27 @@ export declare function listAvailableClinicalEnrollmentSlots(options?: {
     year?: number | null;
     term?: string | null;
 }): Promise<ClinicalEnrollmentSlotRow[]>;
+/**
+ * Distinct term/year pairs for any `clinical_enrollments` row for this student (any status).
+ * Used so the Finance quarter picker includes terms where a clinical slot charge may exist.
+ */
+export declare function listClinicalFinanceQuarterHintsForStudent(studentId: string): Promise<{
+    term: string;
+    year: number;
+}[]>;
 export declare function listStudentClinicalEnrollments(studentId: string, options?: {
     term?: string | null;
     year?: number | null;
 }): Promise<ClinicalEnrollmentStudentRow[]>;
+/**
+ * Students with a non-dropped enrollment on this timetable slot (admin roster).
+ * Joins legacy `students` for display name and email.
+ */
+export declare function listActiveClinicalRosterForTimetable(timetableId: number): Promise<ClinicalSlotRosterAdminRow[]>;
+export declare function getClinicalEnrollmentSlotBinding(enrollmentId: number, studentId: string): Promise<{
+    timetableId: number;
+    status: string;
+} | null>;
 export type ClinicalEnrollmentLockRow = {
     id: number;
     status: string;
@@ -74,6 +100,8 @@ export declare function createClinicalEnrollment(studentId: string, timetableId:
     ok: true;
     enrollmentId: number;
     assignmentId: number;
+    /** `true` only when a new `clinical_enrollments` row was inserted (not a dropped→enrolled reactivation). */
+    isNewEnrollmentRow: boolean;
 } | {
     ok: false;
     error: string;
