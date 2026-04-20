@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAccount } from '../../context/AccountContext'
 import { useLanguage, useStudentPortalT } from '../../LanguageContext'
 import type { PortalLocale, StudentPortalKey } from '../../lib/i18n'
 import {
   fetchAdminClinicalTimetable,
-  fetchStudentClinicalRequests,
+  fetchStudentClinicalEnrollments,
   fetchStudentClinicalSchedule,
-  postStudentClinicalRequest,
+  postStudentClinicalEnrollment,
   type AdminClinicalTimetableSlot,
   type ClinicalScheduleSession,
-  type StudentClinicalRequestItem,
+  type StudentClinicalEnrollmentRow,
 } from '../../lib/api'
 
 function formatScheduleDate(isoYmd: string, locale: PortalLocale): string {
@@ -77,12 +78,25 @@ function isTimetableSlotInSchedule(
   )
 }
 
-function pendingRequestForTimetable(
+function formatPaymentHoldCountdown(iso: string, nowMs: number): string {
+  const end = new Date(iso).getTime()
+  if (!Number.isFinite(end)) return '—'
+  const ms = Math.max(0, end - nowMs)
+  const totalM = Math.floor(ms / 60000)
+  const h = Math.floor(totalM / 60)
+  const m = totalM % 60
+  if (h <= 0) return `${m}m`
+  return `${h}h ${m}m`
+}
+
+function activeEnrollmentForTimetable(
   timetableId: number,
-  requests: StudentClinicalRequestItem[],
-): StudentClinicalRequestItem | undefined {
-  return requests.find(
-    (r) => r.timetableId === timetableId && r.status.toLowerCase() === 'pending',
+  enrollments: StudentClinicalEnrollmentRow[],
+): StudentClinicalEnrollmentRow | undefined {
+  return enrollments.find(
+    (r) =>
+      r.timetableId === timetableId &&
+      r.status.trim().toLowerCase() === 'enrolled',
   )
 }
 
@@ -122,11 +136,12 @@ export function ClinicalSchedulePage() {
   const [filterYear, setFilterYear] = useState('')
   const [filterTerm, setFilterTerm] = useState('')
   const [selectedSlotId, setSelectedSlotId] = useState('')
-  const [requests, setRequests] = useState<StudentClinicalRequestItem[]>([])
-  const [requestSubmitting, setRequestSubmitting] = useState(false)
-  const [requestMessage, setRequestMessage] = useState<string | null>(null)
-  const [requestError, setRequestError] = useState<string | null>(null)
+  const [enrollments, setEnrollments] = useState<StudentClinicalEnrollmentRow[]>([])
+  const [bookingSubmitting, setBookingSubmitting] = useState(false)
+  const [bookingMessage, setBookingMessage] = useState<string | null>(null)
+  const [bookingError, setBookingError] = useState<string | null>(null)
   const [dataReloadKey, setDataReloadKey] = useState(0)
+  const [paymentHoldNowMs, setPaymentHoldNowMs] = useState(() => Date.now())
 
   const rows = useMemo<TableRow[]>(
     () =>
@@ -171,7 +186,7 @@ export function ClinicalSchedulePage() {
     const id = currentStudentId?.trim()
     if (!id) {
       setSessions([])
-      setRequests([])
+      setEnrollments([])
       setLoading(false)
       setError(null)
       return
@@ -184,18 +199,18 @@ export function ClinicalSchedulePage() {
 
     ;(async () => {
       try {
-        const [sess, reqList] = await Promise.all([
+        const [sess, enr] = await Promise.all([
           fetchStudentClinicalSchedule(id, { signal: ac.signal }),
-          fetchStudentClinicalRequests(id, { signal: ac.signal }),
+          fetchStudentClinicalEnrollments(id, { signal: ac.signal }),
         ])
         if (ac.signal.aborted) return
         setSessions(sess)
-        setRequests(reqList)
+        setEnrollments(enr)
         setError(null)
       } catch (e) {
         if (ac.signal.aborted) return
         setSessions([])
-        setRequests([])
+        setEnrollments([])
         setError(
           e instanceof Error ? e.message : t('couldNotLoadClinicSchedule'),
         )
@@ -246,28 +261,54 @@ export function ClinicalSchedulePage() {
     return filteredTimetableSlots.find((s) => s.id === n)
   }, [filteredTimetableSlots, selectedSlotId])
 
-  const selectedPending = selectedSlot
-    ? pendingRequestForTimetable(selectedSlot.id, requests)
+  const selectedActiveEnrollment = selectedSlot
+    ? activeEnrollmentForTimetable(selectedSlot.id, enrollments)
     : undefined
   const selectedInSchedule =
     selectedSlot != null && isTimetableSlotInSchedule(selectedSlot, sessions)
+  const slotAlreadyBooked =
+    selectedSlot != null &&
+    (selectedInSchedule || selectedActiveEnrollment != null)
 
-  async function handleRequestSlot() {
+  const selectedPaymentHoldIso = selectedActiveEnrollment?.paymentHoldExpiresAt
+  const selectedPaymentHoldActive = (() => {
+    if (selectedPaymentHoldIso == null || selectedPaymentHoldIso.trim() === '') {
+      return false
+    }
+    const end = new Date(selectedPaymentHoldIso).getTime()
+    return Number.isFinite(end) && end > paymentHoldNowMs
+  })()
+
+  useEffect(() => {
+    if (!selectedPaymentHoldActive) return
+    const tick = window.setInterval(() => {
+      setPaymentHoldNowMs(Date.now())
+    }, 30_000)
+    return () => clearInterval(tick)
+  }, [selectedPaymentHoldActive])
+
+  async function handleBookSlot() {
     const id = currentStudentId?.trim()
     if (!id || !selectedSlot) return
-    setRequestSubmitting(true)
-    setRequestError(null)
-    setRequestMessage(null)
+    setBookingSubmitting(true)
+    setBookingError(null)
+    setBookingMessage(null)
     try {
-      await postStudentClinicalRequest(id, { timetableId: selectedSlot.id })
-      setRequestMessage(t('clinicalRequestSubmittedMessage'))
+      const created = await postStudentClinicalEnrollment(id, {
+        timetableId: selectedSlot.id,
+      })
+      const parts = [t('clinicalRequestSubmittedMessage')]
+      if (created.billingChargePosted) {
+        parts.push(t('clinicalEnrollmentFinanceChargeNote'))
+      }
+      setBookingMessage(parts.join(' '))
       setDataReloadKey((k) => k + 1)
     } catch (e) {
-      setRequestError(
+      setBookingError(
         e instanceof Error ? e.message : t('couldNotSubmitClinicalRequest'),
       )
     } finally {
-      setRequestSubmitting(false)
+      setBookingSubmitting(false)
     }
   }
 
@@ -386,15 +427,10 @@ export function ClinicalSchedulePage() {
                 <button
                   type="button"
                   className="portal-btn portal-btn--primary"
-                  disabled={
-                    requestSubmitting ||
-                    !selectedSlot ||
-                    Boolean(selectedPending) ||
-                    selectedInSchedule
-                  }
-                  onClick={() => void handleRequestSlot()}
+                  disabled={bookingSubmitting || !selectedSlot || slotAlreadyBooked}
+                  onClick={() => void handleBookSlot()}
                 >
-                  {requestSubmitting ? t('submitting') : t('clinicalRequestSlot')}
+                  {bookingSubmitting ? t('submitting') : t('clinicalRequestSlot')}
                 </button>
               </div>
               <p className="portal-card-note" style={{ margin: '0 0 0.75rem', opacity: 0.85 }}>
@@ -402,28 +438,48 @@ export function ClinicalSchedulePage() {
               </p>
             </>
           ) : null}
-          {selectedSlot && selectedPending ? (
-            <p className="portal-page-lede" role="status">
-              <span className="portal-status portal-status--pending">{t('clinicalPendingBadge')}</span>
-              {' '}
-              {t('clinicalPendingSlotMessage')}
-            </p>
-          ) : null}
-          {selectedSlot && selectedInSchedule && !selectedPending ? (
+          {selectedSlot && slotAlreadyBooked ? (
             <p className="portal-page-lede" role="status">
               <span className="portal-status portal-status--paid">{t('clinicalApprovedBadge')}</span>
               {' '}
               {t('clinicalApprovedSlotMessage')}
             </p>
           ) : null}
-          {requestError ? (
+          {selectedSlot && selectedPaymentHoldActive && selectedActiveEnrollment ? (
+            <div
+              className="portal-registration-form-hint portal-registration-form-hint--warn portal-stack"
+              style={{ margin: '0 0 0.75rem' }}
+              role="status"
+              aria-live="polite"
+            >
+              <strong>{t('clinicalPaymentHoldReminderTitle')}</strong>
+              <p className="portal-inline-note portal-inline-note--flush" style={{ marginTop: '0.35rem' }}>
+                {t('clinicalPaymentHoldReminderBody')}
+              </p>
+              <p className="portal-card-note" style={{ margin: '0.5rem 0 0' }}>
+                {selectedActiveEnrollment.slotLabel}
+                {' · '}
+                {t('clinicalPaymentHoldTimeRemaining')}:{' '}
+                {formatPaymentHoldCountdown(
+                  selectedActiveEnrollment.paymentHoldExpiresAt!,
+                  paymentHoldNowMs,
+                )}
+              </p>
+              <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+                <Link className="portal-link" to="/finances/overview">
+                  {t('clinicalPaymentHoldFinancesLink')}
+                </Link>
+              </p>
+            </div>
+          ) : null}
+          {bookingError ? (
             <p className="portal-page-lede" role="alert">
-              {requestError}
+              {bookingError}
             </p>
           ) : null}
-          {requestMessage ? (
+          {bookingMessage ? (
             <p className="portal-page-lede" role="status">
-              {requestMessage}
+              {bookingMessage}
             </p>
           ) : null}
         </section>
