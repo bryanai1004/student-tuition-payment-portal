@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
+    "tunnel:myamu": "cloudflared tunnel --config ~/.cloudflared/config-myamu.yml run",
+    "dev:all": "concurrently \"npm run dev\" \"npm run tunnel:myamu\"",
     "restart": "lsof -ti :3001 | xargs kill -9 2>/dev/null; npm run dev",
     "build": "tsc",
     "seed": "node legacy/seed/seed.js",
@@ -35,6 +37,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
+    "concurrently": "^9.2.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }
