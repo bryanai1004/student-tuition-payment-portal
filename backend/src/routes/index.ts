@@ -91,6 +91,7 @@ import {
   getAdminClinicalSlotRosterHandler,
   getStudentClinicalEnrollmentsHandler,
   getStudentOpenClinicalEnrollmentSlotsHandler,
+  postAdminClinicalPaymentHoldCleanupHandler,
   postStudentClinicalEnrollmentHandler,
 } from "../controllers/clinicalEnrollmentController.js";
 import {
@@ -206,6 +207,10 @@ adminRouter.get(
 adminRouter.delete(
   "/clinical/slots/:timetableId/enrollments/:enrollmentId",
   deleteAdminClinicalSlotEnrollmentHandler,
+);
+adminRouter.post(
+  "/clinical/run-payment-hold-cleanup",
+  postAdminClinicalPaymentHoldCleanupHandler,
 );
 adminRouter.get("/clinical/slots", getAdminClinicalSlotsHandler);
 adminRouter.post("/clinical/slots", postAdminClinicalSlotHandler);

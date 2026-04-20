@@ -8,6 +8,10 @@ import {
   listOpenClinicalSlotsForStudent,
   listStudentClinicalEnrollmentRows,
 } from "../services/clinicalEnrollmentService.js";
+import {
+  reconcilePaidClinicalBookingPaymentHoldsForStudent,
+  runClinicalBookingPaymentHoldCleanup,
+} from "../services/clinicalBookingPaymentHoldService.js";
 import { ClinicalScheduleValidationError } from "../services/clinicalScheduleService.js";
 
 function devMessage(e: unknown): string {
@@ -163,6 +167,7 @@ export async function getStudentClinicalEnrollmentsHandler(
     }
     const term = parseOptQueryString(req, "term");
     const year = parseOptYearQuery(req);
+    await reconcilePaidClinicalBookingPaymentHoldsForStudent(sid);
     const rows = await listStudentClinicalEnrollmentRows(sid, { term, year });
     res.json(rows);
   } catch (e) {
@@ -255,6 +260,27 @@ export async function deleteStudentClinicalEnrollmentHandler(
     console.error("[clinical-enrollments DELETE] failed:", e);
     const body: { error: string; message?: string } = {
       error: "Could not drop clinic enrollment.",
+    };
+    if (env.nodeEnv === "development") body.message = devMessage(e);
+    res.status(500).json(body);
+  }
+}
+
+/**
+ * POST /api/admin/clinical/run-payment-hold-cleanup
+ * Marks paid clinical booking holds and auto-drops overdue unpaid bookings (idempotent).
+ */
+export async function postAdminClinicalPaymentHoldCleanupHandler(
+  _req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    const stats = await runClinicalBookingPaymentHoldCleanup();
+    res.json(stats);
+  } catch (e) {
+    console.error("[admin/clinical/run-payment-hold-cleanup] failed:", e);
+    const body: { error: string; message?: string } = {
+      error: "Failed to run clinical payment hold cleanup.",
     };
     if (env.nodeEnv === "development") body.message = devMessage(e);
     res.status(500).json(body);

@@ -24,4 +24,9 @@ export declare function postStudentClinicalEnrollmentHandler(req: Request, res: 
  * DELETE /api/students/:studentId/clinical-enrollments/:enrollmentId
  */
 export declare function deleteStudentClinicalEnrollmentHandler(req: Request, res: Response): Promise<void>;
+/**
+ * POST /api/admin/clinical/run-payment-hold-cleanup
+ * Marks paid clinical booking holds and auto-drops overdue unpaid bookings (idempotent).
+ */
+export declare function postAdminClinicalPaymentHoldCleanupHandler(_req: Request, res: Response): Promise<void>;
 //# sourceMappingURL=clinicalEnrollmentController.d.ts.map

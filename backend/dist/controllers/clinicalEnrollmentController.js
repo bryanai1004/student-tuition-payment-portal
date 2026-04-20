@@ -1,5 +1,6 @@
 import { env } from "../config/env.js";
 import { adminDropClinicalEnrollmentForSlot, dropStudentClinicalEnrollment, enrollStudentInClinicalSlot, listAdminClinicalSlotRoster, listOpenClinicalSlotsForStudent, listStudentClinicalEnrollmentRows, } from "../services/clinicalEnrollmentService.js";
+import { reconcilePaidClinicalBookingPaymentHoldsForStudent, runClinicalBookingPaymentHoldCleanup, } from "../services/clinicalBookingPaymentHoldService.js";
 import { ClinicalScheduleValidationError } from "../services/clinicalScheduleService.js";
 function devMessage(e) {
     return e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
@@ -142,6 +143,7 @@ export async function getStudentClinicalEnrollmentsHandler(req, res) {
         }
         const term = parseOptQueryString(req, "term");
         const year = parseOptYearQuery(req);
+        await reconcilePaidClinicalBookingPaymentHoldsForStudent(sid);
         const rows = await listStudentClinicalEnrollmentRows(sid, { term, year });
         res.json(rows);
     }
@@ -229,6 +231,25 @@ export async function deleteStudentClinicalEnrollmentHandler(req, res) {
         console.error("[clinical-enrollments DELETE] failed:", e);
         const body = {
             error: "Could not drop clinic enrollment.",
+        };
+        if (env.nodeEnv === "development")
+            body.message = devMessage(e);
+        res.status(500).json(body);
+    }
+}
+/**
+ * POST /api/admin/clinical/run-payment-hold-cleanup
+ * Marks paid clinical booking holds and auto-drops overdue unpaid bookings (idempotent).
+ */
+export async function postAdminClinicalPaymentHoldCleanupHandler(_req, res) {
+    try {
+        const stats = await runClinicalBookingPaymentHoldCleanup();
+        res.json(stats);
+    }
+    catch (e) {
+        console.error("[admin/clinical/run-payment-hold-cleanup] failed:", e);
+        const body = {
+            error: "Failed to run clinical payment hold cleanup.",
         };
         if (env.nodeEnv === "development")
             body.message = devMessage(e);

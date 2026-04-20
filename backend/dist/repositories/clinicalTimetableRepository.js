@@ -78,9 +78,12 @@ function mapTimetableAdminRow(r) {
     const base = mapTimetableRow(r);
     const row = r;
     const aid = row.academic_term_id;
+    const cntRaw = Number(row.active_enrolled_count);
+    const active_enrolled_count = Number.isFinite(cntRaw) && cntRaw > 0 ? Math.trunc(cntRaw) : 0;
     return {
         ...base,
         academic_term_id: aid == null || aid === "" ? null : String(aid).trim() || null,
+        active_enrolled_count,
     };
 }
 /**
@@ -102,10 +105,17 @@ export async function listClinicTimetableSlotsForAdmin(options) {
             ct.time_from, ct.time_to, ct.slot, ct.instructor_id, ct.instructor,
             ct.\`100Max\` AS cap_100, ct.\`200Max\` AS cap_200,
             ct.\`300Max\` AS cap_300, ct.\`123Max\` AS cap_123,
-            at.id AS academic_term_id
+            at.id AS academic_term_id,
+            COALESCE(ce_cnt.cnt, 0) AS active_enrolled_count
        FROM clinic_timetable ct
        LEFT JOIN academic_terms at
          ON at.year = ct.year AND at.term_name = TRIM(ct.term)
+       LEFT JOIN (
+         SELECT ce.timetable_id, COUNT(*) AS cnt
+           FROM clinical_enrollments ce
+          WHERE LOWER(TRIM(ce.status)) <> 'dropped'
+          GROUP BY ce.timetable_id
+       ) ce_cnt ON ce_cnt.timetable_id = ct.seqNum
       WHERE 1=1
       ${yearClause}
       ${termClause}

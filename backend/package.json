@@ -18,7 +18,8 @@
     "build:knowledge": "tsx scripts/buildKnowledgeBase.ts",
     "pw:generate-initial": "tsx scripts/generate-initial-passwords.ts",
     "pw:audit-amu-2026": "tsx scripts/audit-amu-2026-password-migration.ts",
-    "pw:repair-amu-2026": "tsx scripts/audit-amu-2026-password-migration.ts --repair"
+    "pw:repair-amu-2026": "tsx scripts/audit-amu-2026-password-migration.ts --repair",
+    "job:clinical-hold-cleanup": "tsx scripts/runClinicalPaymentHoldCleanup.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

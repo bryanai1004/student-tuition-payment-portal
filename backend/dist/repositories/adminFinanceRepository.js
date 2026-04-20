@@ -320,17 +320,37 @@ export async function hasSystemLateFeeForQuarter(pool, studentExternalId, term, 
 }
 export async function insertPortalBillingAdjustment(pool, params) {
     const src = params.adjustmentSource ?? "manual";
-    await pool.execute(`INSERT INTO portal_billing_adjustments
-      (student_external_id, term, year, description, amount, category, adjustment_source)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-        params.studentExternalId.trim(),
-        params.term.trim(),
-        Math.trunc(params.year),
-        params.description.trim(),
-        params.amount,
-        params.category,
-        src,
-    ]);
+    const ce = params.clinicalEnrollmentId;
+    const hasCe = ce != null && Number.isFinite(Number(ce)) && Math.trunc(Number(ce)) > 0;
+    const values = hasCe
+        ? [
+            params.studentExternalId.trim(),
+            params.term.trim(),
+            Math.trunc(params.year),
+            params.description.trim(),
+            params.amount,
+            params.category,
+            src,
+            Math.trunc(Number(ce)),
+        ]
+        : [
+            params.studentExternalId.trim(),
+            params.term.trim(),
+            Math.trunc(params.year),
+            params.description.trim(),
+            params.amount,
+            params.category,
+            src,
+        ];
+    const sql = hasCe
+        ? `INSERT INTO portal_billing_adjustments
+        (student_external_id, term, year, description, amount, category, adjustment_source, clinical_enrollment_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        : `INSERT INTO portal_billing_adjustments
+        (student_external_id, term, year, description, amount, category, adjustment_source)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    const [res] = await pool.execute(sql, values);
+    return Math.trunc(Number(res.insertId));
 }
 export async function insertSystemLateFee(pool, params) {
     await insertPortalBillingAdjustment(pool, {

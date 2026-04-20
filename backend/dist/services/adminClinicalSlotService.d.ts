@@ -18,6 +18,8 @@ export type AdminClinicalSlotDto = {
     cap200: number;
     cap300: number;
     cap123: number;
+    /** Non-dropped `clinical_enrollments` for this slot (admin list + roster index). */
+    activeEnrolledCount: number;
 };
 export type AdminClinicalSlotCreateInput = {
     academicTermId: string;

@@ -1,6 +1,12 @@
 import { pool } from "../lib/db.js";
 import { insertPortalBillingAdjustment } from "../repositories/adminFinanceRepository.js";
 import {
+  clinicalBookingPaymentHoldsTableExists,
+  insertClinicalBookingPaymentHold,
+  cancelActiveClinicalBookingPaymentHoldsForEnrollmentPool,
+  voidSystemClinicalChargesForEnrollmentPool,
+} from "../repositories/clinicalBookingPaymentHoldRepository.js";
+import {
   getClinicTimetableById,
   type ClinicTimetableDbRow,
 } from "../repositories/clinicalTimetableRepository.js";
@@ -23,6 +29,7 @@ import {
   ClinicalScheduleValidationError,
   formatClinicTimeHm,
 } from "./clinicalScheduleService.js";
+import { getStudentQuarterBalance } from "./studentLedgerService.js";
 
 /**
  * Phase 2: flat fee for a new clinical timetable slot booking until per-slot pricing exists.
@@ -167,12 +174,24 @@ export async function enrollStudentInClinicalSlot(
     return { ok: false, error: result.error, status: 400 };
   }
 
+  const shouldPostClinicalCharge =
+    result.isNewEnrollmentRow || result.wasReactivation;
+
   let billingChargePosted = false;
-  if (result.isNewEnrollmentRow) {
+  if (shouldPostClinicalCharge) {
+    if (result.wasReactivation) {
+      await voidSystemClinicalChargesForEnrollmentPool(result.enrollmentId);
+      await cancelActiveClinicalBookingPaymentHoldsForEnrollmentPool(
+        result.enrollmentId,
+        "superseded",
+      );
+    }
+
+    const balanceBeforeCharge = await getStudentQuarterBalance(sid, term, year);
     const desc = clinicalSlotBookingLedgerDescription(tt);
     const amount = roundClinicalBookingMoney(CLINICAL_SLOT_BOOKING_CHARGE_USD);
     try {
-      await insertPortalBillingAdjustment(pool, {
+      const adjustmentId = await insertPortalBillingAdjustment(pool, {
         studentExternalId: sid,
         term,
         year,
@@ -180,8 +199,27 @@ export async function enrollStudentInClinicalSlot(
         amount,
         category: "clinical",
         adjustmentSource: "system_clinical",
+        clinicalEnrollmentId: result.enrollmentId,
       });
       billingChargePosted = true;
+      if (await clinicalBookingPaymentHoldsTableExists()) {
+        try {
+          await insertClinicalBookingPaymentHold({
+            clinicalEnrollmentId: result.enrollmentId,
+            studentId: sid,
+            billingAdjustmentId: adjustmentId,
+            term,
+            year,
+            chargeAmount: amount,
+            balanceBeforeCharge,
+          });
+        } catch (holdErr) {
+          console.error(
+            "[clinical enrollment] payment hold row insert failed after billing adjustment:",
+            holdErr,
+          );
+        }
+      }
     } catch (e) {
       console.error(
         "[clinical enrollment] portal billing adjustment failed after enroll:",

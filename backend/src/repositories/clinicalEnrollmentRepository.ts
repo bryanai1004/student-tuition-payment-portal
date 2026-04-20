@@ -1,6 +1,10 @@
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { pool } from "../lib/db.js";
 import {
+  cancelActiveClinicalBookingPaymentHoldsForEnrollment,
+  clinicalBookingPaymentHoldsTableExists,
+} from "./clinicalBookingPaymentHoldRepository.js";
+import {
   buildClinicTimetableSlotLabel,
   formatClinicTimeHm,
 } from "../services/clinicalScheduleService.js";
@@ -57,6 +61,11 @@ export type ClinicalEnrollmentStudentRow = {
   faculty: string | null;
   site: string | null;
   createdAt: string;
+  /**
+   * When present, this active enrollment has an open 12-hour clinical booking payment hold
+   * that expires at this instant (server UTC).
+   */
+  paymentHoldExpiresAt: string | null;
 };
 
 /** Slot roster row for admin (active = not `dropped`; remove uses student drop when `enrolled`). */
@@ -225,6 +234,21 @@ export async function listStudentClinicalEnrollments(
     params.push(Number(y));
   }
 
+  const hasHolds = await clinicalBookingPaymentHoldsTableExists();
+  const holdJoin = hasHolds
+    ? `LEFT JOIN clinical_booking_payment_holds ph
+         ON ph.clinical_enrollment_id = ce.id
+        AND ph.status = 'active'
+        AND ph.id = (
+              SELECT MAX(ph2.id)
+                FROM clinical_booking_payment_holds ph2
+               WHERE ph2.clinical_enrollment_id = ce.id
+                 AND ph2.status = 'active')`
+    : "";
+  const holdSelect = hasHolds
+    ? "ph.hold_expires_at AS payment_hold_expires_at"
+    : "CAST(NULL AS DATETIME) AS payment_hold_expires_at";
+
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT
         ce.id,
@@ -238,9 +262,11 @@ export async function listStudentClinicalEnrollments(
         ct.time_from,
         ct.time_to,
         ct.slot,
-        TRIM(ct.instructor) AS instructor
+        TRIM(ct.instructor) AS instructor,
+        ${holdSelect}
      FROM clinical_enrollments ce
      INNER JOIN clinic_timetable ct ON ct.seqNum = ce.timetable_id
+     ${holdJoin}
     WHERE TRIM(ce.student_id) = TRIM(?)
     ${termClause}
     ${yearClause}
@@ -256,6 +282,18 @@ export async function listStudentClinicalEnrollments(
       createdAt = ca.toISOString();
     } else {
       createdAt = String(ca ?? "");
+    }
+    const phe = row.payment_hold_expires_at;
+    let paymentHoldExpiresAt: string | null = null;
+    if (phe instanceof Date && !Number.isNaN(phe.getTime())) {
+      paymentHoldExpiresAt = phe.toISOString();
+    } else if (phe != null && String(phe).trim() !== "") {
+      const d = new Date(String(phe));
+      paymentHoldExpiresAt = Number.isNaN(d.getTime()) ? null : d.toISOString();
+    }
+    const st = String(row.status ?? "").trim().toLowerCase();
+    if (st !== "enrolled") {
+      paymentHoldExpiresAt = null;
     }
     return {
       id: Number(row.id),
@@ -277,6 +315,7 @@ export async function listStudentClinicalEnrollments(
           : String(row.instructor).trim(),
       site: null,
       createdAt,
+      paymentHoldExpiresAt,
     };
   });
 }
@@ -525,6 +564,8 @@ export async function createClinicalEnrollment(
       assignmentId: number;
       /** `true` only when a new `clinical_enrollments` row was inserted (not a dropped→enrolled reactivation). */
       isNewEnrollmentRow: boolean;
+      /** `true` when an existing dropped row was moved back to `enrolled`. */
+      wasReactivation: boolean;
     }
   | { ok: false; error: string }
 > {
@@ -563,7 +604,7 @@ export async function createClinicalEnrollment(
       year,
     );
 
-    const reactivating = existing != null && existing.status === "dropped";
+    const wasReactivation = existing != null && existing.status === "dropped";
     const capacityEnforced = slotCapacity > 0;
     if (
       capacityEnforced &&
@@ -616,13 +657,71 @@ export async function createClinicalEnrollment(
     const assignmentId = await insertAssignment(conn);
 
     await conn.commit();
-    return { ok: true, enrollmentId, assignmentId, isNewEnrollmentRow };
+    return {
+      ok: true,
+      enrollmentId,
+      assignmentId,
+      isNewEnrollmentRow,
+      wasReactivation,
+    };
   } catch (e) {
     await conn.rollback();
     throw e;
   } finally {
     conn.release();
   }
+}
+
+/**
+ * Non-destructive drop inside an existing transaction (caller manages commit/rollback).
+ */
+export async function dropClinicalEnrollmentInConn(
+  conn: PoolConnection,
+  studentId: string,
+  enrollmentId: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sid = studentId.trim();
+  const [rows] = await conn.query<RowDataPacket[]>(
+    `SELECT id, timetable_id, TRIM(term) AS term, year, TRIM(status) AS status
+       FROM clinical_enrollments
+      WHERE id = ?
+        AND TRIM(student_id) = TRIM(?)
+      LIMIT 1
+      FOR UPDATE`,
+    [enrollmentId, sid],
+  );
+  if (rows.length === 0) {
+    return { ok: false, error: "Enrollment not found." };
+  }
+  const r = rows[0] as Record<string, unknown>;
+  const st = String(r.status ?? "").trim().toLowerCase();
+  if (st !== "enrolled") {
+    return { ok: false, error: "This enrollment is not active." };
+  }
+
+  const timetableId = Number(r.timetable_id);
+  const term = String(r.term ?? "").trim();
+  const year = Number(r.year);
+
+  const n = await updateClinicalEnrollmentStatusById(
+    conn,
+    enrollmentId,
+    sid,
+    "dropped",
+  );
+  if (n === 0) {
+    return { ok: false, error: "Could not drop enrollment." };
+  }
+
+  await markClinicalAssignmentsDroppedForStudentSlot(
+    conn,
+    sid,
+    timetableId,
+    term,
+    year,
+  );
+
+  return { ok: true };
 }
 
 export async function dropClinicalEnrollment(
@@ -636,48 +735,19 @@ export async function dropClinicalEnrollment(
   try {
     await conn.beginTransaction();
 
-    const [rows] = await conn.query<RowDataPacket[]>(
-      `SELECT id, timetable_id, TRIM(term) AS term, year, TRIM(status) AS status
-         FROM clinical_enrollments
-        WHERE id = ?
-          AND TRIM(student_id) = TRIM(?)
-        LIMIT 1
-        FOR UPDATE`,
-      [enrollmentId, sid],
-    );
-    if (rows.length === 0) {
+    const dropped = await dropClinicalEnrollmentInConn(conn, sid, enrollmentId);
+    if (!dropped.ok) {
       await conn.rollback();
-      return { ok: false, error: "Enrollment not found." };
-    }
-    const r = rows[0] as Record<string, unknown>;
-    const st = String(r.status ?? "").trim().toLowerCase();
-    if (st !== "enrolled") {
-      await conn.rollback();
-      return { ok: false, error: "This enrollment is not active." };
+      return dropped;
     }
 
-    const timetableId = Number(r.timetable_id);
-    const term = String(r.term ?? "").trim();
-    const year = Number(r.year);
-
-    const n = await updateClinicalEnrollmentStatusById(
-      conn,
-      enrollmentId,
-      sid,
-      "dropped",
-    );
-    if (n === 0) {
-      await conn.rollback();
-      return { ok: false, error: "Could not drop enrollment." };
+    if (await clinicalBookingPaymentHoldsTableExists()) {
+      await cancelActiveClinicalBookingPaymentHoldsForEnrollment(
+        conn,
+        enrollmentId,
+        "manual_drop",
+      );
     }
-
-    await markClinicalAssignmentsDroppedForStudentSlot(
-      conn,
-      sid,
-      timetableId,
-      term,
-      year,
-    );
 
     await conn.commit();
     return { ok: true };

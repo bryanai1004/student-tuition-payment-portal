@@ -1825,6 +1825,8 @@ export type StudentClinicalEnrollmentRow = {
   faculty: string | null
   site: string | null
   createdAt: string
+  /** Server UTC deadline for the 12-hour clinical booking payment hold, when active. */
+  paymentHoldExpiresAt: string | null
 }
 
 function isStudentClinicalEnrollmentRow(x: unknown): x is StudentClinicalEnrollmentRow {
@@ -1840,7 +1842,8 @@ function isStudentClinicalEnrollmentRow(x: unknown): x is StudentClinicalEnrollm
     typeof o.slotLabel === 'string' &&
     (o.faculty === null || typeof o.faculty === 'string') &&
     (o.site === null || typeof o.site === 'string') &&
-    typeof o.createdAt === 'string'
+    typeof o.createdAt === 'string' &&
+    (o.paymentHoldExpiresAt === null || typeof o.paymentHoldExpiresAt === 'string')
   )
 }
 

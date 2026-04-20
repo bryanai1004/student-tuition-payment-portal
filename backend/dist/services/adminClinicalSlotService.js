@@ -36,6 +36,7 @@ function rowToDto(row) {
         cap200: row.cap_200,
         cap300: row.cap_300,
         cap123: row.cap_123,
+        activeEnrolledCount: row.active_enrolled_count,
     };
 }
 function trimStr(v, fallback = "") {
@@ -224,6 +225,7 @@ export async function createAdminClinicalSlot(input) {
     return rowToDto(withJoin ?? {
         ...created,
         academic_term_id: null,
+        active_enrolled_count: 0,
     });
 }
 export async function updateAdminClinicalSlot(seqNum, patch) {
@@ -321,6 +323,7 @@ export async function updateAdminClinicalSlot(seqNum, patch) {
     return rowToDto(withJoin ?? {
         ...updated,
         academic_term_id: null,
+        active_enrolled_count: 0,
     });
 }
 export async function deleteAdminClinicalSlot(seqNum) {

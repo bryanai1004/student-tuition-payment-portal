@@ -30,6 +30,11 @@ export type ClinicalEnrollmentStudentRow = {
     faculty: string | null;
     site: string | null;
     createdAt: string;
+    /**
+     * When present, this active enrollment has an open 12-hour clinical booking payment hold
+     * that expires at this instant (server UTC).
+     */
+    paymentHoldExpiresAt: string | null;
 };
 /** Slot roster row for admin (active = not `dropped`; remove uses student drop when `enrolled`). */
 export type ClinicalSlotRosterAdminRow = {
@@ -102,6 +107,17 @@ export declare function createClinicalEnrollment(studentId: string, timetableId:
     assignmentId: number;
     /** `true` only when a new `clinical_enrollments` row was inserted (not a dropped→enrolled reactivation). */
     isNewEnrollmentRow: boolean;
+    /** `true` when an existing dropped row was moved back to `enrolled`. */
+    wasReactivation: boolean;
+} | {
+    ok: false;
+    error: string;
+}>;
+/**
+ * Non-destructive drop inside an existing transaction (caller manages commit/rollback).
+ */
+export declare function dropClinicalEnrollmentInConn(conn: PoolConnection, studentId: string, enrollmentId: number): Promise<{
+    ok: true;
 } | {
     ok: false;
     error: string;

@@ -26,6 +26,11 @@ export declare function getClinicTimetableById(seqNum: number): Promise<ClinicTi
 export type ClinicTimetableAdminRow = ClinicTimetableDbRow & {
     /** `academic_terms.id` when year + legacy term matches a portal term; otherwise null. */
     academic_term_id: string | null;
+    /**
+     * Non-dropped rows on `clinical_enrollments` for this timetable id
+     * (same filter as `listActiveClinicalRosterForTimetable`).
+     */
+    active_enrolled_count: number;
 };
 /**
  * Admin list: same filters as `listClinicTimetableSlots`, plus optional `academic_terms.id` via join.

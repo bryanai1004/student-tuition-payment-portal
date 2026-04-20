@@ -844,6 +844,11 @@ export const STUDENT_PORTAL_EN = {
   clinicalCouldNotCompleteEnrollment: 'Could not complete enrollment.',
   clinicalCouldNotDropEnrollment: 'Could not drop enrollment.',
   clinicalStatusEnrolledFallback: 'enrolled',
+  clinicalPaymentHoldReminderTitle: 'Clinical booking — payment due within 12 hours',
+  clinicalPaymentHoldReminderBody:
+    'Payment required within 12 hours to keep this clinical slot. Go to Finances (Student Ledger) for this term and complete the clinical booking charge.',
+  clinicalPaymentHoldTimeRemaining: 'Time remaining',
+  clinicalPaymentHoldFinancesLink: 'Open Finances / Ledger',
 
   documentsPoliciesHeading: 'Policies',
   documentsPoliciesLede:
@@ -1923,6 +1928,11 @@ const STUDENT_PORTAL_ZH: Record<StudentPortalKey, string> = {
   clinicalCouldNotCompleteEnrollment: '無法完成選課。',
   clinicalCouldNotDropEnrollment: '無法辦理退選。',
   clinicalStatusEnrolledFallback: '已選',
+  clinicalPaymentHoldReminderTitle: '臨床選課 — 須於 12 小時內完成繳費',
+  clinicalPaymentHoldReminderBody:
+    '為保留此臨床時段，請於選課後 12 小時內至「帳務／學生帳本」完成臨床時段費用繳納。',
+  clinicalPaymentHoldTimeRemaining: '剩餘時間',
+  clinicalPaymentHoldFinancesLink: '前往帳務／帳本',
 
   documentsPoliciesHeading: '政策',
   documentsPoliciesLede:

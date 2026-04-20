@@ -25,6 +25,17 @@ function remainingDisplay(slot: StudentOpenClinicalEnrollmentSlot): string {
   return slot.remainingSeats == null ? '—' : String(slot.remainingSeats)
 }
 
+function formatPaymentHoldCountdown(iso: string, nowMs: number): string {
+  const end = new Date(iso).getTime()
+  if (!Number.isFinite(end)) return '—'
+  const ms = Math.max(0, end - nowMs)
+  const totalM = Math.floor(ms / 60000)
+  const h = Math.floor(totalM / 60)
+  const m = totalM % 60
+  if (h <= 0) return `${m}m`
+  return `${h}h ${m}m`
+}
+
 function enrollDisabled(slot: StudentOpenClinicalEnrollmentSlot): boolean {
   if (slot.alreadyEnrolled) return true
   if (slot.remainingSeats != null && slot.remainingSeats <= 0) return true
@@ -49,6 +60,7 @@ export function ClinicalAddDropPage() {
   const [busyEnrollmentId, setBusyEnrollmentId] = useState<number | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [paymentHoldNowMs, setPaymentHoldNowMs] = useState(() => Date.now())
 
   useEffect(() => {
     let cancelled = false
@@ -97,6 +109,25 @@ export function ClinicalAddDropPage() {
       enrollments.filter((r) => r.status.trim().toLowerCase() === 'enrolled'),
     [enrollments],
   )
+
+  const enrollmentsWithPaymentHoldCountdown = useMemo(
+    () =>
+      activeEnrollments.filter((r) => {
+        const iso = r.paymentHoldExpiresAt
+        if (iso == null || iso.trim() === '') return false
+        const t = new Date(iso).getTime()
+        return Number.isFinite(t) && t > paymentHoldNowMs
+      }),
+    [activeEnrollments, paymentHoldNowMs],
+  )
+
+  useEffect(() => {
+    if (enrollmentsWithPaymentHoldCountdown.length === 0) return
+    const id = window.setInterval(() => {
+      setPaymentHoldNowMs(Date.now())
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [enrollmentsWithPaymentHoldCountdown.length])
 
   async function handleEnroll(timetableId: number) {
     if (!sid) return
@@ -333,6 +364,38 @@ export function ClinicalAddDropPage() {
           >
             {t('clinicalMyEnrollmentsHeading')}
           </h3>
+          {enrollmentsWithPaymentHoldCountdown.length > 0 ? (
+            <div
+              className="portal-registration-form-hint portal-registration-form-hint--warn portal-stack"
+              style={{ marginBottom: '1rem' }}
+              role="status"
+              aria-live="polite"
+            >
+              <strong>{t('clinicalPaymentHoldReminderTitle')}</strong>
+              <p className="portal-inline-note portal-inline-note--flush" style={{ marginTop: '0.35rem' }}>
+                {t('clinicalPaymentHoldReminderBody')}
+              </p>
+              <ul className="portal-stack" style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
+                {enrollmentsWithPaymentHoldCountdown.map((row) => (
+                  <li key={row.id}>
+                    <span className="portal-card-note">{row.slotLabel}</span>
+                    {' · '}
+                    <span>
+                      {t('clinicalPaymentHoldTimeRemaining')}:{' '}
+                      {row.paymentHoldExpiresAt != null
+                        ? formatPaymentHoldCountdown(row.paymentHoldExpiresAt, paymentHoldNowMs)
+                        : '—'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+                <Link className="portal-link" to="/finances/overview">
+                  {t('clinicalPaymentHoldFinancesLink')}
+                </Link>
+              </p>
+            </div>
+          ) : null}
           <div className="portal-table-wrap">
             <table className="portal-table portal-table--clinical-schedule">
               <thead>
