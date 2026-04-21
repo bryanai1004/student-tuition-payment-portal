@@ -229,8 +229,7 @@ export async function deleteAdminClinicalSlotHandler(req, res) {
         if (!result.ok) {
             const msg = result.error;
             const notFound = msg === "Clinical slot not found.";
-            const forbidden = msg === "Only clinic management admins can force delete a clinical slot.";
-            res.status(notFound ? 404 : forbidden ? 403 : 400).json({ error: msg });
+            res.status(notFound ? 404 : 400).json({ error: msg });
             return;
         }
         res.json({ ok: true });

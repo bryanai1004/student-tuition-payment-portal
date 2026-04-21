@@ -351,12 +351,6 @@ export async function deleteAdminClinicalSlot(seqNum, options) {
     const forceDelete = options?.forceDelete === true;
     const actorRole = (options?.actor?.adminRole ?? "").trim().toLowerCase();
     const actorIdentifier = (options?.actor?.adminIdentifier ?? "").trim() || null;
-    if (forceDelete && actorRole !== "admin") {
-        return {
-            ok: false,
-            error: "Only clinic management admins can force delete a clinical slot.",
-        };
-    }
     const existing = await getClinicTimetableById(seqNum);
     if (!existing) {
         return { ok: false, error: "Clinical slot not found." };
