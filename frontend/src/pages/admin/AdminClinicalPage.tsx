@@ -103,8 +103,8 @@ function pickLatestAcademicTermId(terms: AcademicTerm[]): string {
 }
 
 export function AdminClinicalPage() {
-  const { role } = useAdminAuth()
-  const canForceDeleteSlot = role === 'admin'
+  useAdminAuth()
+  const canForceDeleteSlot = true
   const [tab, setTab] = useState<AdminClinicalTabId>('roster')
 
   const [pendingRequests, setPendingRequests] = useState<
@@ -798,12 +798,9 @@ export function AdminClinicalPage() {
                                 onClick={() => {
                                   setSlotDeleteFeedback(null)
                                   setSlotDeleteError(null)
-                                  const actionName = canForceDeleteSlot
-                                    ? 'Force delete this slot?'
-                                    : 'Delete this clinical slot?'
-                                  const actionDetail = canForceDeleteSlot
-                                    ? 'This will permanently remove the slot and all related clinical enrollments, requests, and assignments. This action cannot be undone.'
-                                    : `Delete clinical slot #${s.id} (${s.weekday} ${s.timeFrom}–${s.timeTo})? This cannot be undone.`
+                                  const actionName = 'Force delete this slot?'
+                                  const actionDetail =
+                                    'This will permanently remove the slot and all related clinical enrollments, requests, and assignments. This action cannot be undone.'
                                   if (
                                     !window.confirm(
                                       `${actionName}\n\n${actionDetail}`,
@@ -814,15 +811,13 @@ export function AdminClinicalPage() {
                                   setDeletingSlotId(s.id)
                                   ;(async () => {
                                     try {
+                                      // Admin Clinical slot management intentionally uses backend force-delete.
                                       await deleteAdminClinicalSlot(s.id, {
                                         forceDelete: canForceDeleteSlot,
                                       })
                                       setSlotsReloadKey((k) => k + 1)
-                                      setSlotDeleteFeedback(
-                                        canForceDeleteSlot
-                                          ? 'Slot force-deleted successfully.'
-                                          : 'Slot deleted successfully.',
-                                      )
+                                      setSlotDeleteError(null)
+                                      setSlotDeleteFeedback('Slot force-deleted successfully.')
                                     } catch (e) {
                                       setSlotDeleteError(
                                         e instanceof Error
