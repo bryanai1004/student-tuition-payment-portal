@@ -18,29 +18,34 @@ export function RegistrationHomePage() {
     () =>
       [
         {
-          to: 'add-drop' as const,
+          to: 'course-bin' as const,
           titleKey: 'regActionAddDropTitle' as const,
           descKey: 'regActionAddDropDesc' as const,
+          appendTermQuery: true as const,
         },
         {
-          to: 'search' as const,
+          to: 'offered-timetable' as const,
           titleKey: 'regActionCourseSearchTitle' as const,
           descKey: 'regActionCourseSearchDesc' as const,
+          appendTermQuery: true as const,
         },
         {
-          to: 'schedule' as const,
+          to: '/dashboard' as const,
           titleKey: 'regActionMyTimetableTitle' as const,
           descKey: 'regActionMyTimetableDesc' as const,
+          appendTermQuery: false as const,
         },
         {
           to: 'form' as const,
           titleKey: 'regActionRegistrationFormTitle' as const,
           descKey: 'regActionRegistrationFormDesc' as const,
+          appendTermQuery: true as const,
         },
         {
           to: 'status' as const,
           titleKey: 'regActionRegistrationStatusTitle' as const,
           descKey: 'regActionRegistrationStatusDesc' as const,
+          appendTermQuery: true as const,
         },
       ] as const,
     [],
@@ -166,7 +171,11 @@ export function RegistrationHomePage() {
           {actions.map((action) => (
             <li key={action.to}>
               <NavLink
-                to={`${action.to}${termQuery}`}
+                to={
+                  action.to.startsWith('/')
+                    ? action.to
+                    : `${action.to}${action.appendTermQuery ? termQuery : ''}`
+                }
                 className="portal-registration-action-card"
               >
                 <span className="portal-registration-action-arrow" aria-hidden="true">

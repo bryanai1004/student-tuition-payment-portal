@@ -12,13 +12,13 @@ import {
 } from '../../lib/api'
 import { currentTermLabel } from '../../lib/academicCourseRecordsDisplay'
 import { getPreferredCourseTitle } from '../../lib/courseDisplayName'
+import { PORTAL_STUDENT_ENROLLMENT_CHANGED } from '../../lib/portalStudentEnrollmentEvents'
 import { formatPrerequisiteCourseDisplay } from '../../lib/prerequisiteCourse'
 import {
   courseBinSectionKey,
   useCourseBin,
   type CourseBinItem,
 } from './CourseBinContext'
-import { PORTAL_STUDENT_ENROLLMENT_CHANGED } from '../../lib/portalStudentEnrollmentEvents'
 import { useRegistrationTermSearchParam } from './registrationTermSearch'
 
 function binRowKey(item: CourseBinItem): string {
