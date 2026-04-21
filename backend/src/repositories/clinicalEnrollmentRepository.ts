@@ -3,6 +3,7 @@ import { pool } from "../lib/db.js";
 import {
   cancelActiveClinicalBookingPaymentHoldsForEnrollment,
   clinicalBookingPaymentHoldsTableExists,
+  voidSystemClinicalChargesForEnrollmentInConn,
 } from "./clinicalBookingPaymentHoldRepository.js";
 import {
   buildClinicTimetableSlotLabel,
@@ -743,6 +744,12 @@ export async function dropClinicalEnrollment(
       await conn.rollback();
       return dropped;
     }
+
+    await voidSystemClinicalChargesForEnrollmentInConn(
+      conn,
+      enrollmentId,
+      "manual_drop",
+    );
 
     if (await clinicalBookingPaymentHoldsTableExists()) {
       await cancelActiveClinicalBookingPaymentHoldsForEnrollment(

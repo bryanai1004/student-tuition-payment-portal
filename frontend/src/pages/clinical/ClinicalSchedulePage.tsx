@@ -25,7 +25,6 @@ import type { StudentPortalKey } from '../../lib/i18n'
 import type { WeekdayFull } from '../../lib/weekdaySchedule'
 import {
   mergeTermOptions,
-  resolveSelectedRegistrationTermId,
 } from '../registration/registrationTermSearch'
 
 const CLINICAL_OFFERED_GRID = STUDENT_REGISTRATION_TIMETABLE_GRID
@@ -94,6 +93,7 @@ export function ClinicalSchedulePage() {
   const [enrollmentError, setEnrollmentError] = useState<string | null>(null)
 
   const [selectedSlotId, setSelectedSlotId] = useState('')
+  const [pendingEnrollmentSlotId, setPendingEnrollmentSlotId] = useState<number | null>(null)
   const [busyTimetableId, setBusyTimetableId] = useState<number | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -145,11 +145,15 @@ export function ClinicalSchedulePage() {
 
   useEffect(() => {
     if (!termsReady) return
-    const next = resolveSelectedRegistrationTermId(selectedTermId, options, currentTerm)
-    if (next !== selectedTermId) {
-      setSelectedTermId(next)
+    if (options.length === 0) {
+      if (selectedTermId !== '') setSelectedTermId('')
+      return
     }
-  }, [termsReady, options, currentTerm, selectedTermId])
+    if (selectedTermId && options.some((x) => x.id === selectedTermId)) {
+      return
+    }
+    setSelectedTermId(options[0]!.id)
+  }, [termsReady, options, selectedTermId])
 
   useEffect(() => {
     if (!termsReady || selectedTerm == null) {
@@ -230,6 +234,10 @@ export function ClinicalSchedulePage() {
     if (!Number.isFinite(n)) return undefined
     return slots.find((s) => s.id === n)
   }, [slots, selectedSlotId])
+  const pendingEnrollmentSlot = useMemo(() => {
+    if (pendingEnrollmentSlotId == null) return null
+    return slots.find((s) => s.id === pendingEnrollmentSlotId) ?? null
+  }, [slots, pendingEnrollmentSlotId])
 
   const enrollmentsByTimetable = useMemo(() => {
     const map = new Map<number, StudentClinicalEnrollmentRow>()
@@ -268,6 +276,23 @@ export function ClinicalSchedulePage() {
     return () => clearInterval(id)
   }, [enrollmentsWithPaymentHoldCountdown.length])
 
+  useEffect(() => {
+    if (pendingEnrollmentSlotId == null) return
+    if (!slots.some((s) => s.id === pendingEnrollmentSlotId)) {
+      setPendingEnrollmentSlotId(null)
+    }
+  }, [slots, pendingEnrollmentSlotId])
+
+  function openEnrollmentConfirmation(slot: ClinicalOfferedTimetableSlot | undefined) {
+    if (!slot) return
+    if (enrollmentsByTimetable.has(slot.id)) return
+    if (slot.remainingSeats != null && slot.remainingSeats <= 0) return
+    if (busyTimetableId != null) return
+    setActionMessage(null)
+    setActionError(null)
+    setPendingEnrollmentSlotId(slot.id)
+  }
+
   async function handleEnroll(timetableId: number) {
     if (!sid) return
     const slot = slots.find((s) => s.id === timetableId)
@@ -285,6 +310,7 @@ export function ClinicalSchedulePage() {
           : t('clinicalEnrollmentSuccessSlot'),
       )
       setReloadKey((k) => k + 1)
+      setPendingEnrollmentSlotId(null)
     } catch (e) {
       setActionError(
         e instanceof Error ? e.message : t('clinicalCouldNotCompleteEnrollment'),
@@ -386,7 +412,14 @@ export function ClinicalSchedulePage() {
               <select
                 className="portal-account-ledger__select"
                 value={selectedSlotId}
-                onChange={(e) => setSelectedSlotId(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setSelectedSlotId(next)
+                  const timetableId = Number(next)
+                  if (Number.isFinite(timetableId) && timetableId > 0) {
+                    openEnrollmentConfirmation(slots.find((s) => s.id === timetableId))
+                  }
+                }}
                 disabled={slots.length === 0 || anyLoading}
               >
                 <option value="">{t('clinicalSelectSlotPlaceholder')}</option>
@@ -408,14 +441,12 @@ export function ClinicalSchedulePage() {
                 (selectedSlot.remainingSeats != null && selectedSlot.remainingSeats <= 0)
               }
               onClick={() => {
-                if (selectedSlot) void handleEnroll(selectedSlot.id)
+                openEnrollmentConfirmation(selectedSlot)
               }}
             >
-              {selectedSlot && busyTimetableId === selectedSlot.id
-                ? t('clinicalEnrollingEllipsis')
-                : selectedSlot && enrollmentsByTimetable.has(selectedSlot.id)
-                  ? t('clinicalEnrolledState')
-                  : t('enroll')}
+              {selectedSlot && enrollmentsByTimetable.has(selectedSlot.id)
+                ? t('clinicalEnrolledState')
+                : t('enroll')}
             </button>
           </div>
         ) : null}
@@ -489,7 +520,9 @@ export function ClinicalSchedulePage() {
                         cursor: disabled ? 'default' : 'pointer',
                       }}
                       disabled={disabled}
-                      onClick={() => void handleEnroll(row.timetableId)}
+                      onClick={() =>
+                        openEnrollmentConfirmation(offeredSlotsById.get(row.timetableId))
+                      }
                     >
                       <span className="admin-timetable-v2__block-title">
                         {offered.slotCode.trim() || offered.slotLabel}
@@ -560,6 +593,84 @@ export function ClinicalSchedulePage() {
             </p>
           </div>
         </section>
+      ) : null}
+
+      {pendingEnrollmentSlot != null ? (
+        <div
+          className="portal-offered-section-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && busyTimetableId == null) {
+              setPendingEnrollmentSlotId(null)
+            }
+          }}
+        >
+          <div
+            className="portal-offered-section-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clinical-enroll-confirm-title"
+          >
+            <h3 id="clinical-enroll-confirm-title" className="portal-offered-section-modal__title">
+              {t('enroll')}
+            </h3>
+            <dl className="portal-offered-section-modal__dl">
+              <div>
+                <dt>{t('term')}</dt>
+                <dd>
+                  {pendingEnrollmentSlot.term} {pendingEnrollmentSlot.year}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('offeredModalDtWeekdays')}</dt>
+                <dd>{pendingEnrollmentSlot.weekday}</dd>
+              </div>
+              <div>
+                <dt>{t('offeredModalDtTime')}</dt>
+                <dd>
+                  {formatTimeHmsForDisplay(pendingEnrollmentSlot.startTime)} -{' '}
+                  {formatTimeHmsForDisplay(pendingEnrollmentSlot.endTime)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('clinicalColSlot')}</dt>
+                <dd>{pendingEnrollmentSlot.slotCode.trim() || pendingEnrollmentSlot.slotLabel}</dd>
+              </div>
+              <div>
+                <dt>{t('clinicalColFaculty')}</dt>
+                <dd>{pendingEnrollmentSlot.instructor?.trim() || '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('clinicalColCapacity')}</dt>
+                <dd>{capDisplay(pendingEnrollmentSlot)}</dd>
+              </div>
+              <div>
+                <dt>{t('clinicalColRemaining')}</dt>
+                <dd>{remainingDisplay(pendingEnrollmentSlot)}</dd>
+              </div>
+            </dl>
+            <div className="portal-offered-section-modal__actions">
+              <button
+                type="button"
+                className="portal-btn portal-btn--secondary"
+                disabled={busyTimetableId != null}
+                onClick={() => setPendingEnrollmentSlotId(null)}
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className="portal-btn portal-btn--primary"
+                disabled={busyTimetableId != null}
+                onClick={() => void handleEnroll(pendingEnrollmentSlot.id)}
+              >
+                {busyTimetableId === pendingEnrollmentSlot.id
+                  ? t('clinicalEnrollingEllipsis')
+                  : t('enroll')}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </main>
   )

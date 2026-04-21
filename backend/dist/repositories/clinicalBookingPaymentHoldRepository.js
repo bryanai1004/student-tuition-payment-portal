@@ -1,4 +1,9 @@
 import { pool } from "../lib/db.js";
+function clinicalChargeVoidSuffix(reason) {
+    return reason === "manual_drop"
+        ? " [voided: clinical booking dropped]"
+        : " [voided: clinical booking superseded]";
+}
 export async function clinicalBookingPaymentHoldsTableExists() {
     const [rows] = await pool.query(`SELECT 1 AS ok
        FROM information_schema.TABLES
@@ -77,30 +82,32 @@ export async function cancelActiveClinicalBookingPaymentHoldsForEnrollmentPool(c
       WHERE clinical_enrollment_id = ?
         AND status = 'active'`, [status, Math.trunc(clinicalEnrollmentId)]);
 }
-export async function voidSystemClinicalChargesForEnrollmentPool(clinicalEnrollmentId) {
+export async function voidSystemClinicalChargesForEnrollmentPool(clinicalEnrollmentId, reason = "superseded") {
+    const suffix = clinicalChargeVoidSuffix(reason);
     const [res] = await pool.execute(`UPDATE portal_billing_adjustments
         SET amount = 0,
             description = LEFT(
-              CONCAT(TRIM(description), ' [voided: clinical booking superseded]'),
+              CONCAT(TRIM(description), ?),
               255
             )
       WHERE clinical_enrollment_id = ?
         AND adjustment_source = 'system_clinical'
         AND category = 'clinical'
-        AND amount <> 0`, [Math.trunc(clinicalEnrollmentId)]);
+        AND amount <> 0`, [suffix, Math.trunc(clinicalEnrollmentId)]);
     return Math.trunc(Number(res.affectedRows ?? 0));
 }
-export async function voidSystemClinicalChargesForEnrollmentInConn(conn, clinicalEnrollmentId) {
+export async function voidSystemClinicalChargesForEnrollmentInConn(conn, clinicalEnrollmentId, reason = "superseded") {
+    const suffix = clinicalChargeVoidSuffix(reason);
     const [res] = await conn.execute(`UPDATE portal_billing_adjustments
         SET amount = 0,
             description = LEFT(
-              CONCAT(TRIM(description), ' [voided: clinical booking superseded]'),
+              CONCAT(TRIM(description), ?),
               255
             )
       WHERE clinical_enrollment_id = ?
         AND adjustment_source = 'system_clinical'
         AND category = 'clinical'
-        AND amount <> 0`, [Math.trunc(clinicalEnrollmentId)]);
+        AND amount <> 0`, [suffix, Math.trunc(clinicalEnrollmentId)]);
     return Math.trunc(Number(res.affectedRows ?? 0));
 }
 /** Voids a single system clinical booking charge row (used when a hold expires). */

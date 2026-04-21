@@ -1,5 +1,5 @@
 import { pool } from "../lib/db.js";
-import { cancelActiveClinicalBookingPaymentHoldsForEnrollment, clinicalBookingPaymentHoldsTableExists, } from "./clinicalBookingPaymentHoldRepository.js";
+import { cancelActiveClinicalBookingPaymentHoldsForEnrollment, clinicalBookingPaymentHoldsTableExists, voidSystemClinicalChargesForEnrollmentInConn, } from "./clinicalBookingPaymentHoldRepository.js";
 import { buildClinicTimetableSlotLabel, formatClinicTimeHm, } from "../services/clinicalScheduleService.js";
 function isMysqlDupEntry(e) {
     return (typeof e === "object" &&
@@ -495,6 +495,7 @@ export async function dropClinicalEnrollment(studentId, enrollmentId) {
             await conn.rollback();
             return dropped;
         }
+        await voidSystemClinicalChargesForEnrollmentInConn(conn, enrollmentId, "manual_drop");
         if (await clinicalBookingPaymentHoldsTableExists()) {
             await cancelActiveClinicalBookingPaymentHoldsForEnrollment(conn, enrollmentId, "manual_drop");
         }

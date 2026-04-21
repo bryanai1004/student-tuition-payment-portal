@@ -1,5 +1,6 @@
 import type { PoolConnection } from "mysql2/promise";
 export type ClinicalBookingPaymentHoldStatus = "active" | "satisfied_paid" | "expired_auto_dropped" | "cancelled_manual_drop" | "cancelled_enrollment_inactive" | "cancelled_superseded";
+type ClinicalChargeVoidReason = "superseded" | "manual_drop";
 export type ClinicalBookingPaymentHoldRow = {
     id: number;
     clinicalEnrollmentId: number;
@@ -24,8 +25,8 @@ export declare function insertClinicalBookingPaymentHold(params: {
 }): Promise<number>;
 export declare function cancelActiveClinicalBookingPaymentHoldsForEnrollment(conn: PoolConnection, clinicalEnrollmentId: number, reason: "manual_drop" | "superseded"): Promise<void>;
 export declare function cancelActiveClinicalBookingPaymentHoldsForEnrollmentPool(clinicalEnrollmentId: number, reason: "manual_drop" | "superseded"): Promise<void>;
-export declare function voidSystemClinicalChargesForEnrollmentPool(clinicalEnrollmentId: number): Promise<number>;
-export declare function voidSystemClinicalChargesForEnrollmentInConn(conn: PoolConnection, clinicalEnrollmentId: number): Promise<number>;
+export declare function voidSystemClinicalChargesForEnrollmentPool(clinicalEnrollmentId: number, reason?: ClinicalChargeVoidReason): Promise<number>;
+export declare function voidSystemClinicalChargesForEnrollmentInConn(conn: PoolConnection, clinicalEnrollmentId: number, reason?: ClinicalChargeVoidReason): Promise<number>;
 /** Voids a single system clinical booking charge row (used when a hold expires). */
 export declare function voidSystemClinicalBillingAdjustmentByIdInConn(conn: PoolConnection, billingAdjustmentId: number): Promise<boolean>;
 export declare function listDueActiveClinicalBookingPaymentHoldIds(limit: number): Promise<number[]>;
@@ -57,4 +58,5 @@ export declare function getUrgentActiveClinicalBookingHoldForStudentPortal(stude
     timetableId: number;
     holdExpiresAt: Date;
 } | null>;
+export {};
 //# sourceMappingURL=clinicalBookingPaymentHoldRepository.d.ts.map

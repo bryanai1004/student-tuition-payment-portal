@@ -9,6 +9,14 @@ export type ClinicalBookingPaymentHoldStatus =
   | "cancelled_enrollment_inactive"
   | "cancelled_superseded";
 
+type ClinicalChargeVoidReason = "superseded" | "manual_drop";
+
+function clinicalChargeVoidSuffix(reason: ClinicalChargeVoidReason): string {
+  return reason === "manual_drop"
+    ? " [voided: clinical booking dropped]"
+    : " [voided: clinical booking superseded]";
+}
+
 export type ClinicalBookingPaymentHoldRow = {
   id: number;
   clinicalEnrollmentId: number;
@@ -147,19 +155,21 @@ export async function cancelActiveClinicalBookingPaymentHoldsForEnrollmentPool(
 
 export async function voidSystemClinicalChargesForEnrollmentPool(
   clinicalEnrollmentId: number,
+  reason: ClinicalChargeVoidReason = "superseded",
 ): Promise<number> {
+  const suffix = clinicalChargeVoidSuffix(reason);
   const [res] = await pool.execute<ResultSetHeader>(
     `UPDATE portal_billing_adjustments
         SET amount = 0,
             description = LEFT(
-              CONCAT(TRIM(description), ' [voided: clinical booking superseded]'),
+              CONCAT(TRIM(description), ?),
               255
             )
       WHERE clinical_enrollment_id = ?
         AND adjustment_source = 'system_clinical'
         AND category = 'clinical'
         AND amount <> 0`,
-    [Math.trunc(clinicalEnrollmentId)],
+    [suffix, Math.trunc(clinicalEnrollmentId)],
   );
   return Math.trunc(Number(res.affectedRows ?? 0));
 }
@@ -167,19 +177,21 @@ export async function voidSystemClinicalChargesForEnrollmentPool(
 export async function voidSystemClinicalChargesForEnrollmentInConn(
   conn: PoolConnection,
   clinicalEnrollmentId: number,
+  reason: ClinicalChargeVoidReason = "superseded",
 ): Promise<number> {
+  const suffix = clinicalChargeVoidSuffix(reason);
   const [res] = await conn.execute<ResultSetHeader>(
     `UPDATE portal_billing_adjustments
         SET amount = 0,
             description = LEFT(
-              CONCAT(TRIM(description), ' [voided: clinical booking superseded]'),
+              CONCAT(TRIM(description), ?),
               255
             )
       WHERE clinical_enrollment_id = ?
         AND adjustment_source = 'system_clinical'
         AND category = 'clinical'
         AND amount <> 0`,
-    [Math.trunc(clinicalEnrollmentId)],
+    [suffix, Math.trunc(clinicalEnrollmentId)],
   );
   return Math.trunc(Number(res.affectedRows ?? 0));
 }
