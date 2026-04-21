@@ -1,5 +1,5 @@
 /**
- * Timetable geometry: one absolute-positioned block per section × weekday.
+ * Timetable geometry: one absolute-positioned block per row × weekday.
  * `topPx` / `heightPx` are linear in minutes from `TIMETABLE_START_HOUR`, so a single
  * class (e.g. 12:00–15:30) is one vertical span, not one cell per clock hour.
  * Overlaps on the same day get greedy column packing (`colIndex` / `colCount`).
@@ -14,6 +14,13 @@ export const TIMETABLE_START_HOUR = 8
 export const TIMETABLE_END_HOUR = 21
 /** One row = one hour [H, H+1); height drives block geometry. */
 export const TIMETABLE_ROW_HEIGHT_PX = 52
+
+/** Minimal shape for expanding rows onto weekday columns (course sections, clinical slots, …). */
+export type TimetableLayoutSource = {
+  weekday: string
+  start_time: string | null
+  end_time: string | null
+}
 
 /** Optional grid window; defaults match admin scheduling (08:00–22:00). */
 export type TimetableGridOptions = {
@@ -64,31 +71,32 @@ export function timetableGridBoundsMinutes(opts?: TimetableGridOptions): {
   }
 }
 
-export type TimetableDayInstance = {
-  section: AdminCourseSection
+export type TimetableDayInstance<T extends TimetableLayoutSource = AdminCourseSection> = {
+  source: T
   dayIndex: number
   /** Clipped to grid, absolute minutes from midnight */
   startMin: number
   endMin: number
 }
 
-export type PlacedTimetableBlock = TimetableDayInstance & {
-  topPx: number
-  heightPx: number
-  colIndex: number
-  colCount: number
-}
+export type PlacedTimetableBlock<T extends TimetableLayoutSource = AdminCourseSection> =
+  TimetableDayInstance<T> & {
+    topPx: number
+    heightPx: number
+    colIndex: number
+    colCount: number
+  }
 
 /**
- * One row per section × weekday with times clipped to the visible grid.
+ * One row per layout source × weekday with times clipped to the visible grid.
  */
-export function expandSectionsToDayInstances(
-  sections: readonly AdminCourseSection[],
+export function expandLayoutSourcesToDayInstances<T extends TimetableLayoutSource>(
+  rows: readonly T[],
   opts?: TimetableGridOptions,
-): TimetableDayInstance[] {
+): TimetableDayInstance<T>[] {
   const { gridStartMin, gridEndMin } = timetableGridBoundsMinutes(opts)
-  const out: TimetableDayInstance[] = []
-  for (const sec of sections) {
+  const out: TimetableDayInstance<T>[] = []
+  for (const sec of rows) {
     const s = timeToMinutes(sec.start_time)
     const e = timeToMinutes(sec.end_time)
     if (s == null || e == null || e <= s) continue
@@ -98,26 +106,34 @@ export function expandSectionsToDayInstances(
     const days = parseStoredWeekdaysToFullNames(sec.weekday)
     for (const d of days) {
       const di = weekdayFullToGridIndex(d)
-      out.push({ section: sec, dayIndex: di, startMin: cs, endMin: ce })
+      out.push({ source: sec, dayIndex: di, startMin: cs, endMin: ce })
     }
   }
   return out
+}
+
+/** @deprecated Use expandLayoutSourcesToDayInstances — alias for course sections. */
+export function expandSectionsToDayInstances(
+  sections: readonly AdminCourseSection[],
+  opts?: TimetableGridOptions,
+): TimetableDayInstance<AdminCourseSection>[] {
+  return expandLayoutSourcesToDayInstances(sections, opts)
 }
 
 /**
  * Greedy column assignment per day; overlapping intervals sit in different columns.
  * All blocks for the day share colCount = number of columns used that day.
  */
-function placeInstancesForDay(
-  instances: TimetableDayInstance[],
+function placeInstancesForDay<T extends TimetableLayoutSource>(
+  instances: TimetableDayInstance<T>[],
   gridStartMin: number,
-): PlacedTimetableBlock[] {
+): PlacedTimetableBlock<T>[] {
   if (instances.length === 0) return []
   const sorted = [...instances].sort(
     (a, b) => a.startMin - b.startMin || a.endMin - b.endMin,
   )
   const colLastEnd: number[] = []
-  const withCol: (TimetableDayInstance & { colIndex: number })[] = []
+  const withCol: (TimetableDayInstance<T> & { colIndex: number })[] = []
   for (const inst of sorted) {
     let col = colLastEnd.findIndex((end) => end <= inst.startMin)
     if (col === -1) {
@@ -148,16 +164,24 @@ function placeInstancesForDay(
 }
 
 /** Blocks grouped by weekday column index 0–6, with geometry + overlap columns. */
-export function buildTimetablePlacedBlocksByDay(
-  sections: readonly AdminCourseSection[],
+export function buildPlacedBlocksByDayForLayout<T extends TimetableLayoutSource>(
+  rows: readonly T[],
   opts?: TimetableGridOptions,
-): PlacedTimetableBlock[][] {
+): PlacedTimetableBlock<T>[][] {
   const { gridStartMin } = timetableGridBoundsMinutes(opts)
-  const byDay: TimetableDayInstance[][] = Array.from({ length: 7 }, () => [])
-  for (const inst of expandSectionsToDayInstances(sections, opts)) {
+  const byDay: TimetableDayInstance<T>[][] = Array.from({ length: 7 }, () => [])
+  for (const inst of expandLayoutSourcesToDayInstances(rows, opts)) {
     byDay[inst.dayIndex]!.push(inst)
   }
   return byDay.map((list) => placeInstancesForDay(list, gridStartMin))
+}
+
+/** Course sections onto the week grid (alias over generic layout builder). */
+export function buildTimetablePlacedBlocksByDay(
+  sections: readonly AdminCourseSection[],
+  opts?: TimetableGridOptions,
+): PlacedTimetableBlock<AdminCourseSection>[][] {
+  return buildPlacedBlocksByDayForLayout(sections, opts)
 }
 
 export function timetableBodyHeightPx(opts?: TimetableGridOptions): number {

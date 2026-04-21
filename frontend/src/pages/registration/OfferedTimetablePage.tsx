@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStudentPortalT } from '@/LanguageContext'
 import type { StudentPortalKey } from '@/lib/i18n'
+import { TimetableWeekGrid } from '../../components/timetable/TimetableWeekGrid'
 import {
   fetchAdminCourseSections,
   fetchApiJson,
@@ -12,14 +13,9 @@ import { formatPrerequisiteCourseDisplay } from '../../lib/prerequisiteCourse'
 import {
   buildTimetablePlacedBlocksByDay,
   STUDENT_REGISTRATION_TIMETABLE_GRID,
-  TIMETABLE_ROW_HEIGHT_PX,
   timetableBodyHeightPx,
 } from '../../lib/timetableBlockLayout'
-import {
-  formatWeekdaysLongFromStored,
-  WEEKDAYS_FULL_ORDERED,
-  type WeekdayFull,
-} from '../../lib/weekdaySchedule'
+import { formatWeekdaysLongFromStored, type WeekdayFull } from '../../lib/weekdaySchedule'
 import {
   getPreferredCourseTitle,
   getSecondaryCourseTitle,
@@ -90,101 +86,66 @@ function OfferedTimetableWeekGrid({
 }: OfferedWeekGridProps) {
   return (
     <div className="admin-timetable-wrap">
-      <div
-        className="admin-timetable-v2"
-        style={
-          {
-            '--admin-tt-slot': `${TIMETABLE_ROW_HEIGHT_PX}px`,
-          } as CSSProperties
-        }
-      >
-        <div className="admin-timetable-v2__head">
-          <div className="admin-timetable-v2__corner" aria-hidden />
-          {WEEKDAYS_FULL_ORDERED.map((d) => (
-            <div key={d} className="admin-timetable-v2__day-head">
-              {weekdayColumnLabel(d, t)}
-            </div>
-          ))}
-        </div>
-        <div className="admin-timetable-v2__main">
-          <div
-            className="admin-timetable-v2__times"
-            style={{ height: bodyHeightPx }}
-          >
-            {hourRows.map((h) => (
-              <div key={h} className="admin-timetable-v2__time-cell">
-                {formatTimeHmsForDisplay(`${h}:00:00`)}
-              </div>
-            ))}
-          </div>
-          {WEEKDAYS_FULL_ORDERED.map((d, di) => (
-            <div key={d} className="admin-timetable-v2__day-col">
-              <div
-                className="admin-timetable-v2__day-track"
-                style={{ height: bodyHeightPx }}
-              >
-                {placedWeekdays[di]!.map((b) => {
-                  const colW = 100 / b.colCount
-                  const insetPx = 3
-                  const inBin = isSectionInBin(binItems, b.section)
-                  const cat = catalogByCode.get(
-                    cellText(b.section.course_code).toUpperCase(),
-                  )
-                  const preferredTitle = getPreferredCourseTitle(
-                    cat ?? {
-                      code: b.section.course_code,
-                      eng_name: null,
-                      chi_name: null,
-                    },
-                    b.section.schedule_track,
-                  )
-                  const labelCore = `${b.section.course_code} ${b.section.section_code}. ${preferredTitle}`
-                  const ariaInBin = t('offeredInCourseBinOpenDetails').replace('{label}', labelCore)
-                  const ariaDefault = t('offeredViewDetailsFor').replace('{label}', labelCore)
-                  return (
-                    <button
-                      key={`${b.section.id}-${d}-${b.startMin}-${b.colIndex}`}
-                      type="button"
-                      className={[
-                        'admin-timetable-v2__block',
-                        'portal-offered-timetable__block',
-                        inBin ? 'portal-offered-timetable__block--in-bin' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      style={{
-                        top: b.topPx,
-                        height: b.heightPx,
-                        left: `calc(${colW * b.colIndex}% + ${insetPx}px)`,
-                        width: `calc(${colW}% - ${insetPx * 2}px)`,
-                      }}
-                      onClick={() => onSelectSection(b.section)}
-                      aria-label={inBin ? ariaInBin : ariaDefault}
-                    >
-                      <span className="admin-timetable-v2__block-title">
-                        {b.section.course_code} {b.section.section_code}
-                        {inBin ? (
-                          <span className="portal-offered-timetable__badge">{t('offeredAddedBadge')}</span>
-                        ) : null}
-                      </span>
-                      <span className="admin-timetable-v2__block-subtitle">
-                        {preferredTitle}
-                      </span>
-                      <span className="admin-timetable-v2__block-meta">
-                        {formatTimeHmsForDisplay(b.section.start_time)} –{' '}
-                        {formatTimeHmsForDisplay(b.section.end_time)}
-                      </span>
-                      <span className="admin-timetable-v2__block-meta">
-                        {formatDeliveryModeForDisplay(b.section.delivery_mode)}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <TimetableWeekGrid
+        placedWeekdays={placedWeekdays}
+        hourRows={hourRows}
+        bodyHeightPx={bodyHeightPx}
+        weekdayLabel={(d) => weekdayColumnLabel(d, t)}
+        hourLabel={(h) => formatTimeHmsForDisplay(`${h}:00:00`)}
+        renderBlock={(b, d) => {
+          const sec = b.source
+          const colW = 100 / b.colCount
+          const insetPx = 3
+          const inBin = isSectionInBin(binItems, sec)
+          const cat = catalogByCode.get(cellText(sec.course_code).toUpperCase())
+          const preferredTitle = getPreferredCourseTitle(
+            cat ?? {
+              code: sec.course_code,
+              eng_name: null,
+              chi_name: null,
+            },
+            sec.schedule_track,
+          )
+          const labelCore = `${sec.course_code} ${sec.section_code}. ${preferredTitle}`
+          const ariaInBin = t('offeredInCourseBinOpenDetails').replace('{label}', labelCore)
+          const ariaDefault = t('offeredViewDetailsFor').replace('{label}', labelCore)
+          return (
+            <button
+              key={`${sec.id}-${d}-${b.startMin}-${b.colIndex}`}
+              type="button"
+              className={[
+                'admin-timetable-v2__block',
+                'portal-offered-timetable__block',
+                inBin ? 'portal-offered-timetable__block--in-bin' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              style={{
+                top: b.topPx,
+                height: b.heightPx,
+                left: `calc(${colW * b.colIndex}% + ${insetPx}px)`,
+                width: `calc(${colW}% - ${insetPx * 2}px)`,
+              }}
+              onClick={() => onSelectSection(sec)}
+              aria-label={inBin ? ariaInBin : ariaDefault}
+            >
+              <span className="admin-timetable-v2__block-title">
+                {sec.course_code} {sec.section_code}
+                {inBin ? (
+                  <span className="portal-offered-timetable__badge">{t('offeredAddedBadge')}</span>
+                ) : null}
+              </span>
+              <span className="admin-timetable-v2__block-subtitle">{preferredTitle}</span>
+              <span className="admin-timetable-v2__block-meta">
+                {formatTimeHmsForDisplay(sec.start_time)} – {formatTimeHmsForDisplay(sec.end_time)}
+              </span>
+              <span className="admin-timetable-v2__block-meta">
+                {formatDeliveryModeForDisplay(sec.delivery_mode)}
+              </span>
+            </button>
+          )
+        }}
+      />
     </div>
   )
 }

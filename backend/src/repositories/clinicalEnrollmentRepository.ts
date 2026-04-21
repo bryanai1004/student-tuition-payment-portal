@@ -151,37 +151,40 @@ export async function listAvailableClinicalEnrollmentSlots(options?: {
     params,
   );
 
-  return rows.map((raw) => {
-    const row = raw as Record<string, unknown>;
-    const cap = totalClinicTimetableCapacityCaps({
-      cap_100: Number(row.cap_100),
-      cap_200: Number(row.cap_200),
-      cap_300: Number(row.cap_300),
-      cap_123: Number(row.cap_123),
-    });
-    const enrolled = Math.max(0, Math.trunc(Number(row.enrolled_count)));
-    const capped = cap > 0;
-    return {
-      timetableId: Number(row.timetable_id),
-      term: String(row.term ?? "").trim(),
-      year: Number(row.year),
-      slotLabel: slotLabelFromTimetableFields({
-        weekday: String(row.weekday ?? "").trim(),
-        time_from: row.time_from,
-        time_to: row.time_to,
-        slot: String(row.slot ?? "").trim(),
-        instructor: String(row.instructor ?? "").trim(),
-      }),
-      faculty:
-        String(row.instructor ?? "").trim() === ""
-          ? null
-          : String(row.instructor).trim(),
-      site: null,
-      capacity: capped ? cap : null,
-      enrolledCount: enrolled,
-      remainingSeats: capped ? Math.max(0, cap - enrolled) : null,
-    };
+  return rows.map((raw) => mapRowToClinicalEnrollmentSlotRow(raw as Record<string, unknown>));
+}
+
+function mapRowToClinicalEnrollmentSlotRow(
+  row: Record<string, unknown>,
+): ClinicalEnrollmentSlotRow {
+  const cap = totalClinicTimetableCapacityCaps({
+    cap_100: Number(row.cap_100),
+    cap_200: Number(row.cap_200),
+    cap_300: Number(row.cap_300),
+    cap_123: Number(row.cap_123),
   });
+  const enrolled = Math.max(0, Math.trunc(Number(row.enrolled_count)));
+  const capped = cap > 0;
+  return {
+    timetableId: Number(row.timetable_id),
+    term: String(row.term ?? "").trim(),
+    year: Number(row.year),
+    slotLabel: slotLabelFromTimetableFields({
+      weekday: String(row.weekday ?? "").trim(),
+      time_from: row.time_from,
+      time_to: row.time_to,
+      slot: String(row.slot ?? "").trim(),
+      instructor: String(row.instructor ?? "").trim(),
+    }),
+    faculty:
+      String(row.instructor ?? "").trim() === ""
+        ? null
+        : String(row.instructor).trim(),
+    site: null,
+    capacity: capped ? cap : null,
+    enrolledCount: enrolled,
+    remainingSeats: capped ? Math.max(0, cap - enrolled) : null,
+  };
 }
 
 /**

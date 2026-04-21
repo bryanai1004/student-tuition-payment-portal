@@ -2058,6 +2058,53 @@ export async function fetchAdminClinicalTimetable(
   return data
 }
 
+/** GET /api/clinical/offered-timetable — read-only slots + enrollment counts (no admin prefix). */
+export type ClinicalOfferedTimetableSlot = AdminClinicalTimetableSlot & {
+  slotCode: string
+  capacity: number | null
+  enrolledCount: number
+  remainingSeats: number | null
+}
+
+function isClinicalOfferedTimetableSlot(x: unknown): x is ClinicalOfferedTimetableSlot {
+  if (x == null || typeof x !== 'object') return false
+  const o = x as Record<string, unknown>
+  if (!isAdminClinicalTimetableSlot(x)) return false
+  return (
+    typeof o.slotCode === 'string' &&
+    (o.capacity === null || typeof o.capacity === 'number') &&
+    typeof o.enrolledCount === 'number' &&
+    (o.remainingSeats === null || typeof o.remainingSeats === 'number')
+  )
+}
+
+export async function fetchClinicalOfferedTimetable(
+  options?: { term?: string; year?: number; signal?: AbortSignal },
+): Promise<ClinicalOfferedTimetableSlot[]> {
+  const params = new URLSearchParams()
+  if (options?.term != null && options.term.trim() !== '') {
+    params.set('term', options.term.trim())
+  }
+  if (options?.year != null && Number.isFinite(options.year)) {
+    params.set('year', String(options.year))
+  }
+  const q = params.toString()
+  const path =
+    q.length > 0
+      ? `/api/clinical/offered-timetable?${q}`
+      : '/api/clinical/offered-timetable'
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected clinical offered timetable response')
+  }
+  for (const row of data) {
+    if (!isClinicalOfferedTimetableSlot(row)) {
+      throw new Error('Unexpected clinical offered timetable response')
+    }
+  }
+  return data
+}
+
 /** Timetable-driven (preferred) or legacy manual assignment body. */
 export type AdminClinicalAssignPayload =
   | { studentId: string; timetableId: number; status?: string | null }

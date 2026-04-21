@@ -1,6 +1,7 @@
 import {
   getClinicTimetableById,
   listClinicTimetableSlots,
+  listClinicalOfferedTimetableDetailRows,
   type ClinicTimetableDbRow,
 } from "../repositories/clinicalTimetableRepository.js";
 import {
@@ -47,6 +48,14 @@ export type AdminClinicalTimetableSlotDto = {
   site: string | null;
   courseCode: string | null;
   slotLabel: string;
+};
+
+/** Student + admin read-only offered grid; adds capacity + legacy `slot` code for clinic label. */
+export type ClinicalOfferedTimetableSlotDto = AdminClinicalTimetableSlotDto & {
+  slotCode: string;
+  capacity: number | null;
+  enrolledCount: number;
+  remainingSeats: number | null;
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -286,6 +295,53 @@ export async function listAdminClinicalTimetable(
       site: null,
       courseCode: null,
       slotLabel: timetableRowToSlotLabel(row),
+    };
+  });
+}
+
+export async function listClinicalOfferedTimetableForPortal(
+  query: { term?: string | null; year?: string | null },
+): Promise<ClinicalOfferedTimetableSlotDto[]> {
+  let yearNum: number | null = null;
+  if (query.year != null && String(query.year).trim() !== "") {
+    const n = Number(String(query.year).trim());
+    if (Number.isFinite(n)) {
+      yearNum = n;
+    }
+  }
+  const term =
+    query.term != null && String(query.term).trim() !== ""
+      ? String(query.term).trim()
+      : null;
+  const rows = await listClinicalOfferedTimetableDetailRows({
+    year: yearNum,
+    term,
+  });
+  return rows.map((r) => {
+    const start = formatClinicTimeHm(r.time_from);
+    const end = formatClinicTimeHm(r.time_to);
+    const slotLabel = buildClinicTimetableSlotLabel({
+      weekday: r.weekday,
+      timeFrom: start,
+      timeTo: end,
+      slot: r.slot,
+      instructor: r.instructor,
+    });
+    return {
+      id: r.timetableId,
+      term: r.term,
+      year: r.year,
+      weekday: r.weekday,
+      startTime: start,
+      endTime: end,
+      instructor: r.instructor,
+      site: null,
+      courseCode: null,
+      slotLabel,
+      slotCode: r.slot,
+      capacity: r.capacity,
+      enrolledCount: r.enrolledCount,
+      remainingSeats: r.remainingSeats,
     };
   });
 }

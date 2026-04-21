@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { TimetableWeekGrid } from '../../components/timetable/TimetableWeekGrid'
 import { applyAdminSchedulingToSearchParams } from '../../lib/adminSchedulingSearchParams'
 import { AdminCourseSectionDetailModal } from '../../components/admin/AdminCourseSectionDetailModal'
 import {
@@ -16,27 +17,14 @@ import { formatTimeHmsForDisplay } from '../../lib/formatScheduleTime'
 import {
   buildTimetablePlacedBlocksByDay,
   TIMETABLE_END_HOUR,
-  TIMETABLE_ROW_HEIGHT_PX,
   TIMETABLE_START_HOUR,
   timetableBodyHeightPx,
 } from '../../lib/timetableBlockLayout'
-import { type WeekdayFull } from '../../lib/weekdaySchedule'
-
 type TimetableLangTab = 'en' | 'cn'
 
 function hourRowLabel(hour: number): string {
   return formatTimeHmsForDisplay(`${hour}:00:00`)
 }
-
-const DAY_HEADERS: { full: WeekdayFull; label: string }[] = [
-  { full: 'Monday', label: 'Monday' },
-  { full: 'Tuesday', label: 'Tuesday' },
-  { full: 'Wednesday', label: 'Wednesday' },
-  { full: 'Thursday', label: 'Thursday' },
-  { full: 'Friday', label: 'Friday' },
-  { full: 'Saturday', label: 'Saturday' },
-  { full: 'Sunday', label: 'Sunday' },
-]
 
 type AdminTimetableGridProps = {
   placedByDay: ReturnType<typeof buildTimetablePlacedBlocksByDay>
@@ -54,86 +42,53 @@ function AdminTimetableWeekGrid({
   onBlockClick,
 }: AdminTimetableGridProps) {
   return (
-    <div
-      className="admin-timetable-v2"
-      style={
-        {
-          '--admin-tt-slot': `${TIMETABLE_ROW_HEIGHT_PX}px`,
-        } as CSSProperties
-      }
-    >
-      <div className="admin-timetable-v2__head">
-        <div className="admin-timetable-v2__corner" aria-hidden />
-        {DAY_HEADERS.map((d) => (
-          <div key={d.full} className="admin-timetable-v2__day-head">
-            {d.label}
-          </div>
-        ))}
-      </div>
-      <div className="admin-timetable-v2__main">
-        <div
-          className="admin-timetable-v2__times"
-          style={{ height: bodyHeightPx }}
-        >
-          {hourRows.map((h) => (
-            <div key={h} className="admin-timetable-v2__time-cell">
-              {hourRowLabel(h)}
-            </div>
-          ))}
-        </div>
-        {DAY_HEADERS.map((d, di) => (
-          <div key={d.full} className="admin-timetable-v2__day-col">
-            <div
-              className="admin-timetable-v2__day-track"
-              style={{ height: bodyHeightPx }}
-            >
-              {placedByDay[di]!.map((b) => {
-                const colW = 100 / b.colCount
-                const insetPx = 3
-                const codeKey = b.section.course_code.trim().toUpperCase()
-                const cat = catalogByCode.get(codeKey)
-                const preferredTitle = getPreferredCourseTitle(
-                  cat ?? {
-                    code: b.section.course_code,
-                    eng_name: null,
-                    chi_name: null,
-                  },
-                  b.section.schedule_track,
-                )
-                return (
-                  <button
-                    key={`${b.section.id}-${d.full}-${b.startMin}-${b.colIndex}`}
-                    type="button"
-                    className="admin-timetable-v2__block"
-                    style={{
-                      top: b.topPx,
-                      height: b.heightPx,
-                      left: `calc(${colW * b.colIndex}% + ${insetPx}px)`,
-                      width: `calc(${colW}% - ${insetPx * 2}px)`,
-                    }}
-                    onClick={() => onBlockClick(b.section, d.label)}
-                  >
-                    <span className="admin-timetable-v2__block-title">
-                      {b.section.course_code} {b.section.section_code}
-                    </span>
-                    <span className="admin-timetable-v2__block-subtitle">
-                      {preferredTitle}
-                    </span>
-                    <span className="admin-timetable-v2__block-meta">
-                      {formatTimeHmsForDisplay(b.section.start_time)} –{' '}
-                      {formatTimeHmsForDisplay(b.section.end_time)}
-                    </span>
-                    <span className="admin-timetable-v2__block-meta">
-                      {formatDeliveryModeForDisplay(b.section.delivery_mode)}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <TimetableWeekGrid
+      placedWeekdays={placedByDay}
+      hourRows={hourRows}
+      bodyHeightPx={bodyHeightPx}
+      weekdayLabel={(d) => d}
+      hourLabel={(h) => hourRowLabel(h)}
+      renderBlock={(b, d) => {
+        const sec = b.source
+        const colW = 100 / b.colCount
+        const insetPx = 3
+        const codeKey = sec.course_code.trim().toUpperCase()
+        const cat = catalogByCode.get(codeKey)
+        const preferredTitle = getPreferredCourseTitle(
+          cat ?? {
+            code: sec.course_code,
+            eng_name: null,
+            chi_name: null,
+          },
+          sec.schedule_track,
+        )
+        return (
+          <button
+            key={`${sec.id}-${d}-${b.startMin}-${b.colIndex}`}
+            type="button"
+            className="admin-timetable-v2__block"
+            style={{
+              top: b.topPx,
+              height: b.heightPx,
+              left: `calc(${colW * b.colIndex}% + ${insetPx}px)`,
+              width: `calc(${colW}% - ${insetPx * 2}px)`,
+            }}
+            onClick={() => onBlockClick(sec, d)}
+          >
+            <span className="admin-timetable-v2__block-title">
+              {sec.course_code} {sec.section_code}
+            </span>
+            <span className="admin-timetable-v2__block-subtitle">{preferredTitle}</span>
+            <span className="admin-timetable-v2__block-meta">
+              {formatTimeHmsForDisplay(sec.start_time)} – {formatTimeHmsForDisplay(sec.end_time)}
+            </span>
+            <span className="admin-timetable-v2__block-meta">
+              {formatDeliveryModeForDisplay(sec.delivery_mode)}
+            </span>
+          </button>
+        )
+      }}
+    />
   )
 }
 

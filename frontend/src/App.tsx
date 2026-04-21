@@ -48,6 +48,7 @@ import { ClinicalAddDropPage } from './pages/clinical/ClinicalAddDropPage'
 import { ClinicalExamPracticePage } from './pages/clinical/ClinicalExamPracticePage'
 import { ClinicalEvaluationPage } from './pages/clinical/ClinicalEvaluationPage'
 import { ClinicalRequiredHoursPage } from './pages/clinical/ClinicalRequiredHoursPage'
+import { ClinicalOfferedTimetablePage } from './pages/clinical/ClinicalOfferedTimetablePage'
 import { ClinicalCompliancePage } from './pages/clinical/ClinicalCompliancePage'
 import { DocumentsLayout } from './pages/documents/DocumentsLayout'
 import { DocumentsHomePage } from './pages/documents/DocumentsHomePage'
@@ -195,6 +196,10 @@ export default function App() {
               <Route path="clinical" element={<ClinicalModuleShell />}>
                 <Route index element={<ClinicalHomePage />} />
                 <Route path="schedule" element={<ClinicalSchedulePage />} />
+                <Route
+                  path="offered-timetable"
+                  element={<ClinicalOfferedTimetablePage />}
+                />
                 <Route path="add-drop" element={<ClinicalAddDropPage />} />
                 <Route path="exam-practice" element={<ClinicalExamPracticePage />} />
                 <Route path="evaluation" element={<ClinicalEvaluationPage />} />

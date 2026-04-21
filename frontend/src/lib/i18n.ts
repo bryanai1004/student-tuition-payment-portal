@@ -201,6 +201,13 @@ export const STUDENT_PORTAL_EN = {
   submitEvaluation: 'Submit Evaluation',
   requiredHours: 'Required Hours',
   compliance: 'Compliance',
+  clinicalOfferedTimetableNav: 'Offered Timetable',
+  clinicalOfferedTimetableHeading: 'Clinical Offered Timetable',
+  clinicalOfferedTimetableLede:
+    'Read-only view of clinical time slots for the selected registration term. Seat counts appear when a capacity is configured on the slot.',
+  clinicalOfferedTimetableLoading: 'Loading clinical timetable…',
+  clinicalOfferedTimetableEmpty: 'No clinical timetable slots for this term.',
+  clinicalOfferedTimetableLoadError: 'Could not load the clinical offered timetable.',
 
   // Documents shell
   documentsFormsTitle: 'Documents & Forms',
@@ -1356,6 +1363,13 @@ const STUDENT_PORTAL_ZH: Record<StudentPortalKey, string> = {
   submitEvaluation: '提交評核',
   requiredHours: '應有時數',
   compliance: '合規文件',
+  clinicalOfferedTimetableNav: '開課時間表',
+  clinicalOfferedTimetableHeading: '臨床開放時段表',
+  clinicalOfferedTimetableLede:
+    '僅供檢視所選註冊學期之臨床時段。若該時段有設定名額上限，會顯示已佔用／總名額。',
+  clinicalOfferedTimetableLoading: '正在載入臨床時間表…',
+  clinicalOfferedTimetableEmpty: '此學期沒有臨床時間表時段。',
+  clinicalOfferedTimetableLoadError: '無法載入臨床開放時段表。',
 
   documentsFormsTitle: '文件與表單',
   documentsNavAria: '文件與表單',

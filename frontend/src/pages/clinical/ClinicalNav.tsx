@@ -9,6 +9,7 @@ export function ClinicalNav() {
   const t = useStudentPortalT()
   const ITEMS = [
     { to: 'schedule', labelKey: 'clinicSchedule' as const },
+    { to: 'offered-timetable', labelKey: 'clinicalOfferedTimetableNav' as const },
     { to: 'add-drop', labelKey: 'addDropClinic' as const },
     { to: 'exam-practice', labelKey: 'examPractice' as const },
     { to: 'evaluation', labelKey: 'submitEvaluation' as const },
