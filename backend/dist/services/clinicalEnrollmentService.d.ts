@@ -1,16 +1,6 @@
 import { type ClinicalEnrollmentSlotRow, type ClinicalEnrollmentStudentRow, type ClinicalSlotRosterAdminRow } from "../repositories/clinicalEnrollmentRepository.js";
 export type OpenClinicalSlotForStudentDto = ClinicalEnrollmentSlotRow & {
     alreadyEnrolled: boolean;
-    /** Clinical ladder mapped to timetable buckets (100/200/300). */
-    studentBookingLevel: "100" | "200" | "300";
-    /** Seats left in this student's level-specific bucket. */
-    yourLevelBucketRemaining: number;
-    /** Seats left in the shared all-levels bucket. */
-    allLevelsBucketRemaining: number;
-    /** Seats this student could still claim (level bucket first, else shared); null when slot is uncapped. */
-    yourEffectiveRemaining: number | null;
-    /** When the student could book now, which bucket would be consumed. */
-    wouldBookIntoBucket: "100" | "200" | "300" | "all" | null;
 };
 export declare function listOpenClinicalSlotsForStudent(studentId: string, query?: {
     term?: string | null;
@@ -20,7 +10,7 @@ export declare function listStudentClinicalEnrollmentRows(studentId: string, que
     term?: string | null;
     year?: string | number | null;
 }): Promise<ClinicalEnrollmentStudentRow[]>;
-export declare function enrollStudentInClinicalSlot(studentId: string, timetableId: number): Promise<{
+export declare function enrollStudentInClinicalSlot(studentId: string, timetableId: number, seatBucketFromRequest: unknown): Promise<{
     ok: true;
     enrollmentId: number;
     assignmentId: number;

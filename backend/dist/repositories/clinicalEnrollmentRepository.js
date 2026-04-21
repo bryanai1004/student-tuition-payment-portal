@@ -486,33 +486,78 @@ function aggregateEnrolledBucketsFromLockedRows(rows) {
     }
     return out;
 }
-function pickAllocatableSeatBucket(studentLevel, caps, used) {
-    const sum = caps.c100 + caps.c200 + caps.c300 + caps.cAll;
-    if (sum <= 0) {
+function parseExplicitSeatBucket(raw) {
+    if (raw == null)
         return null;
-    }
-    const levelCap = studentLevel === "100"
-        ? caps.c100
-        : studentLevel === "200"
-            ? caps.c200
-            : caps.c300;
-    const levelUsed = studentLevel === "100"
-        ? used.n100
-        : studentLevel === "200"
-            ? used.n200
-            : used.n300;
-    if (levelCap > 0 && levelUsed < levelCap) {
-        return studentLevel;
-    }
-    if (caps.cAll > 0 && used.nAll < caps.cAll) {
-        return "all";
+    const s = String(raw).trim().toLowerCase();
+    if (s === "100" || s === "200" || s === "300" || s === "all") {
+        return s;
     }
     return null;
+}
+function resolveChosenSeatBucketForEnrollment(args) {
+    const { bucketEnforced, requestedSeatBucket, caps, used } = args;
+    if (!bucketEnforced) {
+        return { ok: true, seatBucket: null };
+    }
+    const b = parseExplicitSeatBucket(requestedSeatBucket);
+    if (b == null) {
+        return {
+            ok: false,
+            error: "seatBucket is required for this slot (100, 200, 300, or all).",
+        };
+    }
+    if (b === "100") {
+        if (caps.c100 <= 0) {
+            return {
+                ok: false,
+                error: "This slot does not offer 100-level seats.",
+            };
+        }
+        if (used.n100 >= caps.c100) {
+            return { ok: false, error: "100-level seats are full." };
+        }
+        return { ok: true, seatBucket: "100" };
+    }
+    if (b === "200") {
+        if (caps.c200 <= 0) {
+            return {
+                ok: false,
+                error: "This slot does not offer 200-level seats.",
+            };
+        }
+        if (used.n200 >= caps.c200) {
+            return { ok: false, error: "200-level seats are full." };
+        }
+        return { ok: true, seatBucket: "200" };
+    }
+    if (b === "300") {
+        if (caps.c300 <= 0) {
+            return {
+                ok: false,
+                error: "This slot does not offer 300-level seats.",
+            };
+        }
+        if (used.n300 >= caps.c300) {
+            return { ok: false, error: "300-level seats are full." };
+        }
+        return { ok: true, seatBucket: "300" };
+    }
+    if (caps.cAll <= 0) {
+        return {
+            ok: false,
+            error: "This slot does not offer all-levels seats.",
+        };
+    }
+    if (used.nAll >= caps.cAll) {
+        return { ok: false, error: "All-levels seats are full." };
+    }
+    return { ok: true, seatBucket: "all" };
 }
 /**
  * Transaction-safe enroll: lock, capacity check, insert or reactivate row. Caller supplies assignment insert.
  */
-export async function createClinicalEnrollment(studentId, timetableId, term, year, studentBookingLevel, insertAssignment) {
+export async function createClinicalEnrollment(studentId, timetableId, term, year, requestedSeatBucket, insertAssignment) {
     const sid = studentId.trim();
     const te = normalizeEnrollmentTerm(term);
     if (sid === "" || !Number.isFinite(timetableId) || timetableId <= 0) {
@@ -577,17 +622,17 @@ export async function createClinicalEnrollment(studentId, timetableId, term, yea
         }
         const usedBuckets = aggregateEnrolledBucketsFromLockedRows(lockedEnr);
         const wasReactivation = existing != null && existing.status === "dropped";
-        let chosenBucket = null;
-        if (bucketEnforced) {
-            chosenBucket = pickAllocatableSeatBucket(studentBookingLevel, caps, usedBuckets);
-            if (chosenBucket == null) {
-                await conn.rollback();
-                return {
-                    ok: false,
-                    error: "This clinic slot is full for your level and there are no open shared seats.",
-                };
-            }
+        const bucketPick = resolveChosenSeatBucketForEnrollment({
+            bucketEnforced,
+            requestedSeatBucket,
+            caps,
+            used: usedBuckets,
+        });
+        if (!bucketPick.ok) {
+            await conn.rollback();
+            return { ok: false, error: bucketPick.error };
         }
+        const chosenBucket = bucketPick.seatBucket;
         let enrollmentId;
         let isNewEnrollmentRow;
         if (existing == null) {

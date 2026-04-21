@@ -1797,11 +1797,6 @@ export type StudentOpenClinicalEnrollmentSlot = {
   remaining300: number
   remainingAll: number
   alreadyEnrolled: boolean
-  studentBookingLevel: '100' | '200' | '300'
-  yourLevelBucketRemaining: number
-  allLevelsBucketRemaining: number
-  yourEffectiveRemaining: number | null
-  wouldBookIntoBucket: '100' | '200' | '300' | 'all' | null
 }
 
 function isStudentOpenClinicalEnrollmentSlot(
@@ -1832,18 +1827,7 @@ function isStudentOpenClinicalEnrollmentSlot(
     num('remaining200') &&
     num('remaining300') &&
     num('remainingAll') &&
-    typeof o.alreadyEnrolled === 'boolean' &&
-    (o.studentBookingLevel === '100' ||
-      o.studentBookingLevel === '200' ||
-      o.studentBookingLevel === '300') &&
-    num('yourLevelBucketRemaining') &&
-    num('allLevelsBucketRemaining') &&
-    (o.yourEffectiveRemaining === null || typeof o.yourEffectiveRemaining === 'number') &&
-    (o.wouldBookIntoBucket === null ||
-      o.wouldBookIntoBucket === '100' ||
-      o.wouldBookIntoBucket === '200' ||
-      o.wouldBookIntoBucket === '300' ||
-      o.wouldBookIntoBucket === 'all')
+    typeof o.alreadyEnrolled === 'boolean'
   )
 }
 
@@ -1996,7 +1980,7 @@ export async function fetchStudentClinicalEnrollments(
 /** POST /api/students/:studentId/clinical-enrollments — 201 { ok, enrollmentId, assignmentId, billingChargePosted? } */
 export async function postStudentClinicalEnrollment(
   studentId: string,
-  body: { timetableId: number },
+  body: { timetableId: number; seatBucket?: '100' | '200' | '300' | 'all' },
   options?: { signal?: AbortSignal },
 ): Promise<{
   ok: boolean
@@ -2127,12 +2111,6 @@ export type ClinicalOfferedTimetableSlot = AdminClinicalTimetableSlot & {
   remaining200: number
   remaining300: number
   remainingAll: number
-  /** Present when merged with GET …/clinical-enrollments/open for the signed-in student. */
-  studentBookingLevel?: '100' | '200' | '300'
-  yourLevelBucketRemaining?: number
-  allLevelsBucketRemaining?: number
-  yourEffectiveRemaining?: number | null
-  wouldBookIntoBucket?: '100' | '200' | '300' | 'all' | null
 }
 
 function isClinicalOfferedTimetableSlot(x: unknown): x is ClinicalOfferedTimetableSlot {

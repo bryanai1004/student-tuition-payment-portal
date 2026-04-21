@@ -17,7 +17,7 @@ export declare function getStudentOpenClinicalEnrollmentSlotsHandler(req: Reques
 export declare function getStudentClinicalEnrollmentsHandler(req: Request, res: Response): Promise<void>;
 /**
  * POST /api/students/:studentId/clinical-enrollments
- * Body: { timetableId: number }
+ * Body: { timetableId: number, seatBucket?: '100'|'200'|'300'|'all' } — seatBucket required when the slot has per-bucket caps.
  */
 export declare function postStudentClinicalEnrollmentHandler(req: Request, res: Response): Promise<void>;
 /**

@@ -8,7 +8,6 @@ import {
   fetchCurrentAcademicTerm,
   fetchRecentAcademicTerms,
   fetchStudentClinicalEnrollments,
-  fetchStudentOpenClinicalEnrollmentSlots,
   postStudentClinicalEnrollment,
   type AcademicTerm,
   type ClinicalOfferedTimetableSlot,
@@ -24,9 +23,7 @@ import {
 } from '../../lib/timetableBlockLayout'
 import type { StudentPortalKey } from '../../lib/i18n'
 import type { WeekdayFull } from '../../lib/weekdaySchedule'
-import {
-  mergeTermOptions,
-} from '../registration/registrationTermSearch'
+import { mergeTermOptions } from '../registration/registrationTermSearch'
 
 const CLINICAL_OFFERED_GRID = STUDENT_REGISTRATION_TIMETABLE_GRID
 const CLINICAL_WEEKDAYS: WeekdayFull[] = [
@@ -47,6 +44,8 @@ const WEEKDAY_FULL_TO_LABEL: Record<WeekdayFull, StudentPortalKey> = {
   Sunday: 'weekdaySunday',
 }
 
+type ClinicalSeatBucketChoice = '100' | '200' | '300' | 'all'
+
 function weekdayColumnLabel(
   full: WeekdayFull,
   t: (key: StudentPortalKey) => string,
@@ -65,111 +64,47 @@ function formatPaymentHoldCountdown(iso: string, nowMs: number): string {
   return `${h}h ${m}m`
 }
 
-type ClinicalBrowseFilter = 'my_level' | 'all' | '100' | '200' | '300'
-
 function capDisplay(slot: ClinicalOfferedTimetableSlot): string {
   return slot.capacity == null ? '—' : String(slot.capacity)
 }
 
-function remainingDisplay(slot: ClinicalOfferedTimetableSlot): string {
-  if (
-    slot.yourEffectiveRemaining !== undefined &&
-    slot.yourEffectiveRemaining !== null
-  ) {
-    return String(slot.yourEffectiveRemaining)
-  }
-  return slot.remainingSeats == null ? '—' : String(slot.remainingSeats)
+function slotUsesBuckets(slot: ClinicalOfferedTimetableSlot): boolean {
+  return slot.capacity != null && slot.capacity > 0
 }
 
-function slotHasSeatForStudent(slot: ClinicalOfferedTimetableSlot): boolean {
-  if (
-    slot.yourEffectiveRemaining !== undefined &&
-    slot.yourEffectiveRemaining !== null
-  ) {
-    return slot.yourEffectiveRemaining > 0
-  }
-  if (slot.remainingSeats == null) return true
-  return slot.remainingSeats > 0
-}
-
-function capacityForClinicalLevel(
+function remainingForBucket(
   slot: ClinicalOfferedTimetableSlot,
-  level: '100' | '200' | '300',
+  bucket: ClinicalSeatBucketChoice,
 ): number {
-  if (level === '100') return slot.capacity100
-  if (level === '200') return slot.capacity200
-  return slot.capacity300
+  if (bucket === '100') return slot.remaining100
+  if (bucket === '200') return slot.remaining200
+  if (bucket === '300') return slot.remaining300
+  return slot.remainingAll
 }
 
-function passesBrowseFilter(
+function capForBucket(
   slot: ClinicalOfferedTimetableSlot,
-  filter: ClinicalBrowseFilter,
-  myLevel: '100' | '200' | '300' | null,
-): boolean {
-  if (filter === 'all') return true
-  if (filter === '100' || filter === '200' || filter === '300') {
-    return capacityForClinicalLevel(slot, filter) > 0
-  }
-  if (myLevel == null) return true
-  return slot.capacityAll > 0 || capacityForClinicalLevel(slot, myLevel) > 0
+  bucket: ClinicalSeatBucketChoice,
+): number {
+  if (bucket === '100') return slot.capacity100
+  if (bucket === '200') return slot.capacity200
+  if (bucket === '300') return slot.capacity300
+  return slot.capacityAll
 }
 
-type SlotLevelAvailLabelKey =
-  | 'clinicalAvailForYourLevel'
-  | 'clinicalAvailViaShared'
-  | 'clinicalFullForYourLevel'
-
-function slotAvailabilityLabelKey(
-  slot: ClinicalOfferedTimetableSlot,
-): SlotLevelAvailLabelKey | null {
-  if (slot.studentBookingLevel == null) return null
-  if (slotHasSeatForStudent(slot)) {
-    return slot.wouldBookIntoBucket === 'all' ? 'clinicalAvailViaShared' : 'clinicalAvailForYourLevel'
-  }
-  return 'clinicalFullForYourLevel'
+function slotHasAnyOpenSeat(slot: ClinicalOfferedTimetableSlot): boolean {
+  if (!slotUsesBuckets(slot)) return true
+  return (
+    slot.remaining100 > 0 ||
+    slot.remaining200 > 0 ||
+    slot.remaining300 > 0 ||
+    slot.remainingAll > 0
+  )
 }
 
-type SlotBlockPalette = 'enrolled' | 'for_level' | 'via_shared' | 'full' | 'legacy_open' | 'legacy_full'
-
-function slotBlockPalette(
-  slot: ClinicalOfferedTimetableSlot,
-  isEnrolled: boolean,
-): SlotBlockPalette {
-  if (isEnrolled) return 'enrolled'
-  if (slot.studentBookingLevel == null) {
-    return slotHasSeatForStudent(slot) ? 'legacy_open' : 'legacy_full'
-  }
-  if (slotHasSeatForStudent(slot)) {
-    return slot.wouldBookIntoBucket === 'all' ? 'via_shared' : 'for_level'
-  }
-  return 'full'
-}
-
-const BLOCK_PALETTE: Record<SlotBlockPalette, { bg: string; border: string }> = {
-  enrolled: {
-    bg: 'rgba(16, 124, 16, 0.16)',
-    border: 'rgba(16, 124, 16, 0.45)',
-  },
-  for_level: {
-    bg: 'rgba(16, 124, 16, 0.12)',
-    border: 'rgba(16, 124, 16, 0.38)',
-  },
-  via_shared: {
-    bg: 'rgba(200, 140, 0, 0.16)',
-    border: 'rgba(180, 110, 0, 0.42)',
-  },
-  full: {
-    bg: 'rgba(120, 120, 120, 0.2)',
-    border: 'rgba(120, 120, 120, 0.4)',
-  },
-  legacy_open: {
-    bg: 'rgba(139, 0, 0, 0.08)',
-    border: 'rgba(139, 0, 0, 0.24)',
-  },
-  legacy_full: {
-    bg: 'rgba(120, 120, 120, 0.2)',
-    border: 'rgba(120, 120, 120, 0.4)',
-  },
+function totalRemainingDisplay(slot: ClinicalOfferedTimetableSlot): string {
+  if (!slotUsesBuckets(slot)) return '—'
+  return slot.remainingSeats == null ? '—' : String(slot.remainingSeats)
 }
 
 function seatSummaryLine(
@@ -187,32 +122,66 @@ function seatSummaryLine(
     .replace('{cAll}', String(slot.capacityAll))
 }
 
-function bucketRemainingLine(
-  slot: ClinicalOfferedTimetableSlot,
-  t: (key: StudentPortalKey) => string,
-): string | null {
-  if (
-    slot.yourLevelBucketRemaining === undefined ||
-    slot.allLevelsBucketRemaining === undefined
-  ) {
-    return null
-  }
-  return t('clinicalYourBucketRemainingLine')
-    .replace('{n}', String(slot.yourLevelBucketRemaining))
-    .replace('{m}', String(slot.allLevelsBucketRemaining))
-}
-
-function bookingUsesLine(
+function seatBucketsCompactLine(
   slot: ClinicalOfferedTimetableSlot,
   t: (key: StudentPortalKey) => string,
 ): string {
-  const b = slot.wouldBookIntoBucket
-  if (b === 'all') return t('clinicalBookingUsesAllLevelSeat')
-  if (b === '100' || b === '200' || b === '300') {
-    return t('clinicalBookingUsesLevelSeat').replace('{level}', b)
-  }
-  return '—'
+  return t('clinicalSeatBucketsCompactLine')
+    .replace('{e100}', String(slot.enrolled100))
+    .replace('{c100}', String(slot.capacity100))
+    .replace('{e200}', String(slot.enrolled200))
+    .replace('{c200}', String(slot.capacity200))
+    .replace('{e300}', String(slot.enrolled300))
+    .replace('{c300}', String(slot.capacity300))
+    .replace('{eAll}', String(slot.enrolledAll))
+    .replace('{cAll}', String(slot.capacityAll))
 }
+
+function bucketChoiceLabel(
+  bucket: ClinicalSeatBucketChoice,
+  t: (key: StudentPortalKey) => string,
+): string {
+  if (bucket === '100') return t('clinicalSeatTypeOption100')
+  if (bucket === '200') return t('clinicalSeatTypeOption200')
+  if (bucket === '300') return t('clinicalSeatTypeOption300')
+  return t('clinicalSeatTypeOptionAll')
+}
+
+function bucketChoiceSuffix(
+  slot: ClinicalOfferedTimetableSlot,
+  bucket: ClinicalSeatBucketChoice,
+  t: (key: StudentPortalKey) => string,
+): string {
+  const cap = capForBucket(slot, bucket)
+  if (cap <= 0) return ` ${t('clinicalSeatTypeNotOffered')}`
+  const rem = remainingForBucket(slot, bucket)
+  if (rem <= 0) return ` (${t('clinicalSeatTypeFull')})`
+  return ` (${t('clinicalSeatTypeRemaining').replace('{n}', String(rem))})`
+}
+
+type SlotBlockPalette = 'enrolled' | 'open' | 'full'
+
+function slotBlockPalette(slot: ClinicalOfferedTimetableSlot, isEnrolled: boolean): SlotBlockPalette {
+  if (isEnrolled) return 'enrolled'
+  return slotHasAnyOpenSeat(slot) ? 'open' : 'full'
+}
+
+const BLOCK_PALETTE: Record<SlotBlockPalette, { bg: string; border: string }> = {
+  enrolled: {
+    bg: 'rgba(16, 124, 16, 0.16)',
+    border: 'rgba(16, 124, 16, 0.45)',
+  },
+  open: {
+    bg: 'rgba(16, 124, 16, 0.12)',
+    border: 'rgba(16, 124, 16, 0.38)',
+  },
+  full: {
+    bg: 'rgba(120, 120, 120, 0.2)',
+    border: 'rgba(120, 120, 120, 0.4)',
+  },
+}
+
+const BUCKET_CHOICES: ClinicalSeatBucketChoice[] = ['100', '200', '300', 'all']
 
 export function ClinicalSchedulePage() {
   const t = useStudentPortalT()
@@ -236,12 +205,12 @@ export function ClinicalSchedulePage() {
 
   const [selectedSlotId, setSelectedSlotId] = useState('')
   const [pendingEnrollmentSlotId, setPendingEnrollmentSlotId] = useState<number | null>(null)
+  const [selectedSeatBucket, setSelectedSeatBucket] = useState<ClinicalSeatBucketChoice | ''>('')
   const [busyTimetableId, setBusyTimetableId] = useState<number | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [paymentHoldNowMs, setPaymentHoldNowMs] = useState(() => Date.now())
   const [reloadKey, setReloadKey] = useState(0)
-  const [browseFilter, setBrowseFilter] = useState<ClinicalBrowseFilter>('my_level')
 
   const options = useMemo(
     () => mergeTermOptions(recentTerms, currentTerm),
@@ -252,22 +221,7 @@ export function ClinicalSchedulePage() {
     [options, selectedTermId],
   )
 
-  const studentDetectedLevel = useMemo((): '100' | '200' | '300' | null => {
-    for (const s of slots) {
-      if (s.studentBookingLevel) return s.studentBookingLevel
-    }
-    return null
-  }, [slots])
-
-  const filteredSlots = useMemo(
-    () => slots.filter((s) => passesBrowseFilter(s, browseFilter, studentDetectedLevel)),
-    [slots, browseFilter, studentDetectedLevel],
-  )
-
-  const layoutRows = useMemo(
-    () => clinicalOfferedSlotsToLayoutRows(filteredSlots),
-    [filteredSlots],
-  )
+  const layoutRows = useMemo(() => clinicalOfferedSlotsToLayoutRows(slots), [slots])
   const placedWeekdays = useMemo(
     () => buildPlacedBlocksByDayForLayout(layoutRows, CLINICAL_OFFERED_GRID),
     [layoutRows],
@@ -325,43 +279,13 @@ export function ClinicalSchedulePage() {
     setSlotsError(null)
     void (async () => {
       try {
-        const offeredPromise = fetchClinicalOfferedTimetable({
+        const offeredRows = await fetchClinicalOfferedTimetable({
           term: selectedTerm.term_name,
           year: selectedTerm.year,
           signal: ac.signal,
         })
-        const openPromise =
-          sid.trim() !== ''
-            ? fetchStudentOpenClinicalEnrollmentSlots(sid, {
-                term: selectedTerm.term_name,
-                year: selectedTerm.year,
-                signal: ac.signal,
-              })
-            : Promise.resolve(null)
-        const [offeredRows, openRows] = await Promise.all([
-          offeredPromise,
-          openPromise,
-        ])
         if (ac.signal.aborted) return
-        if (openRows != null) {
-          const byTid = new Map(openRows.map((r) => [r.timetableId, r]))
-          setSlots(
-            offeredRows.map((o) => {
-              const ex = byTid.get(o.id)
-              if (ex == null) return o
-              return {
-                ...o,
-                studentBookingLevel: ex.studentBookingLevel,
-                yourLevelBucketRemaining: ex.yourLevelBucketRemaining,
-                allLevelsBucketRemaining: ex.allLevelsBucketRemaining,
-                yourEffectiveRemaining: ex.yourEffectiveRemaining,
-                wouldBookIntoBucket: ex.wouldBookIntoBucket,
-              }
-            }),
-          )
-        } else {
-          setSlots(offeredRows)
-        }
+        setSlots(offeredRows)
       } catch (e) {
         if (ac.signal.aborted) return
         setSlots([])
@@ -373,11 +297,7 @@ export function ClinicalSchedulePage() {
       }
     })()
     return () => ac.abort()
-  }, [termsReady, selectedTerm, t, reloadKey, sid])
-
-  useEffect(() => {
-    setBrowseFilter('my_level')
-  }, [selectedTermId, sid])
+  }, [termsReady, selectedTerm, t, reloadKey])
 
   useEffect(() => {
     if (!sid || selectedTerm == null) {
@@ -421,13 +341,6 @@ export function ClinicalSchedulePage() {
     }
   }, [slots, selectedSlotId])
 
-  useEffect(() => {
-    if (!selectedSlotId) return
-    if (!filteredSlots.some((s) => String(s.id) === selectedSlotId)) {
-      setSelectedSlotId('')
-    }
-  }, [filteredSlots, selectedSlotId])
-
   const selectedSlot = useMemo(() => {
     const n = Number(selectedSlotId)
     if (!Number.isFinite(n)) return undefined
@@ -437,6 +350,10 @@ export function ClinicalSchedulePage() {
     if (pendingEnrollmentSlotId == null) return null
     return slots.find((s) => s.id === pendingEnrollmentSlotId) ?? null
   }, [slots, pendingEnrollmentSlotId])
+
+  useEffect(() => {
+    setSelectedSeatBucket('')
+  }, [pendingEnrollmentSlotId])
 
   const enrollmentsByTimetable = useMemo(() => {
     const map = new Map<number, StudentClinicalEnrollmentRow>()
@@ -485,24 +402,30 @@ export function ClinicalSchedulePage() {
   function openEnrollmentConfirmation(slot: ClinicalOfferedTimetableSlot | undefined) {
     if (!slot) return
     if (enrollmentsByTimetable.has(slot.id)) return
-    if (!slotHasSeatForStudent(slot)) return
+    if (!slotHasAnyOpenSeat(slot)) return
     if (busyTimetableId != null) return
     setActionMessage(null)
     setActionError(null)
     setPendingEnrollmentSlotId(slot.id)
   }
 
-  async function handleEnroll(timetableId: number) {
+  async function handleEnroll(timetableId: number, seatBucket: ClinicalSeatBucketChoice | null) {
     if (!sid) return
     const slot = slots.find((s) => s.id === timetableId)
     if (!slot) return
     if (enrollmentsByTimetable.has(slot.id)) return
-    if (!slotHasSeatForStudent(slot)) return
+    if (!slotHasAnyOpenSeat(slot)) return
+    if (slotUsesBuckets(slot) && seatBucket == null) return
     setActionMessage(null)
     setActionError(null)
     setBusyTimetableId(timetableId)
     try {
-      const created = await postStudentClinicalEnrollment(sid, { timetableId })
+      const created = await postStudentClinicalEnrollment(
+        sid,
+        slotUsesBuckets(slot) && seatBucket != null
+          ? { timetableId, seatBucket }
+          : { timetableId },
+      )
       setActionMessage(
         created.billingChargePosted
           ? `${t('clinicalEnrollmentSuccessSlot')} ${t('clinicalEnrollmentFinanceChargeNote')}`
@@ -521,6 +444,13 @@ export function ClinicalSchedulePage() {
 
   const showEmptyAccount = !sid
   const anyLoading = slotsLoading || enrollmentLoading
+
+  const canConfirmEnrollment =
+    pendingEnrollmentSlot != null &&
+    (!slotUsesBuckets(pendingEnrollmentSlot) ||
+      (selectedSeatBucket !== '' &&
+        remainingForBucket(pendingEnrollmentSlot, selectedSeatBucket) > 0 &&
+        capForBucket(pendingEnrollmentSlot, selectedSeatBucket) > 0))
 
   return (
     <main className="portal-page portal-clinical-offered-timetable">
@@ -573,19 +503,6 @@ export function ClinicalSchedulePage() {
 
         {!showEmptyAccount && selectedTerm != null ? (
           <div className="portal-stack" style={{ gap: '0.65rem' }}>
-            {!slotsLoading && slots.length > 0 ? (
-              <div className="portal-stack" style={{ gap: '0.25rem' }}>
-                {studentDetectedLevel != null ? (
-                  <p className="portal-page-lede" role="status" style={{ margin: 0 }}>
-                    {t('clinicalYourClinicalLevelLine').replace('{level}', studentDetectedLevel)}
-                  </p>
-                ) : (
-                  <p className="portal-text-muted" role="status" style={{ margin: 0 }}>
-                    {t('clinicalLevelDataUnavailableHint')}
-                  </p>
-                )}
-              </div>
-            ) : null}
             <div
               className="portal-actions"
               style={{
@@ -613,28 +530,6 @@ export function ClinicalSchedulePage() {
               </label>
               <label
                 className="portal-card-note"
-                style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}
-              >
-                <span>{t('clinicalBrowseFilterLabel')}</span>
-                <select
-                  className="portal-account-ledger__select"
-                  aria-label={t('clinicalBrowseFilterAria')}
-                  value={browseFilter}
-                  onChange={(e) => setBrowseFilter(e.target.value as ClinicalBrowseFilter)}
-                  disabled={slots.length === 0 || anyLoading}
-                >
-                  <option value="my_level">{t('clinicalBrowseFilterMyLevel')}</option>
-                  <option value="all">{t('clinicalBrowseFilterAllSlots')}</option>
-                  <option value="100">{t('clinicalBrowseFilterLevel100')}</option>
-                  <option value="200">{t('clinicalBrowseFilterLevel200')}</option>
-                  <option value="300">{t('clinicalBrowseFilterLevel300')}</option>
-                </select>
-                <span className="portal-inline-note portal-inline-note--flush">
-                  {t('clinicalBrowseFilterHint')}
-                </span>
-              </label>
-              <label
-                className="portal-card-note"
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -655,10 +550,10 @@ export function ClinicalSchedulePage() {
                       openEnrollmentConfirmation(slots.find((s) => s.id === timetableId))
                     }
                   }}
-                  disabled={filteredSlots.length === 0 || anyLoading}
+                  disabled={slots.length === 0 || anyLoading}
                 >
                   <option value="">{t('clinicalSelectSlotPlaceholder')}</option>
-                  {filteredSlots.map((s) => (
+                  {slots.map((s) => (
                     <option key={s.id} value={String(s.id)}>
                       {s.slotCode.trim() || s.slotLabel} · {s.weekday} ·{' '}
                       {formatTimeHmsForDisplay(s.startTime)}-{formatTimeHmsForDisplay(s.endTime)}
@@ -673,7 +568,7 @@ export function ClinicalSchedulePage() {
                   selectedSlot == null ||
                   busyTimetableId != null ||
                   enrollmentsByTimetable.has(selectedSlot.id) ||
-                  !slotHasSeatForStudent(selectedSlot)
+                  !slotHasAnyOpenSeat(selectedSlot)
                 }
                 onClick={() => {
                   openEnrollmentConfirmation(selectedSlot)
@@ -683,7 +578,7 @@ export function ClinicalSchedulePage() {
                   ? t('clinicalEnrolledState')
                   : selectedSlot != null &&
                       !enrollmentsByTimetable.has(selectedSlot.id) &&
-                      !slotHasSeatForStudent(selectedSlot)
+                      !slotHasAnyOpenSeat(selectedSlot)
                     ? t('clinicalSlotFull')
                     : t('enroll')}
               </button>
@@ -697,33 +592,14 @@ export function ClinicalSchedulePage() {
               {selectedSlot.slotCode.trim() || selectedSlot.slotLabel} ·{' '}
               {formatTimeHmsForDisplay(selectedSlot.startTime)}-
               {formatTimeHmsForDisplay(selectedSlot.endTime)} · {t('clinicalColCapacity')}:{' '}
-              {capDisplay(selectedSlot)} · {t('clinicalColRemaining')} (you):{' '}
-              {remainingDisplay(selectedSlot)}
+              {capDisplay(selectedSlot)} · {t('clinicalColTotalRemaining')}: {totalRemainingDisplay(selectedSlot)}
             </p>
-            {slotAvailabilityLabelKey(selectedSlot) != null ? (
-              <p className="portal-card-note" style={{ margin: 0, fontWeight: 600 }}>
-                {t(slotAvailabilityLabelKey(selectedSlot)!)}
-              </p>
-            ) : null}
             <p className="portal-card-note" style={{ margin: 0 }}>
-              {seatSummaryLine(selectedSlot, t)}
+              {t('clinicalSeatsByLevelHeading')}: {seatSummaryLine(selectedSlot, t)}
             </p>
-            {bucketRemainingLine(selectedSlot, t) != null ? (
+            {selectedSlot.instructor?.trim() ? (
               <p className="portal-card-note" style={{ margin: 0 }}>
-                {bucketRemainingLine(selectedSlot, t)}
-              </p>
-            ) : null}
-            {selectedSlot.studentBookingLevel != null ? (
-              <p className="portal-card-note" style={{ margin: 0 }}>
-                {t('clinicalModalDtYourClinicalLevel')}: {selectedSlot.studentBookingLevel} ·{' '}
-                {t('clinicalModalDtBookingWillUse')}: {bookingUsesLine(selectedSlot, t)}
-              </p>
-            ) : null}
-            {selectedSlot.studentBookingLevel != null &&
-            !enrollmentsByTimetable.has(selectedSlot.id) &&
-            !slotHasSeatForStudent(selectedSlot) ? (
-              <p className="portal-text-muted" role="status" style={{ margin: 0 }}>
-                {t('clinicalSlotNotBookableHint')}
+                {t('clinicalColFaculty')}: {selectedSlot.instructor.trim()}
               </p>
             ) : null}
           </div>
@@ -741,13 +617,7 @@ export function ClinicalSchedulePage() {
           </p>
         ) : null}
 
-        {!anyLoading && selectedTerm != null && slots.length > 0 && filteredSlots.length === 0 ? (
-          <p className="portal-text-muted" role="status">
-            {t('clinicalNoSlotsMatchBrowseFilter')}
-          </p>
-        ) : null}
-
-        {!anyLoading && selectedTerm != null && filteredSlots.length > 0 ? (
+        {!anyLoading && selectedTerm != null && slots.length > 0 ? (
           <div className="portal-clinical-offered-timetable__scroll">
             <div className="admin-timetable-wrap portal-clinical-offered-timetable__inner">
               <TimetableWeekGrid
@@ -765,13 +635,10 @@ export function ClinicalSchedulePage() {
                   const colW = 100 / b.colCount
                   const insetPx = 3
                   const isEnrolled = enrollmentsByTimetable.has(row.timetableId)
-                  const isFull = !slotHasSeatForStudent(offered)
+                  const isFull = !slotHasAnyOpenSeat(offered)
                   const isBusy = busyTimetableId === row.timetableId
                   const disabled = isEnrolled || isFull || busyTimetableId != null
                   const palette = BLOCK_PALETTE[slotBlockPalette(offered, isEnrolled)]
-                  const bg = palette.bg
-                  const border = palette.border
-                  const availKey = !isEnrolled ? slotAvailabilityLabelKey(offered) : null
                   return (
                     <button
                       key={`${row.timetableId}-${d}-${b.startMin}-${b.colIndex}`}
@@ -782,8 +649,8 @@ export function ClinicalSchedulePage() {
                         height: b.heightPx,
                         left: `calc(${colW * b.colIndex}% + ${insetPx}px)`,
                         width: `calc(${colW}% - ${insetPx * 2}px)`,
-                        background: bg,
-                        borderColor: border,
+                        background: palette.bg,
+                        borderColor: palette.border,
                         cursor: disabled ? 'default' : 'pointer',
                       }}
                       disabled={disabled}
@@ -803,21 +670,11 @@ export function ClinicalSchedulePage() {
                           {offered.instructor}
                         </span>
                       ) : null}
-                      {availKey != null ? (
-                        <span className="admin-timetable-v2__block-meta" style={{ fontWeight: 600 }}>
-                          {t(availKey)}
-                        </span>
-                      ) : null}
                       <span className="admin-timetable-v2__block-meta">
-                        {seatSummaryLine(offered, t)}
+                        {seatBucketsCompactLine(offered, t)}
                       </span>
-                      {bucketRemainingLine(offered, t) != null ? (
-                        <span className="admin-timetable-v2__block-meta">
-                          {bucketRemainingLine(offered, t)}
-                        </span>
-                      ) : null}
                       <span className="admin-timetable-v2__block-meta">
-                        {t('clinicalColRemaining')} (you): {remainingDisplay(offered)}
+                        {t('clinicalColTotalRemaining')}: {totalRemainingDisplay(offered)}
                       </span>
                       <span className="admin-timetable-v2__block-meta">
                         {isBusy
@@ -924,50 +781,61 @@ export function ClinicalSchedulePage() {
                 <dd>{capDisplay(pendingEnrollmentSlot)}</dd>
               </div>
               <div>
-                <dt>{t('clinicalColRemaining')}</dt>
-                <dd>{remainingDisplay(pendingEnrollmentSlot)}</dd>
+                <dt>{t('clinicalColTotalRemaining')}</dt>
+                <dd>{totalRemainingDisplay(pendingEnrollmentSlot)}</dd>
               </div>
               <div>
                 <dt>{t('clinicalModalDtSeatsByLevel')}</dt>
                 <dd>{seatSummaryLine(pendingEnrollmentSlot, t)}</dd>
               </div>
-              {pendingEnrollmentSlot.studentBookingLevel != null ? (
-                <>
-                  <div>
-                    <dt>{t('clinicalModalDtYourClinicalLevel')}</dt>
-                    <dd>{pendingEnrollmentSlot.studentBookingLevel}</dd>
-                  </div>
-                  <div>
-                    <dt>{t('clinicalModalDtYourLevelBucket')}</dt>
-                    <dd>
-                      {pendingEnrollmentSlot.yourLevelBucketRemaining !== undefined
-                        ? String(pendingEnrollmentSlot.yourLevelBucketRemaining)
-                        : '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{t('clinicalModalDtAllLevelBucket')}</dt>
-                    <dd>
-                      {pendingEnrollmentSlot.allLevelsBucketRemaining !== undefined
-                        ? String(pendingEnrollmentSlot.allLevelsBucketRemaining)
-                        : '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{t('clinicalModalDtBookingWillUse')}</dt>
-                    <dd>{bookingUsesLine(pendingEnrollmentSlot, t)}</dd>
-                  </div>
-                </>
-              ) : null}
-              <div>
-                <dt>{t('clinicalModalDtCanEnroll')}</dt>
-                <dd>
-                  {slotHasSeatForStudent(pendingEnrollmentSlot)
-                    ? t('clinicalModalCanEnrollYes')
-                    : t('clinicalModalCanEnrollNo')}
-                </dd>
-              </div>
             </dl>
+            {slotUsesBuckets(pendingEnrollmentSlot) ? (
+              <fieldset
+                className="portal-stack"
+                style={{ border: 'none', margin: '0.5rem 0 0', padding: 0 }}
+              >
+                <legend className="portal-card-note" style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
+                  {t('clinicalModalChooseSeatType')}
+                </legend>
+                <p className="portal-inline-note portal-inline-note--flush" style={{ marginTop: 0 }}>
+                  {t('clinicalModalChooseSeatTypeHint')}
+                </p>
+                <div className="portal-stack" style={{ gap: '0.35rem', marginTop: '0.35rem' }}>
+                  {BUCKET_CHOICES.map((bucket) => {
+                    const cap = capForBucket(pendingEnrollmentSlot, bucket)
+                    const rem = remainingForBucket(pendingEnrollmentSlot, bucket)
+                    const disabled =
+                      cap <= 0 || rem <= 0 || busyTimetableId != null
+                    return (
+                      <label
+                        key={bucket}
+                        className="portal-card-note"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '0.5rem',
+                          cursor: disabled ? 'not-allowed' : 'pointer',
+                          opacity: disabled ? 0.55 : 1,
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="clinical-seat-bucket"
+                          value={bucket}
+                          checked={selectedSeatBucket === bucket}
+                          disabled={disabled}
+                          onChange={() => setSelectedSeatBucket(bucket)}
+                        />
+                        <span>
+                          {bucketChoiceLabel(bucket, t)}
+                          {bucketChoiceSuffix(pendingEnrollmentSlot, bucket, t)}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </fieldset>
+            ) : null}
             <div className="portal-offered-section-modal__actions">
               <button
                 type="button"
@@ -980,10 +848,15 @@ export function ClinicalSchedulePage() {
               <button
                 type="button"
                 className="portal-btn portal-btn--primary"
-                disabled={
-                  busyTimetableId != null || !slotHasSeatForStudent(pendingEnrollmentSlot)
+                disabled={busyTimetableId != null || !canConfirmEnrollment}
+                onClick={() =>
+                  void handleEnroll(
+                    pendingEnrollmentSlot.id,
+                    slotUsesBuckets(pendingEnrollmentSlot)
+                      ? (selectedSeatBucket as ClinicalSeatBucketChoice)
+                      : null,
+                  )
                 }
-                onClick={() => void handleEnroll(pendingEnrollmentSlot.id)}
               >
                 {busyTimetableId === pendingEnrollmentSlot.id
                   ? t('clinicalEnrollingEllipsis')

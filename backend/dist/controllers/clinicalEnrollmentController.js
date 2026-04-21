@@ -195,7 +195,7 @@ export async function getStudentClinicalEnrollmentsHandler(req, res) {
 }
 /**
  * POST /api/students/:studentId/clinical-enrollments
- * Body: { timetableId: number }
+ * Body: { timetableId: number, seatBucket?: '100'|'200'|'300'|'all' } — seatBucket required when the slot has per-bucket caps.
  */
 export async function postStudentClinicalEnrollmentHandler(req, res) {
     try {
@@ -215,7 +215,10 @@ export async function postStudentClinicalEnrollmentHandler(req, res) {
             : typeof tidRaw === "string"
                 ? Number(tidRaw.trim())
                 : NaN;
-        const result = await enrollStudentInClinicalSlot(sid, timetableId);
+        const seatBucketRaw = body.seatBucket !== undefined && body.seatBucket !== null
+            ? body.seatBucket
+            : body.seat_bucket;
+        const result = await enrollStudentInClinicalSlot(sid, timetableId, seatBucketRaw);
         if (!result.ok) {
             res.status(result.status).json({ error: result.error });
             return;
