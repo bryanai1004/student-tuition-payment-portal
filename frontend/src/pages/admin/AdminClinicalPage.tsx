@@ -86,6 +86,21 @@ function academicTermDisplayLabel(
   return t ? `${t.term_label} (${t.year} · ${t.term_name})` : '—'
 }
 
+function pickLatestAcademicTermId(terms: AcademicTerm[]): string {
+  if (terms.length === 0) return ''
+  const latest = terms.reduce((best, term) => {
+    if (term.sequence_no !== best.sequence_no) {
+      return term.sequence_no > best.sequence_no ? term : best
+    }
+    if (term.year !== best.year) return term.year > best.year ? term : best
+    if (term.quarter_index !== best.quarter_index) {
+      return term.quarter_index > best.quarter_index ? term : best
+    }
+    return term.id.localeCompare(best.id) > 0 ? term : best
+  }, terms[0]!)
+  return latest.id
+}
+
 export function AdminClinicalPage() {
   const [tab, setTab] = useState<AdminClinicalTabId>('roster')
 
@@ -154,6 +169,12 @@ export function AdminClinicalPage() {
         const list = await fetchAcademicTerms({ signal: ac.signal })
         if (ac.signal.aborted) return
         setTerms(list)
+        setSlotsTermId((prev) => {
+          const current = prev.trim()
+          if (current !== '' && list.some((t) => t.id === current)) return prev
+          // Default to newest term so Clinical opens with data instead of a blank "Select term" state.
+          return pickLatestAcademicTermId(list)
+        })
       } catch {
         if (ac.signal.aborted) return
         setTerms([])
@@ -234,6 +255,8 @@ export function AdminClinicalPage() {
   }, [rosterSlot])
 
   const rosterTermLabel = academicTermDisplayLabel(terms, slotsTermId)
+  const termsLoading = terms == null
+  const hasTerms = (terms?.length ?? 0) > 0
   const rosterSlotsLoading = slotsLoading && slots === null && slotsError === null
   const rosterSlotsReady =
     slotsTermId.trim() !== '' &&
@@ -341,9 +364,9 @@ export function AdminClinicalPage() {
             </div>
           </div>
 
-          {slotsTermId.trim() === '' ? (
+          {!termsLoading && !hasTerms ? (
             <p className="portal-card-note" style={{ marginTop: '0.75rem' }}>
-              Select an academic term to view slot rosters for that term.
+              No academic terms are available yet.
             </p>
           ) : null}
 
@@ -630,9 +653,9 @@ export function AdminClinicalPage() {
             </div>
           </div>
 
-          {slotsTermId.trim() === '' ? (
+          {!termsLoading && !hasTerms ? (
             <p className="portal-card-note" style={{ marginTop: '0.75rem' }}>
-              Select an academic term to view and manage clinic timetable slots.
+              No academic terms are available yet.
             </p>
           ) : null}
 
