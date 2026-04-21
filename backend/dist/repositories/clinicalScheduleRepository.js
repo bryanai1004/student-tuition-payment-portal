@@ -84,17 +84,17 @@ export async function listStudentClinicalAssignments(studentId) {
             ct.slot AS tt_slot, ct.instructor AS tt_instructor, ct.term AS tt_term, ct.year AS tt_year
        FROM clinical_assignments ca
        LEFT JOIN clinic_timetable ct ON ca.timetable_id = ct.seqNum
-      WHERE TRIM(ca.student_id) = TRIM(?)
+      WHERE TRIM(ca.student_id) COLLATE utf8mb4_unicode_ci = TRIM(?) COLLATE utf8mb4_unicode_ci
        AND (
          ca.timetable_id IS NULL
          OR EXISTS (
            SELECT 1
              FROM clinical_enrollments ce
-            WHERE TRIM(ce.student_id) = TRIM(ca.student_id)
+            WHERE TRIM(ce.student_id) COLLATE utf8mb4_unicode_ci = TRIM(ca.student_id) COLLATE utf8mb4_unicode_ci
               AND ce.timetable_id = ca.timetable_id
-              AND TRIM(ce.term) = TRIM(IFNULL(ca.term, ''))
+              AND TRIM(ce.term) COLLATE utf8mb4_unicode_ci = TRIM(IFNULL(ca.term, '')) COLLATE utf8mb4_unicode_ci
               AND ce.year = ca.\`year\`
-              AND LOWER(TRIM(ce.status)) = 'enrolled'
+              AND LOWER(TRIM(ce.status)) COLLATE utf8mb4_unicode_ci = 'enrolled' COLLATE utf8mb4_unicode_ci
          )
        )
       ORDER BY COALESCE(ca.\`year\`, YEAR(ca.session_date)) DESC,

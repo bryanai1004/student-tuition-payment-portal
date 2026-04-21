@@ -20,7 +20,7 @@ import { postAiAsk } from "../controllers/aiAskController.js";
 import { getAdminClinicalRequestsHandler, getStudentClinicalRequestsHandler, postApproveClinicalRequestHandler, postRejectClinicalRequestHandler, postStudentClinicalRequestHandler, } from "../controllers/clinicalRequestController.js";
 import { deleteAdminClinicalSlotEnrollmentHandler, deleteStudentClinicalEnrollmentHandler, getAdminClinicalSlotRosterHandler, getStudentClinicalEnrollmentsHandler, getStudentOpenClinicalEnrollmentSlotsHandler, postAdminClinicalPaymentHoldCleanupHandler, postStudentClinicalEnrollmentHandler, } from "../controllers/clinicalEnrollmentController.js";
 import { deleteAdminClinicalSlotHandler, getAdminClinicalSlotsHandler, patchAdminClinicalSlotHandler, postAdminClinicalSlotHandler, } from "../controllers/adminClinicalSlotController.js";
-import { getAdminClinicalTimetableHandler, getStudentClinicalScheduleHandler, postAdminClinicalAssignHandler, } from "../controllers/clinicalScheduleController.js";
+import { getAdminClinicalTimetableHandler, getClinicalOfferedTimetableHandler, getStudentClinicalScheduleHandler, postAdminClinicalAssignHandler, } from "../controllers/clinicalScheduleController.js";
 import { getAdminStudentDocumentRequirementsHandler, getStudentDocumentRequirementsHandler, postAdminStudentDocumentRequirementResetHandler, postAdminStudentDocumentRequirementsResetAllHandler, postStudentAgreementSubmitHandler, postStudentQuizSubmitHandler, } from "../controllers/studentDocumentsController.js";
 export const apiRouter = Router();
 apiRouter.get("/health", getHealth);
@@ -37,6 +37,8 @@ apiRouter.get("/academic-terms/recent", getAcademicTermsRecent);
 apiRouter.get("/academic-terms/current", getAcademicTermsCurrent);
 apiRouter.get("/academic-terms/current-posted", getAcademicTermsCurrentPosted);
 apiRouter.get("/academic-terms", getAcademicTerms);
+/** Clinical slots for read-only offered timetable (legacy `clinic_timetable` + enrollment counts). */
+apiRouter.get("/clinical/offered-timetable", getClinicalOfferedTimetableHandler);
 /** Course bin (per student); requires `student_course_bin` table when used. */
 apiRouter.get("/course-bin/:studentId", getCourseBin);
 apiRouter.post("/course-bin/:studentId", postCourseBin);

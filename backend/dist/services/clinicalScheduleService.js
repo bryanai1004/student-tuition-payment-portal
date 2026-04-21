@@ -1,4 +1,4 @@
-import { getClinicTimetableById, listClinicTimetableSlots, } from "../repositories/clinicalTimetableRepository.js";
+import { getClinicTimetableById, listClinicTimetableSlots, listClinicalOfferedTimetableDetailRows, } from "../repositories/clinicalTimetableRepository.js";
 import { insertClinicalAssignment, listStudentClinicalAssignments, } from "../repositories/clinicalScheduleRepository.js";
 /** Thrown when `getStudentClinicalSchedule` receives an invalid student id (maps to HTTP 400). */
 export class ClinicalScheduleValidationError extends Error {
@@ -210,6 +210,49 @@ export async function listAdminClinicalTimetable(query) {
             site: null,
             courseCode: null,
             slotLabel: timetableRowToSlotLabel(row),
+        };
+    });
+}
+export async function listClinicalOfferedTimetableForPortal(query) {
+    let yearNum = null;
+    if (query.year != null && String(query.year).trim() !== "") {
+        const n = Number(String(query.year).trim());
+        if (Number.isFinite(n)) {
+            yearNum = n;
+        }
+    }
+    const term = query.term != null && String(query.term).trim() !== ""
+        ? String(query.term).trim()
+        : null;
+    const rows = await listClinicalOfferedTimetableDetailRows({
+        year: yearNum,
+        term,
+    });
+    return rows.map((r) => {
+        const start = formatClinicTimeHm(r.time_from);
+        const end = formatClinicTimeHm(r.time_to);
+        const slotLabel = buildClinicTimetableSlotLabel({
+            weekday: r.weekday,
+            timeFrom: start,
+            timeTo: end,
+            slot: r.slot,
+            instructor: r.instructor,
+        });
+        return {
+            id: r.timetableId,
+            term: r.term,
+            year: r.year,
+            weekday: r.weekday,
+            startTime: start,
+            endTime: end,
+            instructor: r.instructor,
+            site: null,
+            courseCode: null,
+            slotLabel,
+            slotCode: r.slot,
+            capacity: r.capacity,
+            enrolledCount: r.enrolledCount,
+            remainingSeats: r.remainingSeats,
         };
     });
 }

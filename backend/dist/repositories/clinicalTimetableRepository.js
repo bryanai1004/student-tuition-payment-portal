@@ -225,4 +225,93 @@ export async function countClinicTimetableReferences(seqNum) {
         assignments: Math.max(0, Math.trunc(Number(r.assignments))),
     };
 }
+/** Legacy caps summed (same semantics as enrollment repository). */
+function sumClinicTimetableCaps(row) {
+    const a = Math.max(0, Math.trunc(Number(row.cap_100)));
+    const b = Math.max(0, Math.trunc(Number(row.cap_200)));
+    const c = Math.max(0, Math.trunc(Number(row.cap_300)));
+    const d = Math.max(0, Math.trunc(Number(row.cap_123)));
+    return a + b + c + d;
+}
+function coerceMysqlTimeHmsForLayout(v) {
+    if (v instanceof Date) {
+        const h = v.getUTCHours();
+        const m = v.getUTCMinutes();
+        const sec = v.getUTCSeconds();
+        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+    }
+    const s = String(v ?? "").trim();
+    const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(s);
+    if (!m) {
+        return "";
+    }
+    return `${m[1].padStart(2, "0")}:${m[2]}:${(m[3] ?? "00").padStart(2, "0")}`;
+}
+function normalizeOfferedTermFilter(term) {
+    if (term == null) {
+        return "";
+    }
+    return String(term).trim().slice(0, 20);
+}
+export async function listClinicalOfferedTimetableDetailRows(options) {
+    const y = options?.year;
+    const t = normalizeOfferedTermFilter(options?.term ?? null);
+    const yearClause = y != null && Number.isFinite(y) ? " AND ct.year = ? " : "";
+    const termClause = t !== "" ? " AND TRIM(ct.term) = ? " : "";
+    const params = [];
+    if (y != null && Number.isFinite(y)) {
+        params.push(Number(y));
+    }
+    if (t !== "") {
+        params.push(t);
+    }
+    const [rows] = await pool.query(`SELECT
+        ct.seqNum AS timetable_id,
+        ct.year,
+        TRIM(ct.term) AS term,
+        ct.day AS weekday,
+        ct.time_from,
+        ct.time_to,
+        ct.slot,
+        TRIM(ct.instructor) AS instructor,
+        ct.\`100Max\` AS cap_100,
+        ct.\`200Max\` AS cap_200,
+        ct.\`300Max\` AS cap_300,
+        ct.\`123Max\` AS cap_123,
+        COALESCE(ec.cnt, 0) AS enrolled_count
+     FROM clinic_timetable ct
+     LEFT JOIN (
+       SELECT timetable_id, TRIM(term) AS eterm, year AS eyear,
+              COUNT(*) AS cnt
+         FROM clinical_enrollments
+        WHERE LOWER(TRIM(status)) = 'enrolled'
+        GROUP BY timetable_id, TRIM(term), year
+     ) ec ON ec.timetable_id = ct.seqNum
+         AND ec.eterm = TRIM(ct.term)
+         AND ec.eyear = ct.year
+    WHERE 1=1
+    ${yearClause}
+    ${termClause}
+    ORDER BY ct.year DESC, TRIM(ct.term) ASC, ct.day ASC, ct.time_from ASC, ct.seqNum ASC`, params);
+    return rows.map((raw) => {
+        const row = raw;
+        const cap = sumClinicTimetableCaps(row);
+        const enrolled = Math.max(0, Math.trunc(Number(row.enrolled_count)));
+        const capped = cap > 0;
+        const inst = String(row.instructor ?? "").trim();
+        return {
+            timetableId: Number(row.timetable_id),
+            term: String(row.term ?? "").trim(),
+            year: Number(row.year),
+            weekday: String(row.weekday ?? "").trim(),
+            time_from: coerceMysqlTimeHmsForLayout(row.time_from),
+            time_to: coerceMysqlTimeHmsForLayout(row.time_to),
+            slot: String(row.slot ?? "").trim(),
+            instructor: inst === "" ? null : inst,
+            capacity: capped ? cap : null,
+            enrolledCount: enrolled,
+            remainingSeats: capped ? Math.max(0, cap - enrolled) : null,
+        };
+    });
+}
 //# sourceMappingURL=clinicalTimetableRepository.js.map

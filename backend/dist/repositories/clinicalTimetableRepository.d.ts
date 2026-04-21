@@ -65,4 +65,22 @@ export type ClinicTimetableReferenceCounts = {
  * Rows still pointing at this `clinic_timetable.seqNum` (enrollments, requests, assignments).
  */
 export declare function countClinicTimetableReferences(seqNum: number): Promise<ClinicTimetableReferenceCounts>;
+/** `clinic_timetable` + enrolled counts for the portal offered timetable (no dependency on enrollment service). */
+export type ClinicalOfferedTimetableDetailRow = {
+    timetableId: number;
+    term: string;
+    year: number;
+    weekday: string;
+    time_from: string;
+    time_to: string;
+    slot: string;
+    instructor: string | null;
+    capacity: number | null;
+    enrolledCount: number;
+    remainingSeats: number | null;
+};
+export declare function listClinicalOfferedTimetableDetailRows(options?: {
+    year?: number | null;
+    term?: string | null;
+}): Promise<ClinicalOfferedTimetableDetailRow[]>;
 //# sourceMappingURL=clinicalTimetableRepository.d.ts.map

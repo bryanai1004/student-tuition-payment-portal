@@ -9,6 +9,11 @@ export declare function getStudentClinicalScheduleHandler(req: Request, res: Res
  */
 export declare function getAdminClinicalTimetableHandler(req: Request, res: Response): Promise<void>;
 /**
+ * GET /api/clinical/offered-timetable
+ * Read-only `clinic_timetable` rows + enrolled counts (student portal + admins).
+ */
+export declare function getClinicalOfferedTimetableHandler(req: Request, res: Response): Promise<void>;
+/**
  * POST /api/admin/clinical/assign
  * Preferred body: { studentId, timetableId }
  * Legacy body: { studentId, courseCode, sessionDate, sessionName?, site?, faculty? }

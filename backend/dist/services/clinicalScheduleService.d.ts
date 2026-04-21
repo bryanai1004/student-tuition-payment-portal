@@ -32,6 +32,13 @@ export type AdminClinicalTimetableSlotDto = {
     courseCode: string | null;
     slotLabel: string;
 };
+/** Student + admin read-only offered grid; adds capacity + legacy `slot` code for clinic label. */
+export type ClinicalOfferedTimetableSlotDto = AdminClinicalTimetableSlotDto & {
+    slotCode: string;
+    capacity: number | null;
+    enrolledCount: number;
+    remainingSeats: number | null;
+};
 /** Normalize MySQL TIME string to HH:MM for API consumers. */
 export declare function formatClinicTimeHm(raw: string | null | undefined): string | null;
 /**
@@ -49,6 +56,10 @@ export declare function listAdminClinicalTimetable(query: {
     term?: string | null;
     year?: string | null;
 }): Promise<AdminClinicalTimetableSlotDto[]>;
+export declare function listClinicalOfferedTimetableForPortal(query: {
+    term?: string | null;
+    year?: string | null;
+}): Promise<ClinicalOfferedTimetableSlotDto[]>;
 export type AssignClinicalSessionBody = {
     studentId: string;
     /** JSON may send a numeric string; controller normalizes before calling in some paths. */

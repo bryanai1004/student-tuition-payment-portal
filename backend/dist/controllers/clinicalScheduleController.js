@@ -1,4 +1,4 @@
-import { assignClinicalSession, ClinicalScheduleValidationError, getStudentClinicalSchedule, listAdminClinicalTimetable, } from "../services/clinicalScheduleService.js";
+import { assignClinicalSession, ClinicalScheduleValidationError, getStudentClinicalSchedule, listAdminClinicalTimetable, listClinicalOfferedTimetableForPortal, } from "../services/clinicalScheduleService.js";
 function readOptionalStringField(body, key) {
     if (!Object.prototype.hasOwnProperty.call(body, key)) {
         return undefined;
@@ -58,6 +58,26 @@ export async function getAdminClinicalTimetableHandler(req, res) {
     catch (e) {
         console.error(e);
         res.status(500).json({ error: "Failed to load clinical timetable" });
+    }
+}
+/**
+ * GET /api/clinical/offered-timetable
+ * Read-only `clinic_timetable` rows + enrolled counts (student portal + admins).
+ */
+export async function getClinicalOfferedTimetableHandler(req, res) {
+    try {
+        const term = typeof req.query.term === "string" && req.query.term.trim() !== ""
+            ? req.query.term.trim()
+            : null;
+        const year = typeof req.query.year === "string" && req.query.year.trim() !== ""
+            ? req.query.year.trim()
+            : null;
+        const slots = await listClinicalOfferedTimetableForPortal({ term, year });
+        res.json(slots);
+    }
+    catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to load clinical offered timetable" });
     }
 }
 /**
