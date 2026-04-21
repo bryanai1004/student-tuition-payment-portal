@@ -1,521 +1,558 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useStudentPortalT } from '@/LanguageContext'
+import { TimetableWeekGrid } from '../../components/timetable/TimetableWeekGrid'
 import { useAccount } from '../../context/AccountContext'
-import { useLanguage, useStudentPortalT } from '../../LanguageContext'
-import type { PortalLocale, StudentPortalKey } from '../../lib/i18n'
 import {
-  fetchAdminClinicalTimetable,
+  fetchClinicalOfferedTimetable,
+  fetchCurrentAcademicTerm,
+  fetchRecentAcademicTerms,
   fetchStudentClinicalEnrollments,
-  fetchStudentClinicalSchedule,
   postStudentClinicalEnrollment,
-  type AdminClinicalTimetableSlot,
-  type ClinicalScheduleSession,
+  type AcademicTerm,
+  type ClinicalOfferedTimetableSlot,
   type StudentActiveClinicalBookingHold,
   type StudentClinicalEnrollmentRow,
 } from '../../lib/api'
+import { clinicalOfferedSlotsToLayoutRows } from '../../lib/clinicalTimetableAdapter'
+import { formatTimeHmsForDisplay } from '../../lib/formatScheduleTime'
+import {
+  buildPlacedBlocksByDayForLayout,
+  STUDENT_REGISTRATION_TIMETABLE_GRID,
+  timetableBodyHeightPx,
+} from '../../lib/timetableBlockLayout'
+import type { StudentPortalKey } from '../../lib/i18n'
+import type { WeekdayFull } from '../../lib/weekdaySchedule'
+import {
+  mergeTermOptions,
+  resolveSelectedRegistrationTermId,
+} from '../registration/registrationTermSearch'
 
-function formatScheduleDate(isoYmd: string, locale: PortalLocale): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoYmd.trim())
-  if (!m) return isoYmd
-  const y = Number(m[1])
-  const mo = Number(m[2])
-  const d = Number(m[3])
-  const dt = new Date(y, mo - 1, d)
-  if (
-    dt.getFullYear() !== y ||
-    dt.getMonth() !== mo - 1 ||
-    dt.getDate() !== d
-  ) {
-    return isoYmd
-  }
-  const loc = locale === 'zh' ? 'zh-Hant' : 'en-US'
-  return dt.toLocaleDateString(loc, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+const CLINICAL_OFFERED_GRID = STUDENT_REGISTRATION_TIMETABLE_GRID
+const CLINICAL_WEEKDAYS: WeekdayFull[] = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+]
+
+const WEEKDAY_FULL_TO_LABEL: Record<WeekdayFull, StudentPortalKey> = {
+  Monday: 'weekdayMonday',
+  Tuesday: 'weekdayTuesday',
+  Wednesday: 'weekdayWednesday',
+  Thursday: 'weekdayThursday',
+  Friday: 'weekdayFriday',
+  Saturday: 'weekdaySaturday',
+  Sunday: 'weekdaySunday',
 }
 
-function dashText(value: string | null | undefined, dash: string): string {
-  if (value == null) return dash
-  const s = String(value).trim()
-  return s === '' ? dash : s
+function weekdayColumnLabel(
+  full: WeekdayFull,
+  t: (key: StudentPortalKey) => string,
+): string {
+  return t(WEEKDAY_FULL_TO_LABEL[full])
 }
 
-type TableRow = {
-  key: string
-  date: string
-  session: string
-  site: string
-  faculty: string
-  statusRaw: string
+function formatPaymentHoldCountdown(iso: string, nowMs: number): string {
+  const end = new Date(iso).getTime()
+  if (!Number.isFinite(end)) return '—'
+  const ms = Math.max(0, end - nowMs)
+  const totalM = Math.floor(ms / 60000)
+  const h = Math.floor(totalM / 60)
+  const m = totalM % 60
+  if (h <= 0) return `${m}m`
+  return `${h}h ${m}m`
 }
 
-function sessionStatusClass(raw: string): string {
-  const s = raw.trim()
-  if (s === 'Confirmed') return 'portal-status portal-status--paid'
-  if (s === 'Tentative') return 'portal-status portal-status--upcoming'
-  return 'portal-status portal-status--pending'
+function capDisplay(slot: ClinicalOfferedTimetableSlot): string {
+  return slot.capacity == null ? '—' : String(slot.capacity)
 }
 
-function sessionStatusLabel(raw: string, t: (k: StudentPortalKey) => string): string {
-  const s = raw.trim()
-  if (s === 'Confirmed') return t('clinicalStatusConfirmed')
-  if (s === 'Tentative') return t('clinicalStatusTentative')
-  if (s === 'Scheduled') return t('clinicalScheduledStatus')
-  return s.length > 0 ? s : t('clinicalScheduledStatus')
-}
-
-function isTimetableSlotInSchedule(
-  slot: AdminClinicalTimetableSlot,
-  sessions: ClinicalScheduleSession[],
-): boolean {
-  const label = slot.slotLabel.trim()
-  return sessions.some(
-    (s) =>
-      s.courseCode.trim().toUpperCase() === 'CLINIC' &&
-      (s.sessionName?.trim() ?? '') === label,
-  )
-}
-
-function formatRemainingHhMmSs(remainingMs: number): string {
-  const ms = Math.max(0, remainingMs)
-  const totalSec = Math.floor(ms / 1000)
-  const h = Math.floor(totalSec / 3600)
-  const m = Math.floor((totalSec % 3600) / 60)
-  const s = totalSec % 60
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(h)}:${pad(m)}:${pad(s)}`
-}
-
-function activeEnrollmentForTimetable(
-  timetableId: number,
-  enrollments: StudentClinicalEnrollmentRow[],
-): StudentClinicalEnrollmentRow | undefined {
-  return enrollments.find(
-    (r) =>
-      r.timetableId === timetableId &&
-      r.status.trim().toLowerCase() === 'enrolled',
-  )
-}
-
-const ACADEMIC_TERM_ORDER = ['Winter', 'Spring', 'Summer', 'Fall'] as const
-
-function compareTermsAcademic(a: string, b: string): number {
-  const at = a.trim()
-  const bt = b.trim()
-  const ai = ACADEMIC_TERM_ORDER.findIndex(
-    (termName) => termName.toLowerCase() === at.toLowerCase(),
-  )
-  const bi = ACADEMIC_TERM_ORDER.findIndex(
-    (termName) => termName.toLowerCase() === bt.toLowerCase(),
-  )
-  const aKnown = ai >= 0
-  const bKnown = bi >= 0
-  if (aKnown && bKnown) return ai - bi
-  if (aKnown && !bKnown) return -1
-  if (!aKnown && bKnown) return 1
-  return at.localeCompare(bt, undefined, { sensitivity: 'base' })
+function remainingDisplay(slot: ClinicalOfferedTimetableSlot): string {
+  return slot.remainingSeats == null ? '—' : String(slot.remainingSeats)
 }
 
 export function ClinicalSchedulePage() {
-  const { locale } = useLanguage()
   const t = useStudentPortalT()
-  const dash = t('dashEm')
   const { currentStudentId } = useAccount()
-  const [sessions, setSessions] = useState<ClinicalScheduleSession[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const sid = currentStudentId?.trim() ?? ''
 
-  const [timetableSlots, setTimetableSlots] = useState<AdminClinicalTimetableSlot[]>(
-    [],
-  )
-  const [timetableLoading, setTimetableLoading] = useState(false)
-  const [timetableError, setTimetableError] = useState<string | null>(null)
-  const [filterYear, setFilterYear] = useState('')
-  const [filterTerm, setFilterTerm] = useState('')
-  const [selectedSlotId, setSelectedSlotId] = useState('')
+  const [recentTerms, setRecentTerms] = useState<AcademicTerm[]>([])
+  const [currentTerm, setCurrentTerm] = useState<AcademicTerm | null>(null)
+  const [termsReady, setTermsReady] = useState(false)
+  const [selectedTermId, setSelectedTermId] = useState('')
+
+  const [slots, setSlots] = useState<ClinicalOfferedTimetableSlot[]>([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState<string | null>(null)
+
   const [enrollments, setEnrollments] = useState<StudentClinicalEnrollmentRow[]>([])
   const [activeClinicalBookingHold, setActiveClinicalBookingHold] =
     useState<StudentActiveClinicalBookingHold | null>(null)
-  const [bookingSubmitting, setBookingSubmitting] = useState(false)
-  const [bookingMessage, setBookingMessage] = useState<string | null>(null)
-  const [bookingError, setBookingError] = useState<string | null>(null)
-  const [dataReloadKey, setDataReloadKey] = useState(0)
-  const [clinicalHoldTickMs, setClinicalHoldTickMs] = useState(() => Date.now())
+  const [enrollmentLoading, setEnrollmentLoading] = useState(false)
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null)
 
-  const rows = useMemo<TableRow[]>(
+  const [selectedSlotId, setSelectedSlotId] = useState('')
+  const [busyTimetableId, setBusyTimetableId] = useState<number | null>(null)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [paymentHoldNowMs, setPaymentHoldNowMs] = useState(() => Date.now())
+  const [reloadKey, setReloadKey] = useState(0)
+
+  const options = useMemo(
+    () => mergeTermOptions(recentTerms, currentTerm),
+    [recentTerms, currentTerm],
+  )
+  const selectedTerm = useMemo(
+    () => options.find((x) => x.id === selectedTermId) ?? null,
+    [options, selectedTermId],
+  )
+
+  const layoutRows = useMemo(() => clinicalOfferedSlotsToLayoutRows(slots), [slots])
+  const placedWeekdays = useMemo(
+    () => buildPlacedBlocksByDayForLayout(layoutRows, CLINICAL_OFFERED_GRID),
+    [layoutRows],
+  )
+  const hourRows = useMemo(() => {
+    const sh = CLINICAL_OFFERED_GRID.startHour ?? 8
+    const eh = CLINICAL_OFFERED_GRID.endHour ?? 21
+    return Array.from({ length: eh - sh + 1 }, (_, i) => sh + i)
+  }, [])
+  const bodyHeightPx = timetableBodyHeightPx(CLINICAL_OFFERED_GRID)
+
+  useEffect(() => {
+    const ac = new AbortController()
+    void (async () => {
+      try {
+        const [recentR, currentR] = await Promise.all([
+          fetchRecentAcademicTerms(6, { signal: ac.signal }),
+          fetchCurrentAcademicTerm({ signal: ac.signal }),
+        ])
+        if (ac.signal.aborted) return
+        setRecentTerms(recentR)
+        setCurrentTerm(currentR)
+      } catch {
+        if (ac.signal.aborted) return
+        setRecentTerms([])
+        setCurrentTerm(null)
+      } finally {
+        if (!ac.signal.aborted) setTermsReady(true)
+      }
+    })()
+    return () => ac.abort()
+  }, [])
+
+  useEffect(() => {
+    if (!termsReady) return
+    const next = resolveSelectedRegistrationTermId(selectedTermId, options, currentTerm)
+    if (next !== selectedTermId) {
+      setSelectedTermId(next)
+    }
+  }, [termsReady, options, currentTerm, selectedTermId])
+
+  useEffect(() => {
+    if (!termsReady || selectedTerm == null) {
+      setSlots([])
+      setSlotsLoading(false)
+      setSlotsError(null)
+      return
+    }
+    const ac = new AbortController()
+    setSlotsLoading(true)
+    setSlotsError(null)
+    void (async () => {
+      try {
+        const rows = await fetchClinicalOfferedTimetable({
+          term: selectedTerm.term_name,
+          year: selectedTerm.year,
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        setSlots(rows)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setSlots([])
+        setSlotsError(
+          e instanceof Error ? e.message : t('clinicalOfferedTimetableLoadError'),
+        )
+      } finally {
+        if (!ac.signal.aborted) setSlotsLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [termsReady, selectedTerm, t, reloadKey])
+
+  useEffect(() => {
+    if (!sid || selectedTerm == null) {
+      setEnrollments([])
+      setActiveClinicalBookingHold(null)
+      setEnrollmentLoading(false)
+      setEnrollmentError(null)
+      return
+    }
+    const ac = new AbortController()
+    setEnrollmentLoading(true)
+    setEnrollmentError(null)
+    void (async () => {
+      try {
+        const bundle = await fetchStudentClinicalEnrollments(sid, {
+          term: selectedTerm.term_name,
+          year: selectedTerm.year,
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        setEnrollments(bundle.enrollments)
+        setActiveClinicalBookingHold(bundle.activeClinicalBookingHold)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setEnrollments([])
+        setActiveClinicalBookingHold(null)
+        setEnrollmentError(
+          e instanceof Error ? e.message : t('clinicalCouldNotLoadEnrollmentData'),
+        )
+      } finally {
+        if (!ac.signal.aborted) setEnrollmentLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [sid, selectedTerm, t, reloadKey])
+
+  useEffect(() => {
+    if (!selectedSlotId) return
+    if (!slots.some((s) => String(s.id) === selectedSlotId)) {
+      setSelectedSlotId('')
+    }
+  }, [slots, selectedSlotId])
+
+  const selectedSlot = useMemo(() => {
+    const n = Number(selectedSlotId)
+    if (!Number.isFinite(n)) return undefined
+    return slots.find((s) => s.id === n)
+  }, [slots, selectedSlotId])
+
+  const enrollmentsByTimetable = useMemo(() => {
+    const map = new Map<number, StudentClinicalEnrollmentRow>()
+    for (const row of enrollments) {
+      if (row.status.trim().toLowerCase() === 'enrolled') {
+        map.set(row.timetableId, row)
+      }
+    }
+    return map
+  }, [enrollments])
+  const offeredSlotsById = useMemo(() => {
+    const map = new Map<number, ClinicalOfferedTimetableSlot>()
+    for (const slot of slots) {
+      map.set(slot.id, slot)
+    }
+    return map
+  }, [slots])
+
+  const enrollmentsWithPaymentHoldCountdown = useMemo(
     () =>
-      sessions.map((s) => ({
-        key: String(s.id),
-        date: formatScheduleDate(s.sessionDate, locale),
-        session: dashText(s.sessionName, dash),
-        site: dashText(s.site, dash),
-        faculty: dashText(s.faculty, dash),
-        statusRaw: s.status.trim() || 'Scheduled',
-      })),
-    [sessions, locale, dash],
+      enrollments.filter((r) => {
+        if (r.status.trim().toLowerCase() !== 'enrolled') return false
+        const iso = r.paymentHoldExpiresAt
+        if (iso == null || iso.trim() === '') return false
+        const end = new Date(iso).getTime()
+        return Number.isFinite(end) && end > paymentHoldNowMs
+      }),
+    [enrollments, paymentHoldNowMs],
   )
 
   useEffect(() => {
-    const ac = new AbortController()
-    setTimetableLoading(true)
-    setTimetableError(null)
-    ;(async () => {
-      try {
-        const slots = await fetchAdminClinicalTimetable({ signal: ac.signal })
-        if (ac.signal.aborted) return
-        setTimetableSlots(slots)
-      } catch (e) {
-        if (ac.signal.aborted) return
-        setTimetableSlots([])
-        setTimetableError(
-          e instanceof Error
-            ? e.message
-            : t('couldNotLoadClinicTimetableSlots'),
-        )
-      } finally {
-        if (!ac.signal.aborted) {
-          setTimetableLoading(false)
-        }
-      }
-    })()
-    return () => ac.abort()
-  }, [t])
+    if (enrollmentsWithPaymentHoldCountdown.length === 0) return
+    const id = window.setInterval(() => {
+      setPaymentHoldNowMs(Date.now())
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [enrollmentsWithPaymentHoldCountdown.length])
 
-  useEffect(() => {
-    const id = currentStudentId?.trim()
-    if (!id) {
-      setSessions([])
-      setEnrollments([])
-      setActiveClinicalBookingHold(null)
-      setLoading(false)
-      setError(null)
-      return
-    }
-
-    const ac = new AbortController()
-    setSessions([])
-    setLoading(true)
-    setError(null)
-
-    ;(async () => {
-      try {
-        const [sess, enrBundle] = await Promise.all([
-          fetchStudentClinicalSchedule(id, { signal: ac.signal }),
-          fetchStudentClinicalEnrollments(id, { signal: ac.signal }),
-        ])
-        if (ac.signal.aborted) return
-        setSessions(sess)
-        setEnrollments(enrBundle.enrollments)
-        setActiveClinicalBookingHold(enrBundle.activeClinicalBookingHold)
-        setError(null)
-      } catch (e) {
-        if (ac.signal.aborted) return
-        setSessions([])
-        setEnrollments([])
-        setActiveClinicalBookingHold(null)
-        setError(
-          e instanceof Error ? e.message : t('couldNotLoadClinicSchedule'),
-        )
-      } finally {
-        if (!ac.signal.aborted) {
-          setLoading(false)
-        }
-      }
-    })()
-
-    return () => ac.abort()
-  }, [currentStudentId, dataReloadKey, t])
-
-  const availableTerms = useMemo(() => {
-    const seen = new Set<string>()
-    for (const s of timetableSlots) {
-      const termStr = s.term.trim()
-      if (termStr !== '') seen.add(termStr)
-    }
-    return [...seen].sort(compareTermsAcademic)
-  }, [timetableSlots])
-
-  const availableYears = useMemo(() => {
-    const seen = new Set<number>()
-    for (const s of timetableSlots) {
-      if (Number.isFinite(s.year)) seen.add(s.year)
-    }
-    return [...seen].sort((a, b) => b - a)
-  }, [timetableSlots])
-
-  const filteredTimetableSlots = useMemo(() => {
-    return timetableSlots.filter((s) => {
-      if (filterYear.trim() !== '' && String(s.year) !== filterYear.trim()) {
-        return false
-      }
-      if (filterTerm.trim() !== '' && s.term !== filterTerm.trim()) {
-        return false
-      }
-      return true
-    })
-  }, [timetableSlots, filterYear, filterTerm])
-
-  const selectedSlot = useMemo(() => {
-    const raw = selectedSlotId.trim()
-    if (raw === '') return undefined
-    const n = Number(raw)
-    if (!Number.isFinite(n)) return undefined
-    return filteredTimetableSlots.find((s) => s.id === n)
-  }, [filteredTimetableSlots, selectedSlotId])
-
-  const selectedActiveEnrollment = selectedSlot
-    ? activeEnrollmentForTimetable(selectedSlot.id, enrollments)
-    : undefined
-  const selectedInSchedule =
-    selectedSlot != null && isTimetableSlotInSchedule(selectedSlot, sessions)
-  const slotAlreadyBooked =
-    selectedSlot != null &&
-    (selectedInSchedule || selectedActiveEnrollment != null)
-
-  const clinicalHoldEndMs = activeClinicalBookingHold
-    ? new Date(activeClinicalBookingHold.holdExpiresAt).getTime()
-    : NaN
-  const clinicalHoldRemainingMs = Number.isFinite(clinicalHoldEndMs)
-    ? clinicalHoldEndMs - clinicalHoldTickMs
-    : 0
-  const clinicalHoldExpired =
-    activeClinicalBookingHold != null &&
-    (!Number.isFinite(clinicalHoldEndMs) || clinicalHoldRemainingMs <= 0)
-
-  useEffect(() => {
-    const h = activeClinicalBookingHold
-    if (!h) return
-    const endMs = new Date(h.holdExpiresAt).getTime()
-    if (!Number.isFinite(endMs)) return
-    let id: number | null = null
-    const tick = () => {
-      const now = Date.now()
-      setClinicalHoldTickMs(now)
-      if (now >= endMs && id != null) {
-        window.clearInterval(id)
-        id = null
-      }
-    }
-    tick()
-    id = window.setInterval(tick, 1000)
-    return () => {
-      if (id != null) window.clearInterval(id)
-    }
-  }, [activeClinicalBookingHold?.clinicalEnrollmentId, activeClinicalBookingHold?.holdExpiresAt])
-
-  async function handleBookSlot() {
-    const id = currentStudentId?.trim()
-    if (!id || !selectedSlot) return
-    setBookingSubmitting(true)
-    setBookingError(null)
-    setBookingMessage(null)
+  async function handleEnroll(timetableId: number) {
+    if (!sid) return
+    const slot = slots.find((s) => s.id === timetableId)
+    if (!slot) return
+    if (enrollmentsByTimetable.has(slot.id)) return
+    if (slot.remainingSeats != null && slot.remainingSeats <= 0) return
+    setActionMessage(null)
+    setActionError(null)
+    setBusyTimetableId(timetableId)
     try {
-      const created = await postStudentClinicalEnrollment(id, {
-        timetableId: selectedSlot.id,
-      })
-      const parts = [t('clinicalRequestSubmittedMessage')]
-      if (created.billingChargePosted) {
-        parts.push(t('clinicalEnrollmentFinanceChargeNote'))
-      }
-      setBookingMessage(parts.join(' '))
-      setDataReloadKey((k) => k + 1)
+      const created = await postStudentClinicalEnrollment(sid, { timetableId })
+      setActionMessage(
+        created.billingChargePosted
+          ? `${t('clinicalEnrollmentSuccessSlot')} ${t('clinicalEnrollmentFinanceChargeNote')}`
+          : t('clinicalEnrollmentSuccessSlot'),
+      )
+      setReloadKey((k) => k + 1)
     } catch (e) {
-      setBookingError(
-        e instanceof Error ? e.message : t('couldNotSubmitClinicalRequest'),
+      setActionError(
+        e instanceof Error ? e.message : t('clinicalCouldNotCompleteEnrollment'),
       )
     } finally {
-      setBookingSubmitting(false)
+      setBusyTimetableId(null)
     }
   }
 
-  const id = currentStudentId?.trim()
-  const showEmptyAccount = !id
-  const sectionLoading = loading && sessions.length === 0 && error === null
+  const showEmptyAccount = !sid
+  const anyLoading = slotsLoading || enrollmentLoading
 
   return (
-    <main className="portal-page">
-      {showEmptyAccount ? (
-        <p className="portal-page-lede" role="status">
-          {t('clinicalSignInSchedule')}
+    <main className="portal-page portal-clinical-offered-timetable">
+      <section className="portal-card portal-stack" aria-labelledby="clinical-schedule-heading">
+        <h2 id="clinical-schedule-heading" className="portal-section-heading">
+          {t('clinicSchedule')}
+        </h2>
+        <p className="portal-text-muted" style={{ marginTop: 0 }}>
+          {t('clinicalOfferedTimetableLede')}
         </p>
-      ) : null}
-      {!showEmptyAccount && error ? (
-        <p className="portal-page-lede" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {!showEmptyAccount && sectionLoading ? (
-        <p className="portal-page-lede" aria-live="polite">
-          {t('clinicalLoadingScheduleShort')}
-        </p>
-      ) : null}
 
-      {!showEmptyAccount ? (
-        <section
-          className="portal-module-panel"
-          aria-label={t('clinicalRequestSlotSectionAria')}
-          style={{ marginBottom: '1rem' }}
-        >
-          {timetableLoading ? (
-            <p className="portal-page-lede" aria-live="polite">
-              {t('clinicalLoadingTimetable')}
-            </p>
-          ) : null}
-          {timetableError ? (
-            <p className="portal-page-lede" role="alert">
-              {timetableError}
-            </p>
-          ) : null}
-          {!timetableLoading && !timetableError ? (
-            <>
-              <div
-                className="portal-actions"
-                style={{
-                  flexWrap: 'wrap',
-                  alignItems: 'flex-end',
-                  gap: '0.5rem 1rem',
-                  marginBottom: '0.5rem',
-                }}
+        {showEmptyAccount ? (
+          <p className="portal-page-lede" role="status">
+            {t('clinicalSignInAddDrop')}
+          </p>
+        ) : null}
+
+        {!termsReady ? (
+          <p className="portal-text-muted" role="status">
+            {t('loadingTerms')}
+          </p>
+        ) : null}
+
+        {termsReady && options.length === 0 ? (
+          <p className="portal-text-muted" role="status">
+            {t('noAcademicTermsAvailable')}
+          </p>
+        ) : null}
+
+        {actionError ? (
+          <p className="portal-page-lede" role="alert">
+            {actionError}
+          </p>
+        ) : null}
+        {actionMessage ? (
+          <p className="portal-page-lede" role="status">
+            {actionMessage}
+          </p>
+        ) : null}
+        {slotsError ? (
+          <p className="portal-page-lede" role="alert">
+            {slotsError}
+          </p>
+        ) : null}
+        {enrollmentError ? (
+          <p className="portal-page-lede" role="alert">
+            {enrollmentError}
+          </p>
+        ) : null}
+
+        {!showEmptyAccount && selectedTerm != null ? (
+          <div
+            className="portal-actions"
+            style={{
+              flexWrap: 'wrap',
+              alignItems: 'flex-end',
+              gap: '0.75rem 1rem',
+            }}
+          >
+            <label
+              className="portal-card-note"
+              style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}
+            >
+              <span>{t('term')}</span>
+              <select
+                className="portal-account-ledger__select"
+                value={selectedTermId}
+                onChange={(e) => setSelectedTermId(e.target.value)}
               >
-                <label
-                  className="portal-card-note"
-                  style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}
-                >
-                  <span>{t('term')}</span>
-                  <select
-                    className="portal-account-ledger__select"
-                    value={filterTerm}
-                    onChange={(e) => setFilterTerm(e.target.value)}
-                    aria-label={t('clinicalFilterTimetableByTermAria')}
-                  >
-                    <option value="">{t('clinicalAllTerms')}</option>
-                    {availableTerms.map((termName) => (
-                      <option key={termName} value={termName}>
-                        {termName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label
-                  className="portal-card-note"
-                  style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}
-                >
-                  <span>{t('clinicalColYear')}</span>
-                  <select
-                    className="portal-account-ledger__select"
-                    value={filterYear}
-                    onChange={(e) => setFilterYear(e.target.value)}
-                    aria-label={t('clinicalFilterTimetableByYearAria')}
-                  >
-                    <option value="">{t('clinicalAllYears')}</option>
-                    {availableYears.map((y) => (
-                      <option key={y} value={String(y)}>
-                        {y}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label
-                  className="portal-card-note"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.25rem',
-                    minWidth: 'min(100%, 22rem)',
-                    flex: '1 1 14rem',
-                  }}
-                >
-                  <span>{t('clinicalWeeklySlot')}</span>
-                  <select
-                    className="portal-account-ledger__select"
-                    value={selectedSlotId}
-                    onChange={(e) => setSelectedSlotId(e.target.value)}
-                    aria-label={t('clinicalSelectSlotAria')}
-                  >
-                    <option value="">{t('clinicalSelectSlotPlaceholder')}</option>
-                    {filteredTimetableSlots.map((s) => (
-                      <option key={s.id} value={String(s.id)}>
-                        {s.slotLabel} ({s.term} {s.year})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  className="portal-btn portal-btn--primary"
-                  disabled={bookingSubmitting || !selectedSlot || slotAlreadyBooked}
-                  onClick={() => void handleBookSlot()}
-                >
-                  {bookingSubmitting ? t('submitting') : t('clinicalRequestSlot')}
-                </button>
-              </div>
-              <p className="portal-card-note" style={{ margin: '0 0 0.75rem', opacity: 0.85 }}>
-                {t('clinicalRequestSlotStaffNote')}
-              </p>
-            </>
-          ) : null}
-          {selectedSlot && slotAlreadyBooked ? (
-            <p className="portal-page-lede" role="status">
-              <span className="portal-status portal-status--paid">{t('clinicalApprovedBadge')}</span>
-              {' '}
-              {t('clinicalApprovedSlotMessage')}
-            </p>
-          ) : null}
-          {bookingError ? (
-            <p className="portal-page-lede" role="alert">
-              {bookingError}
-            </p>
-          ) : null}
-          {bookingMessage ? (
-            <p className="portal-page-lede" role="status">
-              {bookingMessage}
-            </p>
-          ) : null}
-        </section>
-      ) : null}
+                {options.map((term) => (
+                  <option key={term.id} value={term.id}>
+                    {term.term_name} {term.year}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label
+              className="portal-card-note"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.25rem',
+                minWidth: 'min(100%, 26rem)',
+                flex: '1 1 16rem',
+              }}
+            >
+              <span>{t('clinicalWeeklySlot')}</span>
+              <select
+                className="portal-account-ledger__select"
+                value={selectedSlotId}
+                onChange={(e) => setSelectedSlotId(e.target.value)}
+                disabled={slots.length === 0 || anyLoading}
+              >
+                <option value="">{t('clinicalSelectSlotPlaceholder')}</option>
+                {slots.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.slotCode.trim() || s.slotLabel} · {s.weekday} ·{' '}
+                    {formatTimeHmsForDisplay(s.startTime)}-{formatTimeHmsForDisplay(s.endTime)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="portal-btn portal-btn--primary"
+              disabled={
+                selectedSlot == null ||
+                busyTimetableId != null ||
+                enrollmentsByTimetable.has(selectedSlot.id) ||
+                (selectedSlot.remainingSeats != null && selectedSlot.remainingSeats <= 0)
+              }
+              onClick={() => {
+                if (selectedSlot) void handleEnroll(selectedSlot.id)
+              }}
+            >
+              {selectedSlot && busyTimetableId === selectedSlot.id
+                ? t('clinicalEnrollingEllipsis')
+                : selectedSlot && enrollmentsByTimetable.has(selectedSlot.id)
+                  ? t('clinicalEnrolledState')
+                  : t('enroll')}
+            </button>
+          </div>
+        ) : null}
 
-      {!showEmptyAccount && activeClinicalBookingHold ? (
-        <section
-          className="portal-module-panel portal-stack"
-          aria-label={t('clinicalPaymentHoldReminderTitle')}
-          style={{ marginBottom: '1rem' }}
-        >
+        {selectedSlot != null ? (
+          <p className="portal-card-note" style={{ marginTop: '0.15rem' }}>
+            {selectedSlot.slotCode.trim() || selectedSlot.slotLabel} ·{' '}
+            {formatTimeHmsForDisplay(selectedSlot.startTime)}-
+            {formatTimeHmsForDisplay(selectedSlot.endTime)} · {t('clinicalColCapacity')}:{' '}
+            {capDisplay(selectedSlot)} · {t('clinicalColRemaining')}:{' '}
+            {remainingDisplay(selectedSlot)}
+          </p>
+        ) : null}
+
+        {anyLoading ? (
+          <p className="portal-text-muted" role="status">
+            {t('clinicalLoadingClinicSlots')}
+          </p>
+        ) : null}
+
+        {!anyLoading && selectedTerm != null && slots.length === 0 ? (
+          <p className="portal-text-muted" role="status">
+            {t('clinicalOfferedTimetableEmpty')}
+          </p>
+        ) : null}
+
+        {!anyLoading && selectedTerm != null && slots.length > 0 ? (
+          <div className="portal-clinical-offered-timetable__scroll">
+            <div className="admin-timetable-wrap portal-clinical-offered-timetable__inner">
+              <TimetableWeekGrid
+                weekdays={CLINICAL_WEEKDAYS}
+                rootClassName="portal-clinical-offered-timetable__grid"
+                placedWeekdays={placedWeekdays}
+                hourRows={hourRows}
+                bodyHeightPx={bodyHeightPx}
+                weekdayLabel={(d) => weekdayColumnLabel(d, t)}
+                hourLabel={(h) => formatTimeHmsForDisplay(`${h}:00:00`)}
+                renderBlock={(b, d) => {
+                  const row = b.source
+                  const offered = offeredSlotsById.get(row.timetableId)
+                  if (!offered) return null
+                  const colW = 100 / b.colCount
+                  const insetPx = 3
+                  const isEnrolled = enrollmentsByTimetable.has(row.timetableId)
+                  const isFull =
+                    offered.remainingSeats != null && offered.remainingSeats <= 0
+                  const isBusy = busyTimetableId === row.timetableId
+                  const disabled = isEnrolled || isFull || busyTimetableId != null
+                  const bg = isEnrolled
+                    ? 'rgba(16, 124, 16, 0.16)'
+                    : isFull
+                      ? 'rgba(120, 120, 120, 0.2)'
+                      : 'rgba(139, 0, 0, 0.08)'
+                  const border = isEnrolled
+                    ? 'rgba(16, 124, 16, 0.45)'
+                    : isFull
+                      ? 'rgba(120, 120, 120, 0.4)'
+                      : 'rgba(139, 0, 0, 0.24)'
+                  return (
+                    <button
+                      key={`${row.timetableId}-${d}-${b.startMin}-${b.colIndex}`}
+                      type="button"
+                      className="admin-timetable-v2__block portal-clinical-offered-timetable__block"
+                      style={{
+                        top: b.topPx,
+                        height: b.heightPx,
+                        left: `calc(${colW * b.colIndex}% + ${insetPx}px)`,
+                        width: `calc(${colW}% - ${insetPx * 2}px)`,
+                        background: bg,
+                        borderColor: border,
+                        cursor: disabled ? 'default' : 'pointer',
+                      }}
+                      disabled={disabled}
+                      onClick={() => void handleEnroll(row.timetableId)}
+                    >
+                      <span className="admin-timetable-v2__block-title">
+                        {offered.slotCode.trim() || offered.slotLabel}
+                      </span>
+                      <span className="admin-timetable-v2__block-meta">
+                        {formatTimeHmsForDisplay(offered.startTime)} –{' '}
+                        {formatTimeHmsForDisplay(offered.endTime)}
+                      </span>
+                      {offered.instructor ? (
+                        <span className="admin-timetable-v2__block-meta">
+                          {offered.instructor}
+                        </span>
+                      ) : null}
+                      <span className="admin-timetable-v2__block-meta">
+                        {offered.enrolledCount} / {capDisplay(offered)} (
+                        {t('clinicalColRemaining')}: {remainingDisplay(offered)})
+                      </span>
+                      <span className="admin-timetable-v2__block-meta">
+                        {isBusy
+                          ? t('clinicalEnrollingEllipsis')
+                          : isEnrolled
+                            ? t('clinicalEnrolledState')
+                            : isFull
+                              ? t('clinicalSlotFull')
+                              : t('enroll')}
+                      </span>
+                    </button>
+                  )
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      {!showEmptyAccount && enrollmentsWithPaymentHoldCountdown.length > 0 ? (
+        <section className="portal-module-panel portal-stack" style={{ marginTop: '1rem' }}>
           <div
             className="portal-registration-form-hint portal-registration-form-hint--warn portal-stack"
             role="status"
             aria-live="polite"
           >
-            <strong>
-              {clinicalHoldExpired
-                ? t('clinicalPaymentHoldExpiredTitle')
-                : t('clinicalPaymentHoldReminderTitle')}
-            </strong>
-            {clinicalHoldExpired ? (
-              <p className="portal-inline-note portal-inline-note--flush" style={{ marginTop: '0.35rem' }}>
-                {t('clinicalPaymentHoldExpiredBody')}
-              </p>
-            ) : (
-              <>
-                <p className="portal-card-note" style={{ margin: '0.5rem 0 0' }}>
-                  {activeClinicalBookingHold.slotLabel}
-                </p>
-                <p className="portal-page-lede" style={{ margin: '0.35rem 0 0' }}>
-                  {t('clinicalPaymentHoldDuePrefix')}{' '}
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {formatRemainingHhMmSs(clinicalHoldRemainingMs)}
+            <strong>{t('clinicalPaymentHoldReminderTitle')}</strong>
+            <ul className="portal-stack" style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
+              {enrollmentsWithPaymentHoldCountdown.map((row) => (
+                <li key={row.id}>
+                  <span className="portal-card-note">{row.slotLabel}</span>
+                  {' · '}
+                  <span>
+                    {t('clinicalPaymentHoldTimeRemaining')}:{' '}
+                    {row.paymentHoldExpiresAt != null
+                      ? formatPaymentHoldCountdown(row.paymentHoldExpiresAt, paymentHoldNowMs)
+                      : '—'}
                   </span>
-                </p>
-                <p className="portal-inline-note portal-inline-note--flush" style={{ marginTop: '0.25rem' }}>
-                  {t('clinicalPaymentHoldPayInFinancesShort')}
-                </p>
-                <p className="portal-inline-note portal-inline-note--flush" style={{ marginTop: '0.35rem' }}>
-                  {t('clinicalPaymentHoldReminderBody')}
-                </p>
-              </>
-            )}
+                </li>
+              ))}
+            </ul>
+            {activeClinicalBookingHold ? (
+              <p className="portal-inline-note portal-inline-note--flush" style={{ marginTop: '0.35rem' }}>
+                {t('clinicalPaymentHoldDuePrefix')}{' '}
+                {formatPaymentHoldCountdown(activeClinicalBookingHold.holdExpiresAt, paymentHoldNowMs)}
+              </p>
+            ) : null}
             <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
               <Link className="portal-link" to="/finances/overview">
                 {t('clinicalPaymentHoldFinancesLink')}
@@ -524,40 +561,6 @@ export function ClinicalSchedulePage() {
           </div>
         </section>
       ) : null}
-
-      <section className="portal-module-panel" aria-labelledby="clinic-schedule-table-heading">
-        <h3 id="clinic-schedule-table-heading" className="portal-module-panel-heading">
-          {t('clinicalUpcomingAssignmentsHeading')}
-        </h3>
-        <div className="portal-table-wrap">
-          <table className="portal-table portal-table--clinical-schedule">
-            <thead>
-              <tr>
-                <th scope="col">{t('date')}</th>
-                <th scope="col">{t('clinicalColSession')}</th>
-                <th scope="col">{t('clinicalColClinicSite')}</th>
-                <th scope="col">{t('clinicalColSupervisingFaculty')}</th>
-                <th scope="col">{t('status')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.key}>
-                  <td>{row.date}</td>
-                  <td>{row.session}</td>
-                  <td>{row.site}</td>
-                  <td>{row.faculty}</td>
-                  <td>
-                    <span className={sessionStatusClass(row.statusRaw)}>
-                      {sessionStatusLabel(row.statusRaw, t)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </main>
   )
 }

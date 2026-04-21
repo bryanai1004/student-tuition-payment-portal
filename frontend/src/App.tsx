@@ -42,14 +42,8 @@ import { GpaPage } from './pages/academics/GpaPage'
 import { AcademicProgressPage } from './pages/academics/AcademicProgressPage'
 import { EnrollmentVerificationPage } from './pages/academics/EnrollmentVerificationPage'
 import { ClinicalModuleShell } from './pages/clinical/ClinicalModuleShell'
-import { ClinicalHomePage } from './pages/clinical/ClinicalHomePage'
 import { ClinicalSchedulePage } from './pages/clinical/ClinicalSchedulePage'
 import { ClinicalAddDropPage } from './pages/clinical/ClinicalAddDropPage'
-import { ClinicalExamPracticePage } from './pages/clinical/ClinicalExamPracticePage'
-import { ClinicalEvaluationPage } from './pages/clinical/ClinicalEvaluationPage'
-import { ClinicalRequiredHoursPage } from './pages/clinical/ClinicalRequiredHoursPage'
-import { ClinicalOfferedTimetablePage } from './pages/clinical/ClinicalOfferedTimetablePage'
-import { ClinicalCompliancePage } from './pages/clinical/ClinicalCompliancePage'
 import { DocumentsLayout } from './pages/documents/DocumentsLayout'
 import { DocumentsHomePage } from './pages/documents/DocumentsHomePage'
 import { ProfilePage } from './pages/ProfilePage'
@@ -194,17 +188,15 @@ export default function App() {
               <Route path="schedule" element={<SchedulePage />} />
               <Route path="offered-timetable" element={<OfferedTimetablePage />} />
               <Route path="clinical" element={<ClinicalModuleShell />}>
-                <Route index element={<ClinicalHomePage />} />
+                <Route index element={<Navigate to="schedule" replace />} />
                 <Route path="schedule" element={<ClinicalSchedulePage />} />
-                <Route
-                  path="offered-timetable"
-                  element={<ClinicalOfferedTimetablePage />}
-                />
-                <Route path="add-drop" element={<ClinicalAddDropPage />} />
-                <Route path="exam-practice" element={<ClinicalExamPracticePage />} />
-                <Route path="evaluation" element={<ClinicalEvaluationPage />} />
-                <Route path="required-hours" element={<ClinicalRequiredHoursPage />} />
-                <Route path="compliance" element={<ClinicalCompliancePage />} />
+                <Route path="my-schedule" element={<ClinicalAddDropPage />} />
+                <Route path="offered-timetable" element={<Navigate to="../schedule" replace />} />
+                <Route path="add-drop" element={<Navigate to="../my-schedule" replace />} />
+                <Route path="exam-practice" element={<Navigate to="../schedule" replace />} />
+                <Route path="evaluation" element={<Navigate to="../schedule" replace />} />
+                <Route path="required-hours" element={<Navigate to="../schedule" replace />} />
+                <Route path="compliance" element={<Navigate to="../schedule" replace />} />
               </Route>
             </Route>
             <Route path="/finances" element={<FinancesLayout />}>

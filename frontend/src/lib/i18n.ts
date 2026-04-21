@@ -196,6 +196,9 @@ export const STUDENT_PORTAL_EN = {
   // Clinical nav
   clinicalNavAria: 'Clinical',
   clinicSchedule: 'Clinic Schedule',
+  clinicalMyScheduleNav: 'My Clinical Schedule',
+  clinicalMyScheduleLede:
+    'Review the clinical slots you are registered in, and drop a slot directly from this table when needed.',
   addDropClinic: 'Add / Drop Clinic',
   examPractice: 'Exam Practice',
   submitEvaluation: 'Submit Evaluation',
@@ -852,6 +855,7 @@ export const STUDENT_PORTAL_EN = {
   clinicalNoSlotsMatchFilters: 'No timetable slots match these filters.',
   clinicalEnrollingEllipsis: 'Enrolling…',
   clinicalEnrolledState: 'Enrolled',
+  clinicalSlotFull: 'Full',
   clinicalMyEnrollmentsHeading: 'My clinic enrollments',
   clinicalNoActiveEnrollments: 'No active clinic enrollments for these filters.',
   clinicalDroppingEllipsis: 'Dropping…',
@@ -1358,6 +1362,8 @@ const STUDENT_PORTAL_ZH: Record<StudentPortalKey, string> = {
 
   clinicalNavAria: '臨床實習',
   clinicSchedule: '臨床排程',
+  clinicalMyScheduleNav: '我的臨床排程',
+  clinicalMyScheduleLede: '查看您已選上的臨床時段，並可在此表直接辦理退選。',
   addDropClinic: '臨床加退選',
   examPractice: '考試練習',
   submitEvaluation: '提交評核',
@@ -1963,6 +1969,7 @@ const STUDENT_PORTAL_ZH: Record<StudentPortalKey, string> = {
   clinicalNoSlotsMatchFilters: '沒有符合此篩選的時段表項目。',
   clinicalEnrollingEllipsis: '選課中…',
   clinicalEnrolledState: '已選',
+  clinicalSlotFull: '額滿',
   clinicalMyEnrollmentsHeading: '我的臨床選課',
   clinicalNoActiveEnrollments: '此篩選下無修課中之臨床選課。',
   clinicalDroppingEllipsis: '退選中…',
