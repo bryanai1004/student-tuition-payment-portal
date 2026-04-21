@@ -205,24 +205,66 @@ export async function deleteClinicTimetableSlot(seqNum) {
     return res.affectedRows > 0;
 }
 /**
- * Rows still pointing at this `clinic_timetable.seqNum` (enrollments, requests, assignments).
+ * Status-aware dependency counts for a timetable slot.
+ * - Active dependencies should block delete because they are still operationally referenced.
+ * - Historical dropped/decided dependencies may also block delete to preserve audit/history links.
  */
 export async function countClinicTimetableReferences(seqNum) {
     if (!Number.isFinite(seqNum) || seqNum <= 0) {
-        return { enrollments: 0, requests: 0, assignments: 0 };
+        return {
+            activeEnrollments: 0,
+            historicalDroppedEnrollments: 0,
+            activePendingRequests: 0,
+            historicalDecidedRequests: 0,
+            activeAssignments: 0,
+            historicalDroppedAssignments: 0,
+        };
     }
     const [rows] = await pool.query(`SELECT
-        (SELECT COUNT(*) FROM clinical_enrollments WHERE timetable_id = ?) AS enrollments,
-        (SELECT COUNT(*) FROM clinical_requests WHERE timetable_id = ?) AS requests,
-        (SELECT COUNT(*) FROM clinical_assignments WHERE timetable_id = ?) AS assignments`, [seqNum, seqNum, seqNum]);
+        (SELECT COUNT(*)
+           FROM clinical_enrollments
+          WHERE timetable_id = ?
+            AND LOWER(TRIM(status)) <> 'dropped') AS active_enrollments,
+        (SELECT COUNT(*)
+           FROM clinical_enrollments
+          WHERE timetable_id = ?
+            AND LOWER(TRIM(status)) = 'dropped') AS historical_dropped_enrollments,
+        (SELECT COUNT(*)
+           FROM clinical_assignments
+          WHERE timetable_id = ?
+            AND LOWER(TRIM(IFNULL(status, ''))) NOT IN ('dropped', 'cancelled')
+        ) AS active_assignments,
+        (SELECT COUNT(*)
+           FROM clinical_assignments
+          WHERE timetable_id = ?
+            AND LOWER(TRIM(IFNULL(status, ''))) IN ('dropped', 'cancelled')
+        ) AS historical_dropped_assignments`, [seqNum, seqNum, seqNum, seqNum]);
     const r = rows[0];
-    if (!r) {
-        return { enrollments: 0, requests: 0, assignments: 0 };
+    const [requestTableRows] = await pool.query(`SELECT 1 AS ok
+       FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'clinical_requests'
+      LIMIT 1`);
+    const hasClinicalRequestsTable = requestTableRows.length > 0;
+    let activePendingRequests = 0;
+    let historicalDecidedRequests = 0;
+    if (hasClinicalRequestsTable) {
+        const [requestRows] = await pool.query(`SELECT
+          SUM(CASE WHEN LOWER(TRIM(status)) = 'pending' THEN 1 ELSE 0 END) AS active_pending_requests,
+          SUM(CASE WHEN LOWER(TRIM(status)) <> 'pending' THEN 1 ELSE 0 END) AS historical_decided_requests
+         FROM clinical_requests
+        WHERE timetable_id = ?`, [seqNum]);
+        const rr = requestRows[0];
+        activePendingRequests = Math.max(0, Math.trunc(Number(rr?.active_pending_requests ?? 0)));
+        historicalDecidedRequests = Math.max(0, Math.trunc(Number(rr?.historical_decided_requests ?? 0)));
     }
     return {
-        enrollments: Math.max(0, Math.trunc(Number(r.enrollments))),
-        requests: Math.max(0, Math.trunc(Number(r.requests))),
-        assignments: Math.max(0, Math.trunc(Number(r.assignments))),
+        activeEnrollments: Math.max(0, Math.trunc(Number(r?.active_enrollments ?? 0))),
+        historicalDroppedEnrollments: Math.max(0, Math.trunc(Number(r?.historical_dropped_enrollments ?? 0))),
+        activePendingRequests,
+        historicalDecidedRequests,
+        activeAssignments: Math.max(0, Math.trunc(Number(r?.active_assignments ?? 0))),
+        historicalDroppedAssignments: Math.max(0, Math.trunc(Number(r?.historical_dropped_assignments ?? 0))),
     };
 }
 /** Legacy caps summed (same semantics as enrollment repository). */

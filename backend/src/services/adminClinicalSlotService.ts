@@ -499,11 +499,24 @@ export async function deleteAdminClinicalSlot(
     return { ok: false, error: "Clinical slot not found." };
   }
   const refs = await countClinicTimetableReferences(seqNum);
-  const total = refs.enrollments + refs.requests + refs.assignments;
-  if (total > 0) {
+  const activeTotal =
+    refs.activeEnrollments + refs.activePendingRequests + refs.activeAssignments;
+  if (activeTotal > 0) {
     return {
       ok: false,
-      error: `This slot cannot be deleted because it is still referenced (${refs.enrollments} enrollment(s), ${refs.requests} request(s), ${refs.assignments} assignment(s)). Remove or reassign those records first.`,
+      // Keep delete guard aligned with operational "active" semantics used in roster/list views.
+      error: `This slot cannot be deleted because it still has active references (${refs.activeEnrollments} active enrollment(s), ${refs.activePendingRequests} pending clinical request(s), ${refs.activeAssignments} active assignment(s)). Remove or reassign those records first.`,
+    };
+  }
+  const historicalTotal =
+    refs.historicalDroppedEnrollments +
+    refs.historicalDecidedRequests +
+    refs.historicalDroppedAssignments;
+  if (historicalTotal > 0) {
+    return {
+      ok: false,
+      // Historical rows are retained for audit/history, so hard delete stays blocked even when active counts are zero.
+      error: `This slot cannot be deleted because it has historical references (${refs.historicalDroppedEnrollments} dropped enrollment(s), ${refs.historicalDecidedRequests} decided clinical request(s), ${refs.historicalDroppedAssignments} dropped/cancelled assignment(s)).`,
     };
   }
   const deleted = await deleteClinicTimetableSlot(seqNum);
