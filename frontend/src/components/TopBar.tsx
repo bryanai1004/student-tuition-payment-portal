@@ -1,6 +1,7 @@
 import { forwardRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLanguage, useStudentPortalT } from '@/LanguageContext'
+import { useMatchMedia } from '../hooks/useMatchMedia'
 import { useAccount } from '../context/AccountContext'
 import { PORTAL_BRANDING_TITLE } from '../branding'
 import { PORTAL_MOBILE_NAV_DRAWER_ID } from './PortalSidebar'
@@ -24,6 +25,8 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
   const t = useStudentPortalT()
   const langToggleTitle = locale === 'en' ? t('switchLanguageToZh') : t('switchLanguageToEn')
   const { account, loading, isAuthenticated, logout } = useAccount()
+  /** Icon-only logout + compact header; wider phones/small tablets still show the word "Logout". */
+  const compactMobileHeader = useMatchMedia('(max-width: 639px)')
   const displayName = !isAuthenticated
     ? t('studentFallback')
     : loading
@@ -38,7 +41,7 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
   return (
     <header className="portal-app-header">
       <div className="portal-branding-bar" aria-label={t('schoolBrandingAria')}>
-        <div className="portal-branding-bar-inner">
+        <div className="portal-branding-bar-inner portal-branding-bar-inner--student-topbar">
           <div className="portal-branding-bar-start">
             <button
               ref={ref}
@@ -52,6 +55,8 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
             >
               <span className="portal-branding-bar-menu-icon" aria-hidden="true" />
             </button>
+          </div>
+          <div className="portal-branding-bar-center">
             <Link
               to="/dashboard"
               className="portal-branding-bar-logo-link"
@@ -60,7 +65,9 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
               <img
                 src="/AMULogo.png"
                 alt=""
-                className="portal-branding-bar-logo"
+                className="portal-branding-bar-logo portal-branding-bar-logo--student-wordmark"
+                width={200}
+                height={48}
                 decoding="async"
               />
             </Link>
@@ -92,11 +99,12 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(function TopBar
                 type="button"
                 className="portal-logout-button"
                 onClick={handleLogout}
+                aria-label={compactMobileHeader ? t('logout') : undefined}
               >
                 <span className="portal-user-icon" aria-hidden>
                   <IconLogout width={17} height={17} />
                 </span>
-                <span>{t('logout')}</span>
+                <span className="portal-logout-button__label">{t('logout')}</span>
               </button>
             </div>
           </div>

@@ -162,6 +162,35 @@
   flex: 1;
 }
 
+/* Student portal top bar: hamburger | logo (center) | actions — avoids two-column squeeze on narrow viewports */
+.portal-branding-bar-inner--student-topbar > .portal-branding-bar-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.portal-branding-bar-inner--student-topbar > .portal-branding-bar-start {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 769px) {
+  .portal-branding-bar-inner--student-topbar > .portal-branding-bar-start {
+    display: none;
+  }
+
+  .portal-branding-bar-inner--student-topbar > .portal-branding-bar-center {
+    flex: 0 1 auto;
+    justify-content: flex-start;
+  }
+
+  .portal-branding-bar-inner--student-topbar > .portal-branding-bar-end {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+}
+
 .portal-branding-bar-menu-btn {
   display: none;
   align-items: center;
@@ -324,6 +353,7 @@
   gap: 0.4375rem;
   margin: 0;
   padding: 0;
+  min-width: 0;
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -360,8 +390,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.0625rem;
-  height: 1.0625rem;
+  width: 17px;
+  height: 17px;
   color: currentColor;
 }
 
@@ -369,6 +399,7 @@
   display: block;
   width: 100%;
   height: 100%;
+  flex-shrink: 0;
 }
 
 .portal-user-button:hover,
@@ -900,6 +931,70 @@
     padding-right: max(env(safe-area-inset-right), 1rem);
   }
 
+  /* Student top bar: 3-column grid so logo stays centered and actions never overlap the mark */
+  .portal-branding-bar-inner--student-topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+  }
+
+  .portal-branding-bar-inner--student-topbar > .portal-branding-bar-start {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .portal-branding-bar-inner--student-topbar > .portal-branding-bar-center {
+    grid-column: 2;
+    flex: unset;
+    justify-content: center;
+    justify-self: center;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .portal-branding-bar-inner--student-topbar > .portal-branding-bar-end {
+    grid-column: 3;
+    flex: unset;
+    min-width: 0;
+    overflow: hidden;
+    justify-self: end;
+    max-width: 100%;
+  }
+
+  .portal-branding-bar-inner--student-topbar .portal-branding-bar-logo-link {
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .portal-branding-bar-inner--student-topbar .portal-branding-bar-logo--student-wordmark {
+    height: 2.125rem;
+    width: auto;
+    max-height: calc(var(--portal-branding-bar-height) - 1rem);
+    max-width: min(6.25rem, 30vw);
+    object-fit: contain;
+    object-position: left center;
+  }
+
+  .portal-branding-bar-inner--student-topbar .portal-branding-bar-actions {
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .portal-branding-bar-inner--student-topbar .portal-branding-bar-user-cluster {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+  }
+
+  .portal-branding-bar-inner--student-topbar .portal-user-button {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .portal-branding-bar-start {
     flex: 1;
     min-width: 0;
@@ -938,6 +1033,12 @@
 
   .portal-user-button__label {
     max-width: min(9rem, 28vw);
+  }
+
+  .portal-branding-bar-inner--student-topbar .portal-user-button__label {
+    max-width: none;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .portal-portal-banner-inner {
@@ -1009,6 +1110,21 @@
   .portal-inline-note,
   .portal-note {
     font-size: 0.78125rem;
+  }
+}
+
+/* Student header: icon-only logout on very narrow widths (matches TopBar compact breakpoint) */
+@media (max-width: 639px) {
+  .portal-branding-bar-inner--student-topbar .portal-logout-button__label {
+    display: none;
+  }
+
+  .portal-branding-bar-inner--student-topbar .portal-logout-button {
+    border-bottom: none;
+    padding: 0.4rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    justify-content: center;
   }
 }
 
