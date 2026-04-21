@@ -28,7 +28,7 @@ export function RegistrationSectionNav() {
   const { pathname } = useLocation()
   const [searchParams] = useSearchParams()
   const isClinicalSection = pathname.startsWith('/registration/clinical')
-  const courseTo = `/registration/search${buildCourseTabSearch(searchParams)}`
+  const courseTo = `/registration/offered-timetable${buildCourseTabSearch(searchParams)}`
   const clinicalTo = `/registration/clinical/schedule${buildClinicalTabSearch(searchParams)}`
 
   return (

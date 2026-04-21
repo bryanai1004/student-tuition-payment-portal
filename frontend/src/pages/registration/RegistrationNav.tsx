@@ -7,11 +7,8 @@ function linkClass(isActive: boolean) {
 }
 
 const ITEMS: { to: string; labelKey: StudentPortalKey }[] = [
-  { to: 'search', labelKey: 'courseSearch' },
   { to: 'offered-timetable', labelKey: 'offeredTimetable' },
   { to: 'course-bin', labelKey: 'myCourseBin' },
-  { to: 'add-drop', labelKey: 'addDrop' },
-  { to: 'schedule', labelKey: 'myTimetable' },
 ]
 
 export function RegistrationNav({ termLinkSearch }: { termLinkSearch: string }) {

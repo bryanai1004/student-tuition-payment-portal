@@ -62,12 +62,7 @@ export function CourseBinCheckoutPage() {
           : t('checkoutSuccessAddedCount').replace('{n}', String(res.insertedCount))
       setSuccess(msg)
       window.setTimeout(() => {
-        navigate({
-          pathname: '/registration/schedule',
-          search: registrationTermId
-            ? `?term=${encodeURIComponent(registrationTermId.trim())}`
-            : '',
-        })
+        navigate('/dashboard')
       }, 1800)
     } catch (e) {
       setError(e instanceof Error ? e.message : t('registrationFailedGeneric'))
