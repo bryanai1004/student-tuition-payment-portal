@@ -25,7 +25,13 @@ function withSecondsHm(raw: string | null | undefined): string | null {
 
 function formatSeatsLine(slot: ClinicalOfferedTimetableSlot): string | null {
   if (slot.capacity != null && slot.capacity > 0) {
-    return `${slot.enrolledCount} / ${slot.capacity}`
+    const parts = [
+      `100:${slot.enrolled100}/${slot.capacity100}`,
+      `200:${slot.enrolled200}/${slot.capacity200}`,
+      `300:${slot.enrolled300}/${slot.capacity300}`,
+      `All:${slot.enrolledAll}/${slot.capacityAll}`,
+    ]
+    return parts.join(' · ')
   }
   return null
 }
@@ -83,6 +89,10 @@ export function adminClinicalSlotsToLayoutRows(
     if (start_time == null || end_time == null) continue
     const capacity = Math.max(0, s.cap100 + s.cap200 + s.cap300 + s.cap123)
     const slotCode = s.slot.trim()
+    const seatsDisplay =
+      capacity > 0
+        ? `100:${s.enrolled100}/${s.cap100} · 200:${s.enrolled200}/${s.cap200} · 300:${s.enrolled300}/${s.cap300} · All:${s.enrolledAll}/${s.cap123}`
+        : `${s.activeEnrolledCount}`
     out.push({
       id: s.id,
       timetableId: s.id,
@@ -91,8 +101,7 @@ export function adminClinicalSlotsToLayoutRows(
       end_time,
       clinicDisplayName: slotCode !== '' ? slotCode : `Slot ${s.id}`,
       facultyDisplay: s.instructor.trim() ? s.instructor.trim() : null,
-      seatsDisplay:
-        capacity > 0 ? `${s.activeEnrolledCount} / ${capacity}` : `${s.activeEnrolledCount}`,
+      seatsDisplay,
     })
   }
   return out

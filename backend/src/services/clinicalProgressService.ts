@@ -107,6 +107,25 @@ function assembleClinicalProgress(
 }
 
 /**
+ * Maps {@link ClinicalProgress}.level (CL111→1, CL211→2, CL311→3; 0 = no ladder row yet)
+ * to `clinic_timetable` capacity bucket keys used for booking (`100` / `200` / `300`).
+ */
+export type ClinicalBookingLevelKey = "100" | "200" | "300";
+
+export function clinicalProgressToBookingLevelKey(
+  cp: ClinicalProgress,
+): ClinicalBookingLevelKey {
+  const raw = Math.trunc(Number(cp.level));
+  const tier =
+    !Number.isFinite(raw) || raw <= 0
+      ? 1
+      : Math.min(3, Math.max(1, raw));
+  if (tier === 1) return "100";
+  if (tier === 2) return "200";
+  return "300";
+}
+
+/**
  * Two queries total: clinic rows for all ids, then required hours per student.
  * Same rules as {@link buildClinicalProgress}; map keys are trimmed student ids.
  */

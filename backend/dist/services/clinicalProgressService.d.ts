@@ -5,6 +5,12 @@
 import type { Pool } from "mysql2/promise";
 import type { ClinicalProgress } from "../domain/studentDomainModels.js";
 /**
+ * Maps {@link ClinicalProgress}.level (CL111→1, CL211→2, CL311→3; 0 = no ladder row yet)
+ * to `clinic_timetable` capacity bucket keys used for booking (`100` / `200` / `300`).
+ */
+export type ClinicalBookingLevelKey = "100" | "200" | "300";
+export declare function clinicalProgressToBookingLevelKey(cp: ClinicalProgress): ClinicalBookingLevelKey;
+/**
  * Two queries total: clinic rows for all ids, then required hours per student.
  * Same rules as {@link buildClinicalProgress}; map keys are trimmed student ids.
  */

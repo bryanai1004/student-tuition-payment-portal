@@ -1,6 +1,10 @@
 import { pool } from "../lib/db.js";
 import { insertPortalBillingAdjustment } from "../repositories/adminFinanceRepository.js";
 import {
+  buildClinicalProgress,
+  clinicalProgressToBookingLevelKey,
+} from "./clinicalProgressService.js";
+import {
   clinicalBookingPaymentHoldsTableExists,
   insertClinicalBookingPaymentHold,
   cancelActiveClinicalBookingPaymentHoldsForEnrollmentPool,
@@ -17,7 +21,6 @@ import {
   listActiveClinicalRosterForTimetable,
   listAvailableClinicalEnrollmentSlots,
   listStudentClinicalEnrollments,
-  totalClinicTimetableCapacityCaps,
   type ClinicalEnrollmentSlotRow,
   type ClinicalEnrollmentStudentRow,
   type ClinicalSlotRosterAdminRow,
@@ -57,6 +60,16 @@ function clinicalSlotBookingLedgerDescription(tt: ClinicTimetableDbRow): string 
 
 export type OpenClinicalSlotForStudentDto = ClinicalEnrollmentSlotRow & {
   alreadyEnrolled: boolean;
+  /** Clinical ladder mapped to timetable buckets (100/200/300). */
+  studentBookingLevel: "100" | "200" | "300";
+  /** Seats left in this student's level-specific bucket. */
+  yourLevelBucketRemaining: number;
+  /** Seats left in the shared all-levels bucket. */
+  allLevelsBucketRemaining: number;
+  /** Seats this student could still claim (level bucket first, else shared); null when slot is uncapped. */
+  yourEffectiveRemaining: number | null;
+  /** When the student could book now, which bucket would be consumed. */
+  wouldBookIntoBucket: "100" | "200" | "300" | "all" | null;
 };
 
 function normalizeQueryTerm(term: string | null | undefined): string | null {
@@ -84,7 +97,7 @@ export async function listOpenClinicalSlotsForStudent(
   const term = normalizeQueryTerm(query?.term ?? null);
   const year = normalizeQueryYear(query?.year ?? null);
 
-  const [slots, mine] = await Promise.all([
+  const [slots, mine, progress] = await Promise.all([
     listAvailableClinicalEnrollmentSlots({
       year,
       term,
@@ -93,6 +106,7 @@ export async function listOpenClinicalSlotsForStudent(
       term,
       year,
     }),
+    buildClinicalProgress(pool, sid),
   ]);
 
   const activeTimetableIds = new Set(
@@ -101,10 +115,57 @@ export async function listOpenClinicalSlotsForStudent(
       .map((r) => r.timetableId),
   );
 
-  return slots.map((s) => ({
-    ...s,
-    alreadyEnrolled: activeTimetableIds.has(s.timetableId),
-  }));
+  const studentBookingLevel = clinicalProgressToBookingLevelKey(progress);
+
+  return slots.map((s) => {
+    const levelRem =
+      studentBookingLevel === "100"
+        ? s.remaining100
+        : studentBookingLevel === "200"
+          ? s.remaining200
+          : s.remaining300;
+    const allRem = s.remainingAll;
+    const wouldBookIntoBucket: "100" | "200" | "300" | "all" | null = (() => {
+      if (s.capacity == null || s.capacity <= 0) {
+        return null;
+      }
+      const capL =
+        studentBookingLevel === "100"
+          ? s.capacity100
+          : studentBookingLevel === "200"
+            ? s.capacity200
+            : s.capacity300;
+      const usedL =
+        studentBookingLevel === "100"
+          ? s.enrolled100
+          : studentBookingLevel === "200"
+            ? s.enrolled200
+            : s.enrolled300;
+      if (capL > 0 && usedL < capL) {
+        return studentBookingLevel;
+      }
+      if (s.capacityAll > 0 && s.enrolledAll < s.capacityAll) {
+        return "all";
+      }
+      return null;
+    })();
+    const yourEffectiveRemaining: number | null =
+      s.capacity == null || s.capacity <= 0
+        ? null
+        : Math.max(levelRem, 0) > 0
+          ? Math.max(levelRem, 0)
+          : Math.max(allRem, 0);
+
+    return {
+      ...s,
+      alreadyEnrolled: activeTimetableIds.has(s.timetableId),
+      studentBookingLevel,
+      yourLevelBucketRemaining: levelRem,
+      allLevelsBucketRemaining: allRem,
+      yourEffectiveRemaining,
+      wouldBookIntoBucket,
+    };
+  });
 }
 
 export async function listStudentClinicalEnrollmentRows(
@@ -156,14 +217,15 @@ export async function enrollStudentInClinicalSlot(
     };
   }
 
-  const slotCapacity = totalClinicTimetableCapacityCaps(tt);
+  const progress = await buildClinicalProgress(pool, sid);
+  const studentBookingLevel = clinicalProgressToBookingLevelKey(progress);
 
   const result = await createClinicalEnrollment(
     sid,
     timetableId,
     term,
     year,
-    slotCapacity,
+    studentBookingLevel,
     async (conn) => {
       const payload = buildTimetableClinicalAssignmentPayload(sid, tt, null);
       return insertClinicalAssignment(payload, conn);

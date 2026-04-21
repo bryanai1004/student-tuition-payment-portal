@@ -80,10 +80,18 @@ function mapTimetableAdminRow(r) {
     const aid = row.academic_term_id;
     const cntRaw = Number(row.active_enrolled_count);
     const active_enrolled_count = Number.isFinite(cntRaw) && cntRaw > 0 ? Math.trunc(cntRaw) : 0;
+    const b100 = Math.max(0, Math.trunc(Number(row.enrolled_bucket_100)));
+    const b200 = Math.max(0, Math.trunc(Number(row.enrolled_bucket_200)));
+    const b300 = Math.max(0, Math.trunc(Number(row.enrolled_bucket_300)));
+    const bAll = Math.max(0, Math.trunc(Number(row.enrolled_bucket_all)));
     return {
         ...base,
         academic_term_id: aid == null || aid === "" ? null : String(aid).trim() || null,
         active_enrolled_count,
+        enrolled_bucket_100: b100,
+        enrolled_bucket_200: b200,
+        enrolled_bucket_300: b300,
+        enrolled_bucket_all: bAll,
     };
 }
 /**
@@ -106,12 +114,41 @@ export async function listClinicTimetableSlotsForAdmin(options) {
             ct.\`100Max\` AS cap_100, ct.\`200Max\` AS cap_200,
             ct.\`300Max\` AS cap_300, ct.\`123Max\` AS cap_123,
             at.id AS academic_term_id,
-            COALESCE(ce_cnt.cnt, 0) AS active_enrolled_count
+            COALESCE(ce_cnt.cnt, 0) AS active_enrolled_count,
+            COALESCE(ce_cnt.b100, 0) AS enrolled_bucket_100,
+            COALESCE(ce_cnt.b200, 0) AS enrolled_bucket_200,
+            COALESCE(ce_cnt.b300, 0) AS enrolled_bucket_300,
+            COALESCE(ce_cnt.ball, 0) AS enrolled_bucket_all
        FROM clinic_timetable ct
        LEFT JOIN academic_terms at
          ON at.year = ct.year AND at.term_name = TRIM(ct.term)
        LEFT JOIN (
-         SELECT ce.timetable_id, COUNT(*) AS cnt
+         SELECT ce.timetable_id,
+                COUNT(*) AS cnt,
+                SUM(
+                  CASE
+                    WHEN LOWER(TRIM(ce.status)) = 'enrolled'
+                     AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '100'
+                    THEN 1 ELSE 0 END
+                ) AS b100,
+                SUM(
+                  CASE
+                    WHEN LOWER(TRIM(ce.status)) = 'enrolled'
+                     AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '200'
+                    THEN 1 ELSE 0 END
+                ) AS b200,
+                SUM(
+                  CASE
+                    WHEN LOWER(TRIM(ce.status)) = 'enrolled'
+                     AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '300'
+                    THEN 1 ELSE 0 END
+                ) AS b300,
+                SUM(
+                  CASE
+                    WHEN LOWER(TRIM(ce.status)) = 'enrolled'
+                     AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = 'all'
+                    THEN 1 ELSE 0 END
+                ) AS ball
            FROM clinical_enrollments ce
           WHERE LOWER(TRIM(ce.status)) <> 'dropped'
           GROUP BY ce.timetable_id
@@ -445,14 +482,6 @@ export async function cleanupHistoricalClinicTimetableReferences(seqNum) {
         conn.release();
     }
 }
-/** Legacy caps summed (same semantics as enrollment repository). */
-function sumClinicTimetableCaps(row) {
-    const a = Math.max(0, Math.trunc(Number(row.cap_100)));
-    const b = Math.max(0, Math.trunc(Number(row.cap_200)));
-    const c = Math.max(0, Math.trunc(Number(row.cap_300)));
-    const d = Math.max(0, Math.trunc(Number(row.cap_123)));
-    return a + b + c + d;
-}
 function coerceMysqlTimeHmsForLayout(v) {
     if (v instanceof Date) {
         const h = v.getUTCHours();
@@ -498,11 +527,37 @@ export async function listClinicalOfferedTimetableDetailRows(options) {
         ct.\`200Max\` AS cap_200,
         ct.\`300Max\` AS cap_300,
         ct.\`123Max\` AS cap_123,
-        COALESCE(ec.cnt, 0) AS enrolled_count
+        COALESCE(ec.cnt, 0) AS enrolled_count,
+        COALESCE(ec.e100, 0) AS enrolled_100,
+        COALESCE(ec.e200, 0) AS enrolled_200,
+        COALESCE(ec.e300, 0) AS enrolled_300,
+        COALESCE(ec.eall, 0) AS enrolled_all
      FROM clinic_timetable ct
      LEFT JOIN (
-       SELECT timetable_id, TRIM(term) AS eterm, year AS eyear,
-              COUNT(*) AS cnt
+       SELECT timetable_id,
+              TRIM(term) AS eterm,
+              year AS eyear,
+              COUNT(*) AS cnt,
+              SUM(
+                CASE
+                  WHEN LOWER(TRIM(COALESCE(NULLIF(TRIM(seat_bucket), ''), 'all'))) = '100'
+                  THEN 1 ELSE 0 END
+              ) AS e100,
+              SUM(
+                CASE
+                  WHEN LOWER(TRIM(COALESCE(NULLIF(TRIM(seat_bucket), ''), 'all'))) = '200'
+                  THEN 1 ELSE 0 END
+              ) AS e200,
+              SUM(
+                CASE
+                  WHEN LOWER(TRIM(COALESCE(NULLIF(TRIM(seat_bucket), ''), 'all'))) = '300'
+                  THEN 1 ELSE 0 END
+              ) AS e300,
+              SUM(
+                CASE
+                  WHEN LOWER(TRIM(COALESCE(NULLIF(TRIM(seat_bucket), ''), 'all'))) = 'all'
+                  THEN 1 ELSE 0 END
+              ) AS eall
          FROM clinical_enrollments
         WHERE LOWER(TRIM(status)) = 'enrolled'
         GROUP BY timetable_id, TRIM(term), year
@@ -515,8 +570,16 @@ export async function listClinicalOfferedTimetableDetailRows(options) {
     ORDER BY ct.year DESC, TRIM(ct.term) ASC, ct.day ASC, ct.time_from ASC, ct.seqNum ASC`, params);
     return rows.map((raw) => {
         const row = raw;
-        const cap = sumClinicTimetableCaps(row);
+        const cap100 = Math.max(0, Math.trunc(Number(row.cap_100)));
+        const cap200 = Math.max(0, Math.trunc(Number(row.cap_200)));
+        const cap300 = Math.max(0, Math.trunc(Number(row.cap_300)));
+        const capAll = Math.max(0, Math.trunc(Number(row.cap_123)));
+        const cap = cap100 + cap200 + cap300 + capAll;
         const enrolled = Math.max(0, Math.trunc(Number(row.enrolled_count)));
+        const e100 = Math.max(0, Math.trunc(Number(row.enrolled_100)));
+        const e200 = Math.max(0, Math.trunc(Number(row.enrolled_200)));
+        const e300 = Math.max(0, Math.trunc(Number(row.enrolled_300)));
+        const eAll = Math.max(0, Math.trunc(Number(row.enrolled_all)));
         const capped = cap > 0;
         const inst = String(row.instructor ?? "").trim();
         return {
@@ -531,6 +594,18 @@ export async function listClinicalOfferedTimetableDetailRows(options) {
             capacity: capped ? cap : null,
             enrolledCount: enrolled,
             remainingSeats: capped ? Math.max(0, cap - enrolled) : null,
+            capacity100: cap100,
+            capacity200: cap200,
+            capacity300: cap300,
+            capacityAll: capAll,
+            enrolled100: e100,
+            enrolled200: e200,
+            enrolled300: e300,
+            enrolledAll: eAll,
+            remaining100: Math.max(0, cap100 - e100),
+            remaining200: Math.max(0, cap200 - e200),
+            remaining300: Math.max(0, cap300 - e300),
+            remainingAll: Math.max(0, capAll - eAll),
         };
     });
 }

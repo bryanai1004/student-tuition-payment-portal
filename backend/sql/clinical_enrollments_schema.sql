@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS clinical_enrollments (
   term VARCHAR(20) NOT NULL,
   year INT NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'enrolled',
+  seat_bucket VARCHAR(10) NULL DEFAULT NULL COMMENT '100|200|300|all — capacity bucket used at booking',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_clinical_enrollment_student_slot_term_year (

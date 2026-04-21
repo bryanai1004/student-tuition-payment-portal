@@ -31,6 +31,10 @@ export type ClinicTimetableAdminRow = ClinicTimetableDbRow & {
      * (same filter as `listActiveClinicalRosterForTimetable`).
      */
     active_enrolled_count: number;
+    enrolled_bucket_100: number;
+    enrolled_bucket_200: number;
+    enrolled_bucket_300: number;
+    enrolled_bucket_all: number;
 };
 /**
  * Admin list: same filters as `listClinicTimetableSlots`, plus optional `academic_terms.id` via join.
@@ -107,6 +111,18 @@ export type ClinicalOfferedTimetableDetailRow = {
     capacity: number | null;
     enrolledCount: number;
     remainingSeats: number | null;
+    capacity100: number;
+    capacity200: number;
+    capacity300: number;
+    capacityAll: number;
+    enrolled100: number;
+    enrolled200: number;
+    enrolled300: number;
+    enrolledAll: number;
+    remaining100: number;
+    remaining200: number;
+    remaining300: number;
+    remainingAll: number;
 };
 export declare function listClinicalOfferedTimetableDetailRows(options?: {
     year?: number | null;

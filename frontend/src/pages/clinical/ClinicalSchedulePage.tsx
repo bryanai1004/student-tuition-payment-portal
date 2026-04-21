@@ -8,6 +8,7 @@ import {
   fetchCurrentAcademicTerm,
   fetchRecentAcademicTerms,
   fetchStudentClinicalEnrollments,
+  fetchStudentOpenClinicalEnrollmentSlots,
   postStudentClinicalEnrollment,
   type AcademicTerm,
   type ClinicalOfferedTimetableSlot,
@@ -69,7 +70,36 @@ function capDisplay(slot: ClinicalOfferedTimetableSlot): string {
 }
 
 function remainingDisplay(slot: ClinicalOfferedTimetableSlot): string {
+  if (
+    slot.yourEffectiveRemaining !== undefined &&
+    slot.yourEffectiveRemaining !== null
+  ) {
+    return String(slot.yourEffectiveRemaining)
+  }
   return slot.remainingSeats == null ? '—' : String(slot.remainingSeats)
+}
+
+function slotHasSeatForStudent(slot: ClinicalOfferedTimetableSlot): boolean {
+  if (
+    slot.yourEffectiveRemaining !== undefined &&
+    slot.yourEffectiveRemaining !== null
+  ) {
+    return slot.yourEffectiveRemaining > 0
+  }
+  if (slot.remainingSeats == null) return true
+  return slot.remainingSeats > 0
+}
+
+function seatBucketDescription(
+  b: ClinicalOfferedTimetableSlot['wouldBookIntoBucket'],
+): string {
+  if (b == null) return '—'
+  if (b === 'all') return 'Shared all-level seat'
+  return `${b}-level seat`
+}
+
+function levelSeatsSummary(slot: ClinicalOfferedTimetableSlot): string {
+  return `100: ${slot.enrolled100}/${slot.capacity100} · 200: ${slot.enrolled200}/${slot.capacity200} · 300: ${slot.enrolled300}/${slot.capacity300} · All: ${slot.enrolledAll}/${slot.capacityAll}`
 }
 
 export function ClinicalSchedulePage() {
@@ -167,13 +197,43 @@ export function ClinicalSchedulePage() {
     setSlotsError(null)
     void (async () => {
       try {
-        const rows = await fetchClinicalOfferedTimetable({
+        const offeredPromise = fetchClinicalOfferedTimetable({
           term: selectedTerm.term_name,
           year: selectedTerm.year,
           signal: ac.signal,
         })
+        const openPromise =
+          sid.trim() !== ''
+            ? fetchStudentOpenClinicalEnrollmentSlots(sid, {
+                term: selectedTerm.term_name,
+                year: selectedTerm.year,
+                signal: ac.signal,
+              })
+            : Promise.resolve(null)
+        const [offeredRows, openRows] = await Promise.all([
+          offeredPromise,
+          openPromise,
+        ])
         if (ac.signal.aborted) return
-        setSlots(rows)
+        if (openRows != null) {
+          const byTid = new Map(openRows.map((r) => [r.timetableId, r]))
+          setSlots(
+            offeredRows.map((o) => {
+              const ex = byTid.get(o.id)
+              if (ex == null) return o
+              return {
+                ...o,
+                studentBookingLevel: ex.studentBookingLevel,
+                yourLevelBucketRemaining: ex.yourLevelBucketRemaining,
+                allLevelsBucketRemaining: ex.allLevelsBucketRemaining,
+                yourEffectiveRemaining: ex.yourEffectiveRemaining,
+                wouldBookIntoBucket: ex.wouldBookIntoBucket,
+              }
+            }),
+          )
+        } else {
+          setSlots(offeredRows)
+        }
       } catch (e) {
         if (ac.signal.aborted) return
         setSlots([])
@@ -185,7 +245,7 @@ export function ClinicalSchedulePage() {
       }
     })()
     return () => ac.abort()
-  }, [termsReady, selectedTerm, t, reloadKey])
+  }, [termsReady, selectedTerm, t, reloadKey, sid])
 
   useEffect(() => {
     if (!sid || selectedTerm == null) {
@@ -286,7 +346,7 @@ export function ClinicalSchedulePage() {
   function openEnrollmentConfirmation(slot: ClinicalOfferedTimetableSlot | undefined) {
     if (!slot) return
     if (enrollmentsByTimetable.has(slot.id)) return
-    if (slot.remainingSeats != null && slot.remainingSeats <= 0) return
+    if (!slotHasSeatForStudent(slot)) return
     if (busyTimetableId != null) return
     setActionMessage(null)
     setActionError(null)
@@ -298,7 +358,7 @@ export function ClinicalSchedulePage() {
     const slot = slots.find((s) => s.id === timetableId)
     if (!slot) return
     if (enrollmentsByTimetable.has(slot.id)) return
-    if (slot.remainingSeats != null && slot.remainingSeats <= 0) return
+    if (!slotHasSeatForStudent(slot)) return
     setActionMessage(null)
     setActionError(null)
     setBusyTimetableId(timetableId)
@@ -438,7 +498,7 @@ export function ClinicalSchedulePage() {
                 selectedSlot == null ||
                 busyTimetableId != null ||
                 enrollmentsByTimetable.has(selectedSlot.id) ||
-                (selectedSlot.remainingSeats != null && selectedSlot.remainingSeats <= 0)
+                !slotHasSeatForStudent(selectedSlot)
               }
               onClick={() => {
                 openEnrollmentConfirmation(selectedSlot)
@@ -455,9 +515,16 @@ export function ClinicalSchedulePage() {
           <p className="portal-card-note" style={{ marginTop: '0.15rem' }}>
             {selectedSlot.slotCode.trim() || selectedSlot.slotLabel} ·{' '}
             {formatTimeHmsForDisplay(selectedSlot.startTime)}-
-            {formatTimeHmsForDisplay(selectedSlot.endTime)} · {t('clinicalColCapacity')}:{' '}
-            {capDisplay(selectedSlot)} · {t('clinicalColRemaining')}:{' '}
+            {formatTimeHmsForDisplay(selectedSlot.endTime)} ·             {t('clinicalColCapacity')}:{' '}
+            {capDisplay(selectedSlot)} · {t('clinicalColRemaining')} (you):{' '}
             {remainingDisplay(selectedSlot)}
+            {selectedSlot.studentBookingLevel != null ? (
+              <>
+                {' '}
+                · Your booking level: {selectedSlot.studentBookingLevel} · By bucket:{' '}
+                {levelSeatsSummary(selectedSlot)}
+              </>
+            ) : null}
           </p>
         ) : null}
 
@@ -491,8 +558,7 @@ export function ClinicalSchedulePage() {
                   const colW = 100 / b.colCount
                   const insetPx = 3
                   const isEnrolled = enrollmentsByTimetable.has(row.timetableId)
-                  const isFull =
-                    offered.remainingSeats != null && offered.remainingSeats <= 0
+                  const isFull = !slotHasSeatForStudent(offered)
                   const isBusy = busyTimetableId === row.timetableId
                   const disabled = isEnrolled || isFull || busyTimetableId != null
                   const bg = isEnrolled
@@ -537,8 +603,10 @@ export function ClinicalSchedulePage() {
                         </span>
                       ) : null}
                       <span className="admin-timetable-v2__block-meta">
-                        {offered.enrolledCount} / {capDisplay(offered)} (
-                        {t('clinicalColRemaining')}: {remainingDisplay(offered)})
+                        {levelSeatsSummary(offered)}
+                      </span>
+                      <span className="admin-timetable-v2__block-meta">
+                        {t('clinicalColRemaining')} (you): {remainingDisplay(offered)}
                       </span>
                       <span className="admin-timetable-v2__block-meta">
                         {isBusy
@@ -648,6 +716,22 @@ export function ClinicalSchedulePage() {
                 <dt>{t('clinicalColRemaining')}</dt>
                 <dd>{remainingDisplay(pendingEnrollmentSlot)}</dd>
               </div>
+              <div>
+                <dt>Seats by level</dt>
+                <dd>{levelSeatsSummary(pendingEnrollmentSlot)}</dd>
+              </div>
+              {pendingEnrollmentSlot.studentBookingLevel != null ? (
+                <>
+                  <div>
+                    <dt>Your clinical level (booking)</dt>
+                    <dd>{pendingEnrollmentSlot.studentBookingLevel}</dd>
+                  </div>
+                  <div>
+                    <dt>Seat type if you enroll</dt>
+                    <dd>{seatBucketDescription(pendingEnrollmentSlot.wouldBookIntoBucket)}</dd>
+                  </div>
+                </>
+              ) : null}
             </dl>
             <div className="portal-offered-section-modal__actions">
               <button

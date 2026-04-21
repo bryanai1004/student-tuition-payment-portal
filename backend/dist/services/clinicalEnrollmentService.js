@@ -1,8 +1,9 @@
 import { pool } from "../lib/db.js";
 import { insertPortalBillingAdjustment } from "../repositories/adminFinanceRepository.js";
+import { buildClinicalProgress, clinicalProgressToBookingLevelKey, } from "./clinicalProgressService.js";
 import { clinicalBookingPaymentHoldsTableExists, insertClinicalBookingPaymentHold, cancelActiveClinicalBookingPaymentHoldsForEnrollmentPool, voidSystemClinicalChargesForEnrollmentPool, } from "../repositories/clinicalBookingPaymentHoldRepository.js";
 import { getClinicTimetableById, } from "../repositories/clinicalTimetableRepository.js";
-import { createClinicalEnrollment, dropClinicalEnrollment, getClinicalEnrollmentSlotBinding, listActiveClinicalRosterForTimetable, listAvailableClinicalEnrollmentSlots, listStudentClinicalEnrollments, totalClinicTimetableCapacityCaps, } from "../repositories/clinicalEnrollmentRepository.js";
+import { createClinicalEnrollment, dropClinicalEnrollment, getClinicalEnrollmentSlotBinding, listActiveClinicalRosterForTimetable, listAvailableClinicalEnrollmentSlots, listStudentClinicalEnrollments, } from "../repositories/clinicalEnrollmentRepository.js";
 import { insertClinicalAssignment } from "../repositories/clinicalScheduleRepository.js";
 import { buildClinicTimetableSlotLabel, buildTimetableClinicalAssignmentPayload, ClinicalScheduleValidationError, formatClinicTimeHm, } from "./clinicalScheduleService.js";
 import { getStudentQuarterBalance } from "./studentLedgerService.js";
@@ -46,7 +47,7 @@ export async function listOpenClinicalSlotsForStudent(studentId, query) {
     }
     const term = normalizeQueryTerm(query?.term ?? null);
     const year = normalizeQueryYear(query?.year ?? null);
-    const [slots, mine] = await Promise.all([
+    const [slots, mine, progress] = await Promise.all([
         listAvailableClinicalEnrollmentSlots({
             year,
             term,
@@ -55,14 +56,56 @@ export async function listOpenClinicalSlotsForStudent(studentId, query) {
             term,
             year,
         }),
+        buildClinicalProgress(pool, sid),
     ]);
     const activeTimetableIds = new Set(mine
         .filter((r) => r.status.trim().toLowerCase() === "enrolled")
         .map((r) => r.timetableId));
-    return slots.map((s) => ({
-        ...s,
-        alreadyEnrolled: activeTimetableIds.has(s.timetableId),
-    }));
+    const studentBookingLevel = clinicalProgressToBookingLevelKey(progress);
+    return slots.map((s) => {
+        const levelRem = studentBookingLevel === "100"
+            ? s.remaining100
+            : studentBookingLevel === "200"
+                ? s.remaining200
+                : s.remaining300;
+        const allRem = s.remainingAll;
+        const wouldBookIntoBucket = (() => {
+            if (s.capacity == null || s.capacity <= 0) {
+                return null;
+            }
+            const capL = studentBookingLevel === "100"
+                ? s.capacity100
+                : studentBookingLevel === "200"
+                    ? s.capacity200
+                    : s.capacity300;
+            const usedL = studentBookingLevel === "100"
+                ? s.enrolled100
+                : studentBookingLevel === "200"
+                    ? s.enrolled200
+                    : s.enrolled300;
+            if (capL > 0 && usedL < capL) {
+                return studentBookingLevel;
+            }
+            if (s.capacityAll > 0 && s.enrolledAll < s.capacityAll) {
+                return "all";
+            }
+            return null;
+        })();
+        const yourEffectiveRemaining = s.capacity == null || s.capacity <= 0
+            ? null
+            : Math.max(levelRem, 0) > 0
+                ? Math.max(levelRem, 0)
+                : Math.max(allRem, 0);
+        return {
+            ...s,
+            alreadyEnrolled: activeTimetableIds.has(s.timetableId),
+            studentBookingLevel,
+            yourLevelBucketRemaining: levelRem,
+            allLevelsBucketRemaining: allRem,
+            yourEffectiveRemaining,
+            wouldBookIntoBucket,
+        };
+    });
 }
 export async function listStudentClinicalEnrollmentRows(studentId, query) {
     const sid = String(studentId ?? "").trim();
@@ -94,8 +137,9 @@ export async function enrollStudentInClinicalSlot(studentId, timetableId) {
             status: 400,
         };
     }
-    const slotCapacity = totalClinicTimetableCapacityCaps(tt);
-    const result = await createClinicalEnrollment(sid, timetableId, term, year, slotCapacity, async (conn) => {
+    const progress = await buildClinicalProgress(pool, sid);
+    const studentBookingLevel = clinicalProgressToBookingLevelKey(progress);
+    const result = await createClinicalEnrollment(sid, timetableId, term, year, studentBookingLevel, async (conn) => {
         const payload = buildTimetableClinicalAssignmentPayload(sid, tt, null);
         return insertClinicalAssignment(payload, conn);
     });

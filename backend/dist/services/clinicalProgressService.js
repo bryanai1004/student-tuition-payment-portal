@@ -89,6 +89,17 @@ function assembleClinicalProgress(completedCourses, completedHours, requiredHour
         missing,
     };
 }
+export function clinicalProgressToBookingLevelKey(cp) {
+    const raw = Math.trunc(Number(cp.level));
+    const tier = !Number.isFinite(raw) || raw <= 0
+        ? 1
+        : Math.min(3, Math.max(1, raw));
+    if (tier === 1)
+        return "100";
+    if (tier === 2)
+        return "200";
+    return "300";
+}
 /**
  * Two queries total: clinic rows for all ids, then required hours per student.
  * Same rules as {@link buildClinicalProgress}; map keys are trimmed student ids.

@@ -6,6 +6,8 @@ export declare function totalClinicTimetableCapacityCaps(row: {
     cap_300: number;
     cap_123: number;
 }): number;
+/** Capacity / enrollment bucket for timetable-driven bookings. */
+export type ClinicalSeatBucket = "100" | "200" | "300" | "all";
 export type ClinicalEnrollmentSlotRow = {
     timetableId: number;
     term: string;
@@ -18,6 +20,18 @@ export type ClinicalEnrollmentSlotRow = {
     enrolledCount: number;
     /** Seats left when capped; `null` when uncapped. */
     remainingSeats: number | null;
+    capacity100: number;
+    capacity200: number;
+    capacity300: number;
+    capacityAll: number;
+    enrolled100: number;
+    enrolled200: number;
+    enrolled300: number;
+    enrolledAll: number;
+    remaining100: number;
+    remaining200: number;
+    remaining300: number;
+    remainingAll: number;
 };
 export type ClinicalEnrollmentStudentRow = {
     id: number;
@@ -26,6 +40,8 @@ export type ClinicalEnrollmentStudentRow = {
     term: string;
     year: number;
     status: string;
+    /** Which timetable capacity bucket this row consumes when `enrolled`. */
+    seatBucket: ClinicalSeatBucket | null;
     slotLabel: string;
     faculty: string | null;
     site: string | null;
@@ -43,6 +59,7 @@ export type ClinicalSlotRosterAdminRow = {
     studentName: string;
     email: string | null;
     status: string;
+    seatBucket: ClinicalSeatBucket | null;
     createdAt: string;
 };
 /**
@@ -91,8 +108,10 @@ export declare function insertClinicalEnrollmentRow(conn: PoolConnection, input:
     term: string;
     year: number;
     status?: string;
+    seatBucket?: ClinicalSeatBucket | null;
 }): Promise<number>;
 export declare function updateClinicalEnrollmentStatusById(conn: PoolConnection, enrollmentId: number, studentId: string, status: string): Promise<number>;
+export declare function updateClinicalEnrollmentStatusAndSeatBucketById(conn: PoolConnection, enrollmentId: number, studentId: string, status: string, seatBucket: ClinicalSeatBucket | null): Promise<number>;
 /**
  * Marks timetable-linked assignments for this student/slot as dropped (non-destructive).
  */
@@ -101,7 +120,7 @@ export declare function countActiveClinicalEnrollmentsForSlot(timetableId: numbe
 /**
  * Transaction-safe enroll: lock, capacity check, insert or reactivate row. Caller supplies assignment insert.
  */
-export declare function createClinicalEnrollment(studentId: string, timetableId: number, term: string, year: number, slotCapacity: number, insertAssignment: (conn: PoolConnection) => Promise<number>): Promise<{
+export declare function createClinicalEnrollment(studentId: string, timetableId: number, term: string, year: number, studentBookingLevel: "100" | "200" | "300", insertAssignment: (conn: PoolConnection) => Promise<number>): Promise<{
     ok: true;
     enrollmentId: number;
     assignmentId: number;
@@ -109,6 +128,7 @@ export declare function createClinicalEnrollment(studentId: string, timetableId:
     isNewEnrollmentRow: boolean;
     /** `true` when an existing dropped row was moved back to `enrolled`. */
     wasReactivation: boolean;
+    seatBucket: ClinicalSeatBucket | null;
 } | {
     ok: false;
     error: string;

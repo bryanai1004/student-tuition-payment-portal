@@ -1784,7 +1784,24 @@ export type StudentOpenClinicalEnrollmentSlot = {
   capacity: number | null
   enrolledCount: number
   remainingSeats: number | null
+  capacity100: number
+  capacity200: number
+  capacity300: number
+  capacityAll: number
+  enrolled100: number
+  enrolled200: number
+  enrolled300: number
+  enrolledAll: number
+  remaining100: number
+  remaining200: number
+  remaining300: number
+  remainingAll: number
   alreadyEnrolled: boolean
+  studentBookingLevel: '100' | '200' | '300'
+  yourLevelBucketRemaining: number
+  allLevelsBucketRemaining: number
+  yourEffectiveRemaining: number | null
+  wouldBookIntoBucket: '100' | '200' | '300' | 'all' | null
 }
 
 function isStudentOpenClinicalEnrollmentSlot(
@@ -1792,6 +1809,7 @@ function isStudentOpenClinicalEnrollmentSlot(
 ): x is StudentOpenClinicalEnrollmentSlot {
   if (x == null || typeof x !== 'object') return false
   const o = x as Record<string, unknown>
+  const num = (k: string) => typeof o[k] === 'number'
   return (
     typeof o.timetableId === 'number' &&
     typeof o.term === 'string' &&
@@ -1802,7 +1820,30 @@ function isStudentOpenClinicalEnrollmentSlot(
     (o.capacity === null || typeof o.capacity === 'number') &&
     typeof o.enrolledCount === 'number' &&
     (o.remainingSeats === null || typeof o.remainingSeats === 'number') &&
-    typeof o.alreadyEnrolled === 'boolean'
+    num('capacity100') &&
+    num('capacity200') &&
+    num('capacity300') &&
+    num('capacityAll') &&
+    num('enrolled100') &&
+    num('enrolled200') &&
+    num('enrolled300') &&
+    num('enrolledAll') &&
+    num('remaining100') &&
+    num('remaining200') &&
+    num('remaining300') &&
+    num('remainingAll') &&
+    typeof o.alreadyEnrolled === 'boolean' &&
+    (o.studentBookingLevel === '100' ||
+      o.studentBookingLevel === '200' ||
+      o.studentBookingLevel === '300') &&
+    num('yourLevelBucketRemaining') &&
+    num('allLevelsBucketRemaining') &&
+    (o.yourEffectiveRemaining === null || typeof o.yourEffectiveRemaining === 'number') &&
+    (o.wouldBookIntoBucket === null ||
+      o.wouldBookIntoBucket === '100' ||
+      o.wouldBookIntoBucket === '200' ||
+      o.wouldBookIntoBucket === '300' ||
+      o.wouldBookIntoBucket === 'all')
   )
 }
 
@@ -1842,6 +1883,8 @@ export type StudentClinicalEnrollmentRow = {
   term: string
   year: number
   status: string
+  /** Capacity bucket used for this booking when enrolled. */
+  seatBucket: '100' | '200' | '300' | 'all' | null
   slotLabel: string
   faculty: string | null
   site: string | null
@@ -1883,6 +1926,13 @@ function isStudentActiveClinicalBookingHold(
 function isStudentClinicalEnrollmentRow(x: unknown): x is StudentClinicalEnrollmentRow {
   if (x == null || typeof x !== 'object') return false
   const o = x as Record<string, unknown>
+  const sb = o.seatBucket
+  const seatOk =
+    sb === null ||
+    sb === '100' ||
+    sb === '200' ||
+    sb === '300' ||
+    sb === 'all'
   return (
     typeof o.id === 'number' &&
     typeof o.studentId === 'string' &&
@@ -1890,6 +1940,7 @@ function isStudentClinicalEnrollmentRow(x: unknown): x is StudentClinicalEnrollm
     typeof o.term === 'string' &&
     typeof o.year === 'number' &&
     typeof o.status === 'string' &&
+    seatOk &&
     typeof o.slotLabel === 'string' &&
     (o.faculty === null || typeof o.faculty === 'string') &&
     (o.site === null || typeof o.site === 'string') &&
@@ -2064,17 +2115,48 @@ export type ClinicalOfferedTimetableSlot = AdminClinicalTimetableSlot & {
   capacity: number | null
   enrolledCount: number
   remainingSeats: number | null
+  capacity100: number
+  capacity200: number
+  capacity300: number
+  capacityAll: number
+  enrolled100: number
+  enrolled200: number
+  enrolled300: number
+  enrolledAll: number
+  remaining100: number
+  remaining200: number
+  remaining300: number
+  remainingAll: number
+  /** Present when merged with GET …/clinical-enrollments/open for the signed-in student. */
+  studentBookingLevel?: '100' | '200' | '300'
+  yourLevelBucketRemaining?: number
+  allLevelsBucketRemaining?: number
+  yourEffectiveRemaining?: number | null
+  wouldBookIntoBucket?: '100' | '200' | '300' | 'all' | null
 }
 
 function isClinicalOfferedTimetableSlot(x: unknown): x is ClinicalOfferedTimetableSlot {
   if (x == null || typeof x !== 'object') return false
   const o = x as Record<string, unknown>
   if (!isAdminClinicalTimetableSlot(x)) return false
+  const num = (k: string) => typeof o[k] === 'number'
   return (
     typeof o.slotCode === 'string' &&
     (o.capacity === null || typeof o.capacity === 'number') &&
     typeof o.enrolledCount === 'number' &&
-    (o.remainingSeats === null || typeof o.remainingSeats === 'number')
+    (o.remainingSeats === null || typeof o.remainingSeats === 'number') &&
+    num('capacity100') &&
+    num('capacity200') &&
+    num('capacity300') &&
+    num('capacityAll') &&
+    num('enrolled100') &&
+    num('enrolled200') &&
+    num('enrolled300') &&
+    num('enrolledAll') &&
+    num('remaining100') &&
+    num('remaining200') &&
+    num('remaining300') &&
+    num('remainingAll')
   )
 }
 
@@ -2196,6 +2278,10 @@ export type AdminClinicalSlot = {
   cap123: number
   /** Non-dropped enrollments on this timetable slot (from admin slot list SQL). */
   activeEnrolledCount: number
+  enrolled100: number
+  enrolled200: number
+  enrolled300: number
+  enrolledAll: number
 }
 
 export type CreateAdminClinicalSlotBody = {
@@ -2233,7 +2319,11 @@ function isAdminClinicalSlot(x: unknown): x is AdminClinicalSlot {
     typeof o.cap300 === 'number' &&
     typeof o.cap123 === 'number' &&
     typeof o.activeEnrolledCount === 'number' &&
-    Number.isFinite(o.activeEnrolledCount)
+    Number.isFinite(o.activeEnrolledCount) &&
+    typeof o.enrolled100 === 'number' &&
+    typeof o.enrolled200 === 'number' &&
+    typeof o.enrolled300 === 'number' &&
+    typeof o.enrolledAll === 'number'
   )
 }
 
@@ -2348,18 +2438,27 @@ export type AdminClinicalSlotRosterRow = {
   studentName: string
   email: string | null
   status: string
+  seatBucket: '100' | '200' | '300' | 'all' | null
   createdAt: string
 }
 
 function isAdminClinicalSlotRosterRow(x: unknown): x is AdminClinicalSlotRosterRow {
   if (x == null || typeof x !== 'object') return false
   const o = x as Record<string, unknown>
+  const sb = o.seatBucket
+  const seatOk =
+    sb === null ||
+    sb === '100' ||
+    sb === '200' ||
+    sb === '300' ||
+    sb === 'all'
   return (
     typeof o.enrollmentId === 'number' &&
     typeof o.studentId === 'string' &&
     typeof o.studentName === 'string' &&
     (o.email === null || typeof o.email === 'string') &&
     typeof o.status === 'string' &&
+    seatOk &&
     typeof o.createdAt === 'string'
   )
 }

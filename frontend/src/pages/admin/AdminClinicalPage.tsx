@@ -483,10 +483,10 @@ export function AdminClinicalPage() {
                     <th scope="col">Time To</th>
                     <th scope="col">Slot</th>
                     <th scope="col">Instructor</th>
-                    <th scope="col">100 Level</th>
-                    <th scope="col">200 Level</th>
-                    <th scope="col">300 Level</th>
-                    <th scope="col">All Levels</th>
+                    <th scope="col">100 (enrolled / cap)</th>
+                    <th scope="col">200 (enrolled / cap)</th>
+                    <th scope="col">300 (enrolled / cap)</th>
+                    <th scope="col">All (enrolled / cap)</th>
                     <th scope="col">Active enrolled</th>
                     <th scope="col">Actions</th>
                   </tr>
@@ -517,10 +517,18 @@ export function AdminClinicalPage() {
                           >
                             {s.instructor || '—'}
                           </td>
-                          <td>{s.cap100}</td>
-                          <td>{s.cap200}</td>
-                          <td>{s.cap300}</td>
-                          <td>{s.cap123}</td>
+                          <td>
+                            {s.enrolled100} / {s.cap100}
+                          </td>
+                          <td>
+                            {s.enrolled200} / {s.cap200}
+                          </td>
+                          <td>
+                            {s.enrolled300} / {s.cap300}
+                          </td>
+                          <td>
+                            {s.enrolledAll} / {s.cap123}
+                          </td>
                           <td>{s.activeEnrolledCount}</td>
                           <td>
                             <div
@@ -1152,6 +1160,7 @@ export function AdminClinicalPage() {
                       <th scope="col">Name</th>
                       <th scope="col">Email</th>
                       <th scope="col">Status</th>
+                      <th scope="col">Seat bucket</th>
                       <th scope="col">Booked at</th>
                       <th scope="col">Actions</th>
                     </tr>
@@ -1183,6 +1192,13 @@ export function AdminClinicalPage() {
                             {r.email ?? '—'}
                           </td>
                           <td>{r.status}</td>
+                          <td>
+                            {r.seatBucket == null
+                              ? '—'
+                              : r.seatBucket === 'all'
+                                ? 'All levels'
+                                : `${r.seatBucket}-level`}
+                          </td>
                           <td style={{ whiteSpace: 'nowrap' }}>
                             {formatClinicalRosterBookedAt(r.createdAt)}
                           </td>

@@ -224,6 +224,7 @@ export function ClinicalAddDropPage() {
                   <th scope="col">{t('offeredModalDtTime')}</th>
                   <th scope="col">{t('clinicalColSlot')}</th>
                   <th scope="col">{t('clinicalColFaculty')}</th>
+                  <th scope="col">Seat bucket</th>
                   <th scope="col">{t('status')}</th>
                   <th scope="col">{t('clinicalColAction')}</th>
                 </tr>
@@ -231,7 +232,7 @@ export function ClinicalAddDropPage() {
               <tbody>
                 {filteredEnrollments.length === 0 && !loading ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <span className="portal-inline-note portal-inline-note--flush">
                         {t('clinicalNoActiveEnrollments')}
                       </span>
@@ -249,6 +250,13 @@ export function ClinicalAddDropPage() {
                       <td>{timeRangeForSlot(slotMeta)}</td>
                       <td>{dashText(row.slotLabel)}</td>
                       <td>{dashText(row.faculty)}</td>
+                      <td>
+                        {row.seatBucket == null
+                          ? '—'
+                          : row.seatBucket === 'all'
+                            ? 'All levels'
+                            : `${row.seatBucket}-level`}
+                      </td>
                       <td>
                         <span className="portal-status portal-status--paid">
                           {row.status.trim() || t('clinicalStatusEnrolledFallback')}

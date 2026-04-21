@@ -51,6 +51,10 @@ export type AdminClinicalSlotDto = {
   cap123: number;
   /** Non-dropped `clinical_enrollments` for this slot (admin list + roster index). */
   activeEnrolledCount: number;
+  enrolled100: number;
+  enrolled200: number;
+  enrolled300: number;
+  enrolledAll: number;
 };
 
 export type AdminClinicalSlotCreateInput = {
@@ -100,6 +104,10 @@ function rowToDto(row: ClinicTimetableAdminRow): AdminClinicalSlotDto {
     cap300: row.cap_300,
     cap123: row.cap_123,
     activeEnrolledCount: row.active_enrolled_count,
+    enrolled100: row.enrolled_bucket_100,
+    enrolled200: row.enrolled_bucket_200,
+    enrolled300: row.enrolled_bucket_300,
+    enrolledAll: row.enrolled_bucket_all,
   };
 }
 
@@ -360,6 +368,10 @@ export async function createAdminClinicalSlot(
       ...created,
       academic_term_id: null,
       active_enrolled_count: 0,
+      enrolled_bucket_100: 0,
+      enrolled_bucket_200: 0,
+      enrolled_bucket_300: 0,
+      enrolled_bucket_all: 0,
     },
   );
 }
@@ -486,6 +498,10 @@ export async function updateAdminClinicalSlot(
       ...updated,
       academic_term_id: null,
       active_enrolled_count: 0,
+      enrolled_bucket_100: 0,
+      enrolled_bucket_200: 0,
+      enrolled_bucket_300: 0,
+      enrolled_bucket_all: 0,
     },
   );
 }

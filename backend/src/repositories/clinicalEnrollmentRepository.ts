@@ -37,6 +37,9 @@ export function totalClinicTimetableCapacityCaps(row: {
   return a + b + c + d;
 }
 
+/** Capacity / enrollment bucket for timetable-driven bookings. */
+export type ClinicalSeatBucket = "100" | "200" | "300" | "all";
+
 export type ClinicalEnrollmentSlotRow = {
   timetableId: number;
   term: string;
@@ -49,6 +52,18 @@ export type ClinicalEnrollmentSlotRow = {
   enrolledCount: number;
   /** Seats left when capped; `null` when uncapped. */
   remainingSeats: number | null;
+  capacity100: number;
+  capacity200: number;
+  capacity300: number;
+  capacityAll: number;
+  enrolled100: number;
+  enrolled200: number;
+  enrolled300: number;
+  enrolledAll: number;
+  remaining100: number;
+  remaining200: number;
+  remaining300: number;
+  remainingAll: number;
 };
 
 export type ClinicalEnrollmentStudentRow = {
@@ -58,6 +73,8 @@ export type ClinicalEnrollmentStudentRow = {
   term: string;
   year: number;
   status: string;
+  /** Which timetable capacity bucket this row consumes when `enrolled`. */
+  seatBucket: ClinicalSeatBucket | null;
   slotLabel: string;
   faculty: string | null;
   site: string | null;
@@ -76,6 +93,7 @@ export type ClinicalSlotRosterAdminRow = {
   studentName: string;
   email: string | null;
   status: string;
+  seatBucket: ClinicalSeatBucket | null;
   createdAt: string;
 };
 
@@ -134,11 +152,37 @@ export async function listAvailableClinicalEnrollmentSlots(options?: {
         ct.\`200Max\` AS cap_200,
         ct.\`300Max\` AS cap_300,
         ct.\`123Max\` AS cap_123,
-        COALESCE(ec.cnt, 0) AS enrolled_count
+        COALESCE(ec.cnt, 0) AS enrolled_count,
+        COALESCE(ec.e100, 0) AS enrolled_100,
+        COALESCE(ec.e200, 0) AS enrolled_200,
+        COALESCE(ec.e300, 0) AS enrolled_300,
+        COALESCE(ec.eall, 0) AS enrolled_all
      FROM clinic_timetable ct
      LEFT JOIN (
-       SELECT timetable_id, TRIM(term) AS eterm, year AS eyear,
-              COUNT(*) AS cnt
+       SELECT timetable_id,
+              TRIM(term) AS eterm,
+              year AS eyear,
+              COUNT(*) AS cnt,
+              SUM(
+                CASE
+                  WHEN LOWER(TRIM(COALESCE(NULLIF(TRIM(seat_bucket), ''), 'all'))) = '100'
+                  THEN 1 ELSE 0 END
+              ) AS e100,
+              SUM(
+                CASE
+                  WHEN LOWER(TRIM(COALESCE(NULLIF(TRIM(seat_bucket), ''), 'all'))) = '200'
+                  THEN 1 ELSE 0 END
+              ) AS e200,
+              SUM(
+                CASE
+                  WHEN LOWER(TRIM(COALESCE(NULLIF(TRIM(seat_bucket), ''), 'all'))) = '300'
+                  THEN 1 ELSE 0 END
+              ) AS e300,
+              SUM(
+                CASE
+                  WHEN LOWER(TRIM(COALESCE(NULLIF(TRIM(seat_bucket), ''), 'all'))) = 'all'
+                  THEN 1 ELSE 0 END
+              ) AS eall
          FROM clinical_enrollments
         WHERE LOWER(TRIM(status)) = 'enrolled'
         GROUP BY timetable_id, TRIM(term), year
@@ -158,14 +202,21 @@ export async function listAvailableClinicalEnrollmentSlots(options?: {
 function mapRowToClinicalEnrollmentSlotRow(
   row: Record<string, unknown>,
 ): ClinicalEnrollmentSlotRow {
-  const cap = totalClinicTimetableCapacityCaps({
-    cap_100: Number(row.cap_100),
-    cap_200: Number(row.cap_200),
-    cap_300: Number(row.cap_300),
-    cap_123: Number(row.cap_123),
-  });
+  const cap100 = Math.max(0, Math.trunc(Number(row.cap_100)));
+  const cap200 = Math.max(0, Math.trunc(Number(row.cap_200)));
+  const cap300 = Math.max(0, Math.trunc(Number(row.cap_300)));
+  const capAll = Math.max(0, Math.trunc(Number(row.cap_123)));
+  const cap = cap100 + cap200 + cap300 + capAll;
   const enrolled = Math.max(0, Math.trunc(Number(row.enrolled_count)));
+  const e100 = Math.max(0, Math.trunc(Number(row.enrolled_100)));
+  const e200 = Math.max(0, Math.trunc(Number(row.enrolled_200)));
+  const e300 = Math.max(0, Math.trunc(Number(row.enrolled_300)));
+  const eAll = Math.max(0, Math.trunc(Number(row.enrolled_all)));
   const capped = cap > 0;
+  const r100 = Math.max(0, cap100 - e100);
+  const r200 = Math.max(0, cap200 - e200);
+  const r300 = Math.max(0, cap300 - e300);
+  const rAll = Math.max(0, capAll - eAll);
   return {
     timetableId: Number(row.timetable_id),
     term: String(row.term ?? "").trim(),
@@ -185,6 +236,18 @@ function mapRowToClinicalEnrollmentSlotRow(
     capacity: capped ? cap : null,
     enrolledCount: enrolled,
     remainingSeats: capped ? Math.max(0, cap - enrolled) : null,
+    capacity100: cap100,
+    capacity200: cap200,
+    capacity300: cap300,
+    capacityAll: capAll,
+    enrolled100: e100,
+    enrolled200: e200,
+    enrolled300: e300,
+    enrolledAll: eAll,
+    remaining100: r100,
+    remaining200: r200,
+    remaining300: r300,
+    remainingAll: rAll,
   };
 }
 
@@ -261,6 +324,7 @@ export async function listStudentClinicalEnrollments(
         TRIM(ce.term) AS term,
         ce.year,
         TRIM(ce.status) AS status,
+        TRIM(ce.seat_bucket) AS seat_bucket,
         ce.created_at,
         ct.day AS weekday,
         ct.time_from,
@@ -299,6 +363,11 @@ export async function listStudentClinicalEnrollments(
     if (st !== "enrolled") {
       paymentHoldExpiresAt = null;
     }
+    const sbRaw = String(row.seat_bucket ?? "").trim().toLowerCase();
+    let seatBucket: ClinicalSeatBucket | null = null;
+    if (sbRaw === "100" || sbRaw === "200" || sbRaw === "300" || sbRaw === "all") {
+      seatBucket = sbRaw as ClinicalSeatBucket;
+    }
     return {
       id: Number(row.id),
       studentId: String(row.student_id ?? "").trim(),
@@ -306,6 +375,7 @@ export async function listStudentClinicalEnrollments(
       term: String(row.term ?? "").trim(),
       year: Number(row.year),
       status: String(row.status ?? "").trim(),
+      seatBucket,
       slotLabel: slotLabelFromTimetableFields({
         weekday: String(row.weekday ?? "").trim(),
         time_from: row.time_from,
@@ -339,6 +409,7 @@ export async function listActiveClinicalRosterForTimetable(
         ce.id AS enrollment_id,
         TRIM(ce.student_id) AS student_id,
         TRIM(ce.status) AS status,
+        TRIM(ce.seat_bucket) AS seat_bucket,
         ce.created_at,
         TRIM(s.name) AS student_name,
         TRIM(s.email) AS student_email
@@ -364,12 +435,18 @@ export async function listActiveClinicalRosterForTimetable(
     } else {
       createdAt = String(ca ?? "");
     }
+    const sbRaw = String(row.seat_bucket ?? "").trim().toLowerCase();
+    let seatBucket: ClinicalSeatBucket | null = null;
+    if (sbRaw === "100" || sbRaw === "200" || sbRaw === "300" || sbRaw === "all") {
+      seatBucket = sbRaw as ClinicalSeatBucket;
+    }
     return {
       enrollmentId: Number(row.enrollment_id),
       studentId: sid,
       studentName: name,
       email,
       status: String(row.status ?? "").trim(),
+      seatBucket,
       createdAt,
     };
   });
@@ -470,23 +547,43 @@ export async function insertClinicalEnrollmentRow(
     term: string;
     year: number;
     status?: string;
+    seatBucket?: ClinicalSeatBucket | null;
   },
 ): Promise<number> {
   const status =
     input.status != null && String(input.status).trim() !== ""
       ? String(input.status).trim().toLowerCase().slice(0, 20)
       : "enrolled";
+  const sb =
+    input.seatBucket === undefined
+      ? undefined
+      : input.seatBucket === null
+        ? null
+        : input.seatBucket;
   const [res] = await conn.query<ResultSetHeader>(
-    `INSERT INTO clinical_enrollments
-      (student_id, timetable_id, term, year, status)
-     VALUES (TRIM(?), ?, TRIM(?), ?, ?)`,
-    [
-      input.studentId.trim(),
-      input.timetableId,
-      normalizeEnrollmentTerm(input.term),
-      input.year,
-      status,
-    ],
+    sb === undefined
+      ? `INSERT INTO clinical_enrollments
+          (student_id, timetable_id, term, year, status)
+         VALUES (TRIM(?), ?, TRIM(?), ?, ?)`
+      : `INSERT INTO clinical_enrollments
+          (student_id, timetable_id, term, year, status, seat_bucket)
+         VALUES (TRIM(?), ?, TRIM(?), ?, ?, ?)`,
+    sb === undefined
+      ? [
+          input.studentId.trim(),
+          input.timetableId,
+          normalizeEnrollmentTerm(input.term),
+          input.year,
+          status,
+        ]
+      : [
+          input.studentId.trim(),
+          input.timetableId,
+          normalizeEnrollmentTerm(input.term),
+          input.year,
+          status,
+          sb,
+        ],
   );
   return Number(res.insertId);
 }
@@ -504,6 +601,25 @@ export async function updateClinicalEnrollmentStatusById(
       WHERE id = ?
         AND TRIM(student_id) = TRIM(?)`,
     [st, enrollmentId, studentId.trim()],
+  );
+  return res.affectedRows;
+}
+
+export async function updateClinicalEnrollmentStatusAndSeatBucketById(
+  conn: PoolConnection,
+  enrollmentId: number,
+  studentId: string,
+  status: string,
+  seatBucket: ClinicalSeatBucket | null,
+): Promise<number> {
+  const st = status.trim().toLowerCase().slice(0, 20);
+  const [res] = await conn.query<ResultSetHeader>(
+    `UPDATE clinical_enrollments
+        SET status = ?,
+            seat_bucket = ?
+      WHERE id = ?
+        AND TRIM(student_id) = TRIM(?)`,
+    [st, seatBucket, enrollmentId, studentId.trim()],
   );
   return res.affectedRows;
 }
@@ -551,6 +667,65 @@ export async function countActiveClinicalEnrollmentsForSlot(
   return Math.max(0, Math.trunc(Number(r?.c ?? 0)));
 }
 
+type BucketUsage = { n100: number; n200: number; n300: number; nAll: number };
+
+function normalizeEnrollmentSeatBucket(v: unknown): ClinicalSeatBucket {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (s === "100") return "100";
+  if (s === "200") return "200";
+  if (s === "300") return "300";
+  return "all";
+}
+
+function aggregateEnrolledBucketsFromLockedRows(
+  rows: RowDataPacket[],
+): BucketUsage {
+  const out: BucketUsage = { n100: 0, n200: 0, n300: 0, nAll: 0 };
+  for (const raw of rows) {
+    const row = raw as Record<string, unknown>;
+    if (String(row.status ?? "").trim().toLowerCase() !== "enrolled") {
+      continue;
+    }
+    const b = normalizeEnrollmentSeatBucket(row.seat_bucket);
+    if (b === "100") out.n100 += 1;
+    else if (b === "200") out.n200 += 1;
+    else if (b === "300") out.n300 += 1;
+    else out.nAll += 1;
+  }
+  return out;
+}
+
+function pickAllocatableSeatBucket(
+  studentLevel: "100" | "200" | "300",
+  caps: { c100: number; c200: number; c300: number; cAll: number },
+  used: BucketUsage,
+): ClinicalSeatBucket | null {
+  const sum = caps.c100 + caps.c200 + caps.c300 + caps.cAll;
+  if (sum <= 0) {
+    return null;
+  }
+  const levelCap =
+    studentLevel === "100"
+      ? caps.c100
+      : studentLevel === "200"
+        ? caps.c200
+        : caps.c300;
+  const levelUsed =
+    studentLevel === "100"
+      ? used.n100
+      : studentLevel === "200"
+        ? used.n200
+        : used.n300;
+
+  if (levelCap > 0 && levelUsed < levelCap) {
+    return studentLevel;
+  }
+  if (caps.cAll > 0 && used.nAll < caps.cAll) {
+    return "all";
+  }
+  return null;
+}
+
 /**
  * Transaction-safe enroll: lock, capacity check, insert or reactivate row. Caller supplies assignment insert.
  */
@@ -559,7 +734,7 @@ export async function createClinicalEnrollment(
   timetableId: number,
   term: string,
   year: number,
-  slotCapacity: number,
+  studentBookingLevel: "100" | "200" | "300",
   insertAssignment: (conn: PoolConnection) => Promise<number>,
 ): Promise<
   | {
@@ -570,6 +745,7 @@ export async function createClinicalEnrollment(
       isNewEnrollmentRow: boolean;
       /** `true` when an existing dropped row was moved back to `enrolled`. */
       wasReactivation: boolean;
+      seatBucket: ClinicalSeatBucket | null;
     }
   | { ok: false; error: string }
 > {
@@ -586,13 +762,59 @@ export async function createClinicalEnrollment(
   try {
     await conn.beginTransaction();
 
-    const existing = await lockStudentClinicalEnrollmentForSlot(
-      conn,
-      sid,
-      timetableId,
-      te,
-      year,
+    const [ttRows] = await conn.query<RowDataPacket[]>(
+      `SELECT seqNum AS id,
+              TRIM(term) AS term,
+              year,
+              \`100Max\` AS cap_100,
+              \`200Max\` AS cap_200,
+              \`300Max\` AS cap_300,
+              \`123Max\` AS cap_123
+         FROM clinic_timetable
+        WHERE seqNum = ?
+        LIMIT 1
+        FOR UPDATE`,
+      [timetableId],
     );
+    if (ttRows.length === 0) {
+      await conn.rollback();
+      return { ok: false, error: "Clinic slot not found." };
+    }
+    const tt = ttRows[0] as Record<string, unknown>;
+    const caps = {
+      c100: Math.max(0, Math.trunc(Number(tt.cap_100))),
+      c200: Math.max(0, Math.trunc(Number(tt.cap_200))),
+      c300: Math.max(0, Math.trunc(Number(tt.cap_300))),
+      cAll: Math.max(0, Math.trunc(Number(tt.cap_123))),
+    };
+    const slotCapacity = caps.c100 + caps.c200 + caps.c300 + caps.cAll;
+    const bucketEnforced = slotCapacity > 0;
+
+    const [lockedEnr] = await conn.query<RowDataPacket[]>(
+      `SELECT id,
+              TRIM(student_id) AS student_id,
+              LOWER(TRIM(status)) AS status,
+              seat_bucket
+         FROM clinical_enrollments
+        WHERE timetable_id = ?
+          AND TRIM(term) = ?
+          AND year = ?
+        FOR UPDATE`,
+      [timetableId, te, year],
+    );
+
+    let existing: ClinicalEnrollmentLockRow | null = null;
+    for (const raw of lockedEnr) {
+      const row = raw as Record<string, unknown>;
+      if (String(row.student_id ?? "").trim() === sid) {
+        existing = {
+          id: Number(row.id),
+          status: String(row.status ?? "").trim().toLowerCase(),
+        };
+        break;
+      }
+    }
+
     if (existing != null && existing.status === "enrolled") {
       await conn.rollback();
       return {
@@ -601,24 +823,24 @@ export async function createClinicalEnrollment(
       };
     }
 
-    const enrolledCount = await lockAndCountActiveClinicalEnrollmentsForSlot(
-      conn,
-      timetableId,
-      te,
-      year,
-    );
-
+    const usedBuckets = aggregateEnrolledBucketsFromLockedRows(lockedEnr);
     const wasReactivation = existing != null && existing.status === "dropped";
-    const capacityEnforced = slotCapacity > 0;
-    if (
-      capacityEnforced &&
-      enrolledCount >= slotCapacity
-    ) {
-      await conn.rollback();
-      return {
-        ok: false,
-        error: "This clinic slot is full.",
-      };
+
+    let chosenBucket: ClinicalSeatBucket | null = null;
+    if (bucketEnforced) {
+      chosenBucket = pickAllocatableSeatBucket(
+        studentBookingLevel,
+        caps,
+        usedBuckets,
+      );
+      if (chosenBucket == null) {
+        await conn.rollback();
+        return {
+          ok: false,
+          error:
+            "This clinic slot is full for your level and there are no open shared seats.",
+        };
+      }
     }
 
     let enrollmentId: number;
@@ -631,6 +853,7 @@ export async function createClinicalEnrollment(
           term: te,
           year,
           status: "enrolled",
+          seatBucket: bucketEnforced ? chosenBucket : null,
         });
         isNewEnrollmentRow = true;
       } catch (e: unknown) {
@@ -644,11 +867,12 @@ export async function createClinicalEnrollment(
         throw e;
       }
     } else {
-      const n = await updateClinicalEnrollmentStatusById(
+      const n = await updateClinicalEnrollmentStatusAndSeatBucketById(
         conn,
         existing.id,
         sid,
         "enrolled",
+        bucketEnforced ? chosenBucket : null,
       );
       if (n === 0) {
         await conn.rollback();
@@ -667,6 +891,7 @@ export async function createClinicalEnrollment(
       assignmentId,
       isNewEnrollmentRow,
       wasReactivation,
+      seatBucket: bucketEnforced ? chosenBucket : null,
     };
   } catch (e) {
     await conn.rollback();

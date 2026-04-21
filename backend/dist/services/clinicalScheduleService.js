@@ -253,6 +253,18 @@ export async function listClinicalOfferedTimetableForPortal(query) {
             capacity: r.capacity,
             enrolledCount: r.enrolledCount,
             remainingSeats: r.remainingSeats,
+            capacity100: r.capacity100,
+            capacity200: r.capacity200,
+            capacity300: r.capacity300,
+            capacityAll: r.capacityAll,
+            enrolled100: r.enrolled100,
+            enrolled200: r.enrolled200,
+            enrolled300: r.enrolled300,
+            enrolledAll: r.enrolledAll,
+            remaining100: r.remaining100,
+            remaining200: r.remaining200,
+            remaining300: r.remaining300,
+            remainingAll: r.remainingAll,
         };
     });
 }

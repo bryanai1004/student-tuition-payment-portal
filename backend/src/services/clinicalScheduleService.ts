@@ -56,6 +56,18 @@ export type ClinicalOfferedTimetableSlotDto = AdminClinicalTimetableSlotDto & {
   capacity: number | null;
   enrolledCount: number;
   remainingSeats: number | null;
+  capacity100: number;
+  capacity200: number;
+  capacity300: number;
+  capacityAll: number;
+  enrolled100: number;
+  enrolled200: number;
+  enrolled300: number;
+  enrolledAll: number;
+  remaining100: number;
+  remaining200: number;
+  remaining300: number;
+  remainingAll: number;
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -342,6 +354,18 @@ export async function listClinicalOfferedTimetableForPortal(
       capacity: r.capacity,
       enrolledCount: r.enrolledCount,
       remainingSeats: r.remainingSeats,
+      capacity100: r.capacity100,
+      capacity200: r.capacity200,
+      capacity300: r.capacity300,
+      capacityAll: r.capacityAll,
+      enrolled100: r.enrolled100,
+      enrolled200: r.enrolled200,
+      enrolled300: r.enrolled300,
+      enrolledAll: r.enrolledAll,
+      remaining100: r.remaining100,
+      remaining200: r.remaining200,
+      remaining300: r.remaining300,
+      remainingAll: r.remainingAll,
     };
   });
 }

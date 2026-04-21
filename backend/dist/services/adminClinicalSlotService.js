@@ -37,6 +37,10 @@ function rowToDto(row) {
         cap300: row.cap_300,
         cap123: row.cap_123,
         activeEnrolledCount: row.active_enrolled_count,
+        enrolled100: row.enrolled_bucket_100,
+        enrolled200: row.enrolled_bucket_200,
+        enrolled300: row.enrolled_bucket_300,
+        enrolledAll: row.enrolled_bucket_all,
     };
 }
 function trimStr(v, fallback = "") {
@@ -244,6 +248,10 @@ export async function createAdminClinicalSlot(input) {
         ...created,
         academic_term_id: null,
         active_enrolled_count: 0,
+        enrolled_bucket_100: 0,
+        enrolled_bucket_200: 0,
+        enrolled_bucket_300: 0,
+        enrolled_bucket_all: 0,
     });
 }
 export async function updateAdminClinicalSlot(seqNum, patch) {
@@ -342,6 +350,10 @@ export async function updateAdminClinicalSlot(seqNum, patch) {
         ...updated,
         academic_term_id: null,
         active_enrolled_count: 0,
+        enrolled_bucket_100: 0,
+        enrolled_bucket_200: 0,
+        enrolled_bucket_300: 0,
+        enrolled_bucket_all: 0,
     });
 }
 export async function deleteAdminClinicalSlot(seqNum, options) {

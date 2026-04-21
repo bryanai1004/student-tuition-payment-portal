@@ -38,6 +38,18 @@ export type ClinicalOfferedTimetableSlotDto = AdminClinicalTimetableSlotDto & {
     capacity: number | null;
     enrolledCount: number;
     remainingSeats: number | null;
+    capacity100: number;
+    capacity200: number;
+    capacity300: number;
+    capacityAll: number;
+    enrolled100: number;
+    enrolled200: number;
+    enrolled300: number;
+    enrolledAll: number;
+    remaining100: number;
+    remaining200: number;
+    remaining300: number;
+    remainingAll: number;
 };
 /** Normalize MySQL TIME string to HH:MM for API consumers. */
 export declare function formatClinicTimeHm(raw: string | null | undefined): string | null;
