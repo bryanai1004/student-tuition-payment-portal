@@ -2143,6 +2143,41 @@ export async function postAdminClinicalAssign(
   return { ok: true, id: o.id }
 }
 
+/** GET `/api/admin/instructors` */
+export type AdminInstructor = {
+  id: number
+  instructorId: string
+  name: string
+}
+
+function isAdminInstructor(x: unknown): x is AdminInstructor {
+  if (x == null || typeof x !== 'object') return false
+  const o = x as Record<string, unknown>
+  return (
+    typeof o.id === 'number' &&
+    Number.isFinite(o.id) &&
+    typeof o.instructorId === 'string' &&
+    typeof o.name === 'string'
+  )
+}
+
+export async function fetchAdminInstructors(options?: {
+  signal?: AbortSignal
+}): Promise<AdminInstructor[]> {
+  const data = (await fetchApiJson('/api/admin/instructors', {
+    signal: options?.signal,
+  })) as unknown
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected admin instructors response')
+  }
+  for (const row of data) {
+    if (!isAdminInstructor(row)) {
+      throw new Error('Unexpected admin instructors response')
+    }
+  }
+  return data
+}
+
 /** GET/POST/PATCH `/api/admin/clinical/slots` — legacy `clinic_timetable` CRUD (term via `academicTermId`). */
 export type AdminClinicalSlot = {
   id: number

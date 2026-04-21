@@ -4,10 +4,12 @@ import {
   deleteAdminClinicalSlot,
   deleteAdminClinicalSlotEnrollment,
   fetchAcademicTerms,
+  fetchAdminInstructors,
   fetchAdminClinicalSlots,
   fetchAdminClinicalSlotRoster,
   updateAdminClinicalSlot,
   type AcademicTerm,
+  type AdminInstructor,
   type AdminClinicalSlot,
   type AdminClinicalSlotRosterRow,
 } from '../../lib/api'
@@ -25,17 +27,11 @@ type SlotFormState = {
   timeFrom: string
   timeTo: string
   slot: string
-  instructorId: string
-  instructor: string
+  selectedInstructorId: string
   cap100: string
   cap200: string
   cap300: string
   cap123: string
-}
-
-type InstructorOption = {
-  instructorId: string
-  instructor: string
 }
 
 function emptySlotForm(defaultTermId: string): SlotFormState {
@@ -45,8 +41,7 @@ function emptySlotForm(defaultTermId: string): SlotFormState {
     timeFrom: '',
     timeTo: '',
     slot: '',
-    instructorId: '',
-    instructor: '',
+    selectedInstructorId: '',
     cap100: '0',
     cap200: '0',
     cap300: '0',
@@ -87,36 +82,28 @@ function buildHalfHourTimeOptions(startHour: number, endHour: number): string[] 
   return out
 }
 
-function buildInstructorOptions(
-  rows: AdminClinicalSlot[] | null,
-  currentForm: SlotFormState,
-): InstructorOption[] {
-  const map = new Map<string, InstructorOption>()
-  for (const row of rows ?? []) {
-    const name = row.instructor.trim()
-    if (name === '' || name.toUpperCase() === 'TBA') continue
-    const id = row.instructorId.trim()
-    const key = `${id}::${name}`
-    if (!map.has(key)) {
-      map.set(key, { instructorId: id, instructor: name })
-    }
+function selectedInstructorIdForSlot(
+  row: Pick<AdminClinicalSlot, 'instructorId' | 'instructor'>,
+  instructors: AdminInstructor[],
+): string {
+  const currentName = row.instructor.trim()
+  if (currentName === '' || currentName.toUpperCase() === 'TBA') return ''
+  const currentInstructorId = row.instructorId.trim()
+  if (currentInstructorId !== '') {
+    const byInstructorId = instructors.find(
+      (i) => i.instructorId.trim() === currentInstructorId,
+    )
+    if (byInstructorId) return String(byInstructorId.id)
   }
-  const currentName = currentForm.instructor.trim()
-  if (currentName !== '' && currentName.toUpperCase() !== 'TBA') {
-    const currentId = currentForm.instructorId.trim()
-    const key = `${currentId}::${currentName}`
-    if (!map.has(key)) {
-      map.set(key, { instructorId: currentId, instructor: currentName })
-    }
-  }
-  return Array.from(map.values()).sort((a, b) =>
-    a.instructor.localeCompare(b.instructor),
-  )
+  const targetName = currentName.toLowerCase()
+  const byName = instructors.find((i) => i.name.trim().toLowerCase() === targetName)
+  return byName ? String(byName.id) : ''
 }
 
 function slotRowToForm(
   row: AdminClinicalSlot,
   fallbackTermId: string,
+  instructors: AdminInstructor[],
 ): SlotFormState {
   return {
     academicTermId: row.academicTermId ?? fallbackTermId,
@@ -124,8 +111,7 @@ function slotRowToForm(
     timeFrom: normalizeTimeForSelect(row.timeFrom),
     timeTo: normalizeTimeForSelect(row.timeTo),
     slot: row.slot,
-    instructorId: row.instructorId,
-    instructor: row.instructor === 'TBA' ? '' : row.instructor,
+    selectedInstructorId: selectedInstructorIdForSlot(row, instructors),
     cap100: String(row.cap100),
     cap200: String(row.cap200),
     cap300: String(row.cap300),
@@ -183,6 +169,9 @@ export function AdminClinicalPage() {
   const [deletingSlotId, setDeletingSlotId] = useState<number | null>(null)
   const [slotDeleteFeedback, setSlotDeleteFeedback] = useState<string | null>(null)
   const [slotDeleteError, setSlotDeleteError] = useState<string | null>(null)
+  const [instructors, setInstructors] = useState<AdminInstructor[]>([])
+  const [instructorsLoading, setInstructorsLoading] = useState(false)
+  const [instructorsError, setInstructorsError] = useState<string | null>(null)
 
   const [rosterSlot, setRosterSlot] = useState<AdminClinicalSlot | null>(null)
   const [rosterRows, setRosterRows] = useState<AdminClinicalSlotRosterRow[] | null>(
@@ -278,6 +267,42 @@ export function AdminClinicalPage() {
     return () => ac.abort()
   }, [rosterSlot])
 
+  useEffect(() => {
+    if (slotModalMode == null) return
+    const ac = new AbortController()
+    setInstructorsLoading(true)
+    setInstructorsError(null)
+    ;(async () => {
+      try {
+        const list = await fetchAdminInstructors({ signal: ac.signal })
+        if (ac.signal.aborted) return
+        setInstructors(list)
+        setInstructorsError(null)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setInstructors([])
+        setInstructorsError(
+          e instanceof Error ? e.message : 'Could not load instructors.',
+        )
+      } finally {
+        if (!ac.signal.aborted) setInstructorsLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [slotModalMode])
+
+  useEffect(() => {
+    if (slotModalMode !== 'edit') return
+    if (editingSlotId == null) return
+    if (instructors.length === 0) return
+    if (slotForm.selectedInstructorId.trim() !== '') return
+    const editingSlot = (slots ?? []).find((s) => s.id === editingSlotId)
+    if (!editingSlot) return
+    const matchedId = selectedInstructorIdForSlot(editingSlot, instructors)
+    if (matchedId === '') return
+    setSlotForm((f) => ({ ...f, selectedInstructorId: matchedId }))
+  }, [slotModalMode, editingSlotId, instructors, slots, slotForm.selectedInstructorId])
+
   const rosterTermLabel = academicTermDisplayLabel(terms, slotsTermId)
   const termsLoading = terms == null
   const hasTerms = (terms?.length ?? 0) > 0
@@ -294,8 +319,6 @@ export function AdminClinicalPage() {
     const bb = timeToMinutes(b) ?? Number.MAX_SAFE_INTEGER
     return aa - bb
   })
-  const instructorOptions = buildInstructorOptions(slots, slotForm)
-
   return (
     <main className="admin-page">
       <div className="admin-page__toolbar">
@@ -502,7 +525,9 @@ export function AdminClinicalPage() {
                                 disabled={busy}
                                 onClick={() => {
                                   setEditingSlotId(s.id)
-                                  setSlotForm(slotRowToForm(s, slotsTermId.trim()))
+                                  setSlotForm(
+                                    slotRowToForm(s, slotsTermId.trim(), instructors),
+                                  )
                                   setSlotFormError(null)
                                   setSlotModalMode('edit')
                                 }}
@@ -669,10 +694,11 @@ export function AdminClinicalPage() {
                       return
                     }
 
-                    const instructor =
-                      slotForm.instructor.trim() === ''
-                        ? 'TBA'
-                        : slotForm.instructor.trim()
+                    const selectedInstructor = instructors.find(
+                      (i) => String(i.id) === slotForm.selectedInstructorId.trim(),
+                    )
+                    const instructor = selectedInstructor?.name ?? 'TBA'
+                    const instructorId = selectedInstructor?.instructorId ?? ''
 
                     setSlotSaving(true)
                     ;(async () => {
@@ -685,10 +711,7 @@ export function AdminClinicalPage() {
                             timeTo: to,
                             slot: slotForm.slot.trim(),
                             instructor,
-                            instructorId:
-                              slotForm.instructorId.trim() === ''
-                                ? ''
-                                : slotForm.instructorId.trim(),
+                            instructorId,
                             cap100: caps.cap100,
                             cap200: caps.cap200,
                             cap300: caps.cap300,
@@ -705,10 +728,7 @@ export function AdminClinicalPage() {
                             timeTo: to,
                             slot: slotForm.slot.trim(),
                             instructor,
-                            instructorId:
-                              slotForm.instructorId.trim() === ''
-                                ? ''
-                                : slotForm.instructorId.trim(),
+                            instructorId,
                             cap100: caps.cap100,
                             cap200: caps.cap200,
                             cap300: caps.cap300,
@@ -836,32 +856,27 @@ export function AdminClinicalPage() {
                       id="admin-clinical-slot-instr"
                       className="admin-input"
                       style={{ width: '100%', boxSizing: 'border-box' }}
-                      value={`${slotForm.instructorId}::${slotForm.instructor}`}
+                      value={slotForm.selectedInstructorId}
+                      disabled={instructorsLoading}
                       onChange={(e) =>
-                        setSlotForm((f) => {
-                          const value = e.target.value
-                          if (value === '') {
-                            return { ...f, instructorId: '', instructor: '' }
-                          }
-                          const [instructorId, ...nameParts] = value.split('::')
-                          return {
-                            ...f,
-                            instructorId,
-                            instructor: nameParts.join('::'),
-                          }
-                        })
+                        setSlotForm((f) => ({
+                          ...f,
+                          selectedInstructorId: e.target.value,
+                        }))
                       }
                     >
                       <option value="">TBA</option>
-                      {instructorOptions.map((opt) => (
-                        <option
-                          key={`${opt.instructorId}::${opt.instructor}`}
-                          value={`${opt.instructorId}::${opt.instructor}`}
-                        >
-                          {opt.instructor}
+                      {instructors.map((i) => (
+                        <option key={i.id} value={String(i.id)}>
+                          {i.name}
                         </option>
                       ))}
                     </select>
+                    {instructorsError ? (
+                      <p className="portal-page-lede" role="alert">
+                        {instructorsError}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="portal-course-feedback-modal__field">
                     <label htmlFor="admin-clinical-cap100">100 level slot</label>

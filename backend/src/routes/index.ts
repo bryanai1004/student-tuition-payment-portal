@@ -101,6 +101,7 @@ import {
   patchAdminClinicalSlotHandler,
   postAdminClinicalSlotHandler,
 } from "../controllers/adminClinicalSlotController.js";
+import { getAdminInstructorsHandler } from "../controllers/adminInstructorController.js";
 import {
   getAdminClinicalTimetableHandler,
   getClinicalOfferedTimetableHandler,
@@ -219,6 +220,7 @@ adminRouter.post(
   postAdminClinicalPaymentHoldCleanupHandler,
 );
 adminRouter.get("/clinical/slots", getAdminClinicalSlotsHandler);
+adminRouter.get("/instructors", getAdminInstructorsHandler);
 adminRouter.post("/clinical/slots", postAdminClinicalSlotHandler);
 adminRouter.patch("/clinical/slots/:id", patchAdminClinicalSlotHandler);
 adminRouter.delete("/clinical/slots/:id", deleteAdminClinicalSlotHandler);
