@@ -33,6 +33,11 @@ type SlotFormState = {
   cap123: string
 }
 
+type InstructorOption = {
+  instructorId: string
+  instructor: string
+}
+
 function emptySlotForm(defaultTermId: string): SlotFormState {
   return {
     academicTermId: defaultTermId,
@@ -49,6 +54,66 @@ function emptySlotForm(defaultTermId: string): SlotFormState {
   }
 }
 
+function toTwoDigit(v: number): string {
+  return String(v).padStart(2, '0')
+}
+
+function normalizeTimeForSelect(value: string): string {
+  const m = value.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
+  if (!m) return ''
+  const hh = Number(m[1])
+  const mm = Number(m[2])
+  if (!Number.isInteger(hh) || !Number.isInteger(mm)) return ''
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return ''
+  return `${toTwoDigit(hh)}:${toTwoDigit(mm)}`
+}
+
+function timeToMinutes(value: string): number | null {
+  const m = value.match(/^(\d{2}):(\d{2})$/)
+  if (!m) return null
+  const hh = Number(m[1])
+  const mm = Number(m[2])
+  if (!Number.isInteger(hh) || !Number.isInteger(mm)) return null
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
+  return hh * 60 + mm
+}
+
+function buildHalfHourTimeOptions(startHour: number, endHour: number): string[] {
+  const out: string[] = []
+  for (let hour = startHour; hour <= endHour; hour += 1) {
+    out.push(`${toTwoDigit(hour)}:00`)
+    out.push(`${toTwoDigit(hour)}:30`)
+  }
+  return out
+}
+
+function buildInstructorOptions(
+  rows: AdminClinicalSlot[] | null,
+  currentForm: SlotFormState,
+): InstructorOption[] {
+  const map = new Map<string, InstructorOption>()
+  for (const row of rows ?? []) {
+    const name = row.instructor.trim()
+    if (name === '' || name.toUpperCase() === 'TBA') continue
+    const id = row.instructorId.trim()
+    const key = `${id}::${name}`
+    if (!map.has(key)) {
+      map.set(key, { instructorId: id, instructor: name })
+    }
+  }
+  const currentName = currentForm.instructor.trim()
+  if (currentName !== '' && currentName.toUpperCase() !== 'TBA') {
+    const currentId = currentForm.instructorId.trim()
+    const key = `${currentId}::${currentName}`
+    if (!map.has(key)) {
+      map.set(key, { instructorId: currentId, instructor: currentName })
+    }
+  }
+  return Array.from(map.values()).sort((a, b) =>
+    a.instructor.localeCompare(b.instructor),
+  )
+}
+
 function slotRowToForm(
   row: AdminClinicalSlot,
   fallbackTermId: string,
@@ -56,8 +121,8 @@ function slotRowToForm(
   return {
     academicTermId: row.academicTermId ?? fallbackTermId,
     weekday: row.weekday || 'Monday',
-    timeFrom: row.timeFrom,
-    timeTo: row.timeTo,
+    timeFrom: normalizeTimeForSelect(row.timeFrom),
+    timeTo: normalizeTimeForSelect(row.timeTo),
     slot: row.slot,
     instructorId: row.instructorId,
     instructor: row.instructor === 'TBA' ? '' : row.instructor,
@@ -216,6 +281,20 @@ export function AdminClinicalPage() {
   const rosterTermLabel = academicTermDisplayLabel(terms, slotsTermId)
   const termsLoading = terms == null
   const hasTerms = (terms?.length ?? 0) > 0
+  const baseTimeOptions = buildHalfHourTimeOptions(7, 20)
+  const allTimeOptions = Array.from(
+    new Set(
+      [slotForm.timeFrom, slotForm.timeTo]
+        .map((x) => normalizeTimeForSelect(x))
+        .filter((x) => x !== '')
+        .concat(baseTimeOptions),
+    ),
+  ).sort((a, b) => {
+    const aa = timeToMinutes(a) ?? Number.MAX_SAFE_INTEGER
+    const bb = timeToMinutes(b) ?? Number.MAX_SAFE_INTEGER
+    return aa - bb
+  })
+  const instructorOptions = buildInstructorOptions(slots, slotForm)
 
   return (
     <main className="admin-page">
@@ -523,8 +602,8 @@ export function AdminClinicalPage() {
                   {slotModalMode === 'add' ? 'Create clinical slot' : 'Edit clinical slot'}
                 </h2>
                 <p className="admin-section-detail-modal__meta">
-                  Slots are stored in the legacy clinic timetable. Times use 24-hour
-                  format (HH:MM or HH:MM:SS).
+                  Slots are stored in the legacy clinic timetable. Select instructor
+                  and 24-hour time values from dropdowns.
                 </p>
                 <form
                   onSubmit={(e) => {
@@ -540,7 +619,7 @@ export function AdminClinicalPage() {
                       return
                     }
                     if (!slotForm.timeFrom.trim() || !slotForm.timeTo.trim()) {
-                      setSlotFormError('Enter time from and time to.')
+                      setSlotFormError('Select time from and time to.')
                       return
                     }
                     if (!slotForm.slot.trim()) {
@@ -577,12 +656,16 @@ export function AdminClinicalPage() {
                       caps[key] = n
                     }
 
-                    const timeRe = /^\d{1,2}:\d{2}(:\d{2})?$/
-                    if (
-                      !timeRe.test(slotForm.timeFrom.trim()) ||
-                      !timeRe.test(slotForm.timeTo.trim())
-                    ) {
-                      setSlotFormError('Times must look like HH:MM or HH:MM:SS.')
+                    const from = normalizeTimeForSelect(slotForm.timeFrom)
+                    const to = normalizeTimeForSelect(slotForm.timeTo)
+                    const fromMinutes = timeToMinutes(from)
+                    const toMinutes = timeToMinutes(to)
+                    if (fromMinutes == null || toMinutes == null) {
+                      setSlotFormError('Select valid start and end times.')
+                      return
+                    }
+                    if (toMinutes <= fromMinutes) {
+                      setSlotFormError('Time to must be later than time from.')
                       return
                     }
 
@@ -598,8 +681,8 @@ export function AdminClinicalPage() {
                           await createAdminClinicalSlot({
                             academicTermId: termId,
                             weekday: slotForm.weekday.trim(),
-                            timeFrom: slotForm.timeFrom.trim(),
-                            timeTo: slotForm.timeTo.trim(),
+                            timeFrom: from,
+                            timeTo: to,
                             slot: slotForm.slot.trim(),
                             instructor,
                             instructorId:
@@ -618,8 +701,8 @@ export function AdminClinicalPage() {
                           await updateAdminClinicalSlot(editingSlotId, {
                             academicTermId: termId,
                             weekday: slotForm.weekday.trim(),
-                            timeFrom: slotForm.timeFrom.trim(),
-                            timeTo: slotForm.timeTo.trim(),
+                            timeFrom: from,
+                            timeTo: to,
                             slot: slotForm.slot.trim(),
                             instructor,
                             instructorId:
@@ -690,31 +773,49 @@ export function AdminClinicalPage() {
                   </div>
                   <div className="portal-course-feedback-modal__field">
                     <label htmlFor="admin-clinical-slot-from">Time from</label>
-                    <input
+                    <select
                       id="admin-clinical-slot-from"
                       className="admin-input"
                       style={{ width: '100%', boxSizing: 'border-box' }}
-                      placeholder="09:00 or 09:00:00"
                       required
                       value={slotForm.timeFrom}
                       onChange={(e) =>
-                        setSlotForm((f) => ({ ...f, timeFrom: e.target.value }))
+                        setSlotForm((f) => ({
+                          ...f,
+                          timeFrom: normalizeTimeForSelect(e.target.value),
+                        }))
                       }
-                    />
+                    >
+                      <option value="">Select…</option>
+                      {allTimeOptions.map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="portal-course-feedback-modal__field">
                     <label htmlFor="admin-clinical-slot-to">Time to</label>
-                    <input
+                    <select
                       id="admin-clinical-slot-to"
                       className="admin-input"
                       style={{ width: '100%', boxSizing: 'border-box' }}
-                      placeholder="13:00 or 13:00:00"
                       required
                       value={slotForm.timeTo}
                       onChange={(e) =>
-                        setSlotForm((f) => ({ ...f, timeTo: e.target.value }))
+                        setSlotForm((f) => ({
+                          ...f,
+                          timeTo: normalizeTimeForSelect(e.target.value),
+                        }))
                       }
-                    />
+                    >
+                      <option value="">Select…</option>
+                      {allTimeOptions.map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="portal-course-feedback-modal__field">
                     <label htmlFor="admin-clinical-slot-num">Slot</label>
@@ -730,34 +831,37 @@ export function AdminClinicalPage() {
                     />
                   </div>
                   <div className="portal-course-feedback-modal__field">
-                    <label htmlFor="admin-clinical-slot-instr-id">
-                      Instructor ID (optional)
-                    </label>
-                    <input
-                      id="admin-clinical-slot-instr-id"
-                      className="admin-input"
-                      style={{ width: '100%', boxSizing: 'border-box' }}
-                      value={slotForm.instructorId}
-                      onChange={(e) =>
-                        setSlotForm((f) => ({
-                          ...f,
-                          instructorId: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="portal-course-feedback-modal__field">
                     <label htmlFor="admin-clinical-slot-instr">Instructor</label>
-                    <input
+                    <select
                       id="admin-clinical-slot-instr"
                       className="admin-input"
                       style={{ width: '100%', boxSizing: 'border-box' }}
-                      placeholder="TBA if blank"
-                      value={slotForm.instructor}
+                      value={`${slotForm.instructorId}::${slotForm.instructor}`}
                       onChange={(e) =>
-                        setSlotForm((f) => ({ ...f, instructor: e.target.value }))
+                        setSlotForm((f) => {
+                          const value = e.target.value
+                          if (value === '') {
+                            return { ...f, instructorId: '', instructor: '' }
+                          }
+                          const [instructorId, ...nameParts] = value.split('::')
+                          return {
+                            ...f,
+                            instructorId,
+                            instructor: nameParts.join('::'),
+                          }
+                        })
                       }
-                    />
+                    >
+                      <option value="">TBA</option>
+                      {instructorOptions.map((opt) => (
+                        <option
+                          key={`${opt.instructorId}::${opt.instructor}`}
+                          value={`${opt.instructorId}::${opt.instructor}`}
+                        >
+                          {opt.instructor}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="portal-course-feedback-modal__field">
                     <label htmlFor="admin-clinical-cap100">100 level slot</label>
