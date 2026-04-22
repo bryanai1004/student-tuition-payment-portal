@@ -9,5 +9,10 @@ export declare const env: {
         readonly password: string;
         readonly database: string;
     };
+    readonly supabase: {
+        readonly url: string | null;
+        readonly serviceRoleKey: string | null;
+        readonly storageBucket: string;
+    };
 };
 //# sourceMappingURL=env.d.ts.map

@@ -57,6 +57,20 @@ CREATE TABLE IF NOT EXISTS portal_payments (
   KEY idx_pay_student_term (student_external_id, term, year)
 );
 
+CREATE TABLE IF NOT EXISTS portal_payment_transactions (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  student_id VARCHAR(64) NOT NULL,
+  term VARCHAR(32) NOT NULL,
+  amount DECIMAL(12, 2) NOT NULL,
+  status ENUM('pending', 'succeeded', 'failed') NOT NULL DEFAULT 'pending',
+  provider VARCHAR(64) NOT NULL,
+  provider_transaction_id VARCHAR(128) NULL,
+  invoice_number VARCHAR(64) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_payment_tx_student_term (student_id, term),
+  KEY idx_payment_tx_provider_id (provider, provider_transaction_id)
+);
+
 CREATE TABLE IF NOT EXISTS portal_billing_adjustments (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   student_external_id VARCHAR(64) NOT NULL,

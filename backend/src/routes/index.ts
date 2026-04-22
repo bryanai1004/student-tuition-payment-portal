@@ -1,13 +1,16 @@
 import { Router } from "express";
 import {
   getAdminStudent,
+  getAdminStudentPhotoUrlHandler,
   getAdminStudents,
   getNextAdminStudentId,
   postExportAdminStudentsCsv,
+  postAdminStudentPhoto,
   postAdminStudent,
   postAdminStudentLoa,
   postDeleteSelectedAdminStudents,
   putAdminStudent,
+  uploadAdminStudentPhotoMiddleware,
 } from "../controllers/adminStudentController.js";
 import {
   deleteAdminCourseSection,
@@ -48,6 +51,7 @@ import {
   getAccountingLedger,
   getAccountingQuarters,
 } from "../controllers/studentLedgerController.js";
+import { postAuthorizeNetChargeHandler } from "../controllers/studentAuthorizePaymentController.js";
 import { getStudentAcademics } from "../controllers/studentAcademicsController.js";
 import {
   getAdminStudentCourseFeedback,
@@ -63,6 +67,11 @@ import {
   getStudentProfile,
   putStudentProfile,
 } from "../controllers/studentAccountController.js";
+import {
+  getStudentMyPhotoUrlHandler,
+  postStudentMyPhotoHandler,
+  uploadStudentMyPhotoMiddleware,
+} from "../controllers/studentPhotoController.js";
 import { postStudentLogin } from "../controllers/studentAuthController.js";
 import {
   getStudentEnrolledSections,
@@ -132,6 +141,7 @@ apiRouter.get("/health", getHealth);
 apiRouter.get("/health/db", getHealthDb);
 
 apiRouter.post("/auth/login", postStudentLogin);
+apiRouter.post("/payments/authorize/charge", postAuthorizeNetChargeHandler);
 
 apiRouter.post("/student/enroll", postStudentEnroll);
 apiRouter.post("/student/withdraw", postStudentWithdraw);
@@ -140,6 +150,12 @@ apiRouter.get("/student/clinical-progress", getStudentClinicalProgressHandler);
 apiRouter.post("/student/clinical/exam-request", postStudentClinicalExamRequestHandler);
 apiRouter.get("/student/clinical/exam-requests", getStudentClinicalExamRequestsHandler);
 apiRouter.put("/student/profile", putStudentProfile);
+apiRouter.get("/student/me/photo-url", getStudentMyPhotoUrlHandler);
+apiRouter.post(
+  "/student/me/photo",
+  uploadStudentMyPhotoMiddleware,
+  postStudentMyPhotoHandler,
+);
 
 apiRouter.post("/ai/ask", postAiAsk);
 
@@ -170,6 +186,12 @@ adminRouter.post("/students", postAdminStudent);
 adminRouter.post("/students/delete-selected", postDeleteSelectedAdminStudents);
 adminRouter.post("/students/export.csv", postExportAdminStudentsCsv);
 adminRouter.post("/students/:studentId/loa", postAdminStudentLoa);
+adminRouter.post(
+  "/students/:studentId/photo",
+  uploadAdminStudentPhotoMiddleware,
+  postAdminStudentPhoto,
+);
+adminRouter.get("/students/:studentId/photo-url", getAdminStudentPhotoUrlHandler);
 adminRouter.get("/students/:studentId", getAdminStudent);
 adminRouter.put("/students/:studentId", putAdminStudent);
 adminRouter.get(

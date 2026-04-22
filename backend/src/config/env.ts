@@ -23,6 +23,13 @@ function required(name: string): string {
   return value;
 }
 
+function optional(name: string): string | null {
+  const value = process.env[name];
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 function parsePort(raw: string | undefined, fallback: number): number {
   const n = Number(raw ?? fallback);
   if (!Number.isInteger(n) || n < 1 || n > 65535) {
@@ -61,5 +68,10 @@ export const env = {
     user: required("DB_USER"),
     password: process.env.DB_PASSWORD ?? "",
     database: required("DB_NAME"),
+  },
+  supabase: {
+    url: optional("SUPABASE_URL"),
+    serviceRoleKey: optional("SUPABASE_SERVICE_ROLE_KEY"),
+    storageBucket: optional("SUPABASE_STORAGE_BUCKET") ?? "student-photos",
   },
 } as const;

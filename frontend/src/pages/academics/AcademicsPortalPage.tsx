@@ -200,7 +200,7 @@ export function AcademicsPortalPage() {
         />
       ) : null}
       <div
-        className="portal-academics-print-hide"
+        className="portal-academics-print-hide portal-academics-sections-tabs"
         role="tablist"
         aria-label={t('academicsSectionsAria')}
       >
@@ -282,28 +282,31 @@ export function AcademicsPortalPage() {
                 </div>
               ) : (
                 <>
-                  <div className="portal-stack portal-account-ledger__toolbar portal-academics-term-toolbar">
-                    <label className="portal-account-ledger__quarter-label" htmlFor="registration-history-term-select">
-                      <span className="portal-card-note">{t('term')}</span>
-                      <select
-                        id="registration-history-term-select"
-                        className="portal-account-ledger__select"
-                        value={selectedRegistrationTermKey}
-                        onChange={(e) => setSelectedRegistrationTermKey(e.target.value)}
-                      >
-                        {registrationTermOptions.map((termOpt) => (
-                          <option key={termOpt.key} value={termOpt.key}>
-                            {termOpt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
                   {selectedRegistrationGroup ? (
-                    <div key={selectedRegistrationGroup.key} className="portal-stack">
-                      <h2 className="portal-academics-term-heading">
-                        {selectedRegistrationGroup.term} {selectedRegistrationGroup.year}
-                      </h2>
+                    <div
+                      key={selectedRegistrationGroup.key}
+                      className="portal-academics-registration-history-term"
+                    >
+                      <div className="portal-account-ledger__toolbar portal-academics-term-toolbar">
+                        <label
+                          className="portal-account-ledger__quarter-label"
+                          htmlFor="registration-history-term-select"
+                        >
+                          <span className="portal-card-note">{t('term')}</span>
+                          <select
+                            id="registration-history-term-select"
+                            className="portal-account-ledger__select"
+                            value={selectedRegistrationTermKey}
+                            onChange={(e) => setSelectedRegistrationTermKey(e.target.value)}
+                          >
+                            {registrationTermOptions.map((termOpt) => (
+                              <option key={termOpt.key} value={termOpt.key}>
+                                {termOpt.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
                       <div className="portal-table-wrap">
                         <table className={REGISTRATION_HISTORY_TABLE_CLASS}>
                           <thead>

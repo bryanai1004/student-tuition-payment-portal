@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
-import { Link } from 'react-router-dom'
 import { useLanguage, useStudentPortalT } from '@/LanguageContext'
+import { FinancePaymentModal } from '@/components/finance/FinancePaymentModal'
 import { useAccount } from '../../context/AccountContext'
 import {
   fetchAccountingLedger,
@@ -41,6 +41,17 @@ function formatLedgerDate(iso: string, locale: string): string {
 
 function quarterKey(q: AccountingQuarterOption): string {
   return `${q.year}:${q.term}`
+}
+
+function termCodeFromQuarter(term: string, year: number): string {
+  const upper = term.trim().toUpperCase()
+  const suffix =
+    upper.startsWith('SPR') ? 'SPR'
+    : upper.startsWith('SUM') ? 'SUM'
+    : upper.startsWith('FAL') ? 'FAL'
+    : upper.startsWith('WIN') ? 'WIN'
+    : upper.slice(0, 3) || 'TRM'
+  return `${year}-${suffix}`
 }
 
 function formatRemainingHms(totalSeconds: number): string {
@@ -165,13 +176,16 @@ export function AccountingLedgerSection() {
   const t = useStudentPortalT()
   const narrowMobile = useIsNarrowMobile()
   const dateLocale = locale === 'zh' ? 'zh-TW' : 'en-US'
-  const { currentStudentId, isAuthenticated } = useAccount()
+  const { currentStudentId, isAuthenticated, authToken } = useAccount()
   const [quarters, setQuarters] = useState<AccountingQuarterOption[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [ledger, setLedger] = useState<AccountingLedgerResponse | null>(null)
   const [loadingQuarters, setLoadingQuarters] = useState(false)
   const [loadingLedger, setLoadingLedger] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [ledgerReloadSeq, setLedgerReloadSeq] = useState(0)
+  const [paymentToast, setPaymentToast] = useState<string | null>(null)
 
   const studentId = currentStudentId?.trim() ?? ''
 
@@ -216,6 +230,12 @@ export function AccountingLedgerSection() {
   }, [quarters, selectedKey])
 
   useEffect(() => {
+    if (!paymentToast) return undefined
+    const id = window.setTimeout(() => setPaymentToast(null), 5000)
+    return () => window.clearTimeout(id)
+  }, [paymentToast])
+
+  useEffect(() => {
     if (selectedQuarter == null || studentId === '') {
       setLedger(null)
       return
@@ -242,7 +262,7 @@ export function AccountingLedgerSection() {
       }
     })()
     return () => ac.abort()
-  }, [selectedQuarter, studentId])
+  }, [selectedQuarter, studentId, ledgerReloadSeq])
 
   if (!isAuthenticated || studentId === '') {
     return null
@@ -273,6 +293,8 @@ export function AccountingLedgerSection() {
   const makePaymentEnabled =
     ledger != null && !loadingLedger && ledger.summary.balance > 0
   const showMakePaymentControl = selectedQuarter != null && quarters.length > 0
+  const selectedTermCode =
+    selectedQuarter != null ? termCodeFromQuarter(selectedQuarter.term, selectedQuarter.year) : ''
 
   return (
     <section className="portal-stack" aria-labelledby="accounting-ledger-heading">
@@ -283,12 +305,13 @@ export function AccountingLedgerSection() {
         <div className="portal-account-ledger__toolbar-actions">
           {showMakePaymentControl ? (
             makePaymentEnabled ? (
-              <Link
-                to="/plan"
+              <button
+                type="button"
                 className="portal-btn portal-btn--primary portal-account-ledger__pay-btn"
+                onClick={() => setPaymentModalOpen(true)}
               >
                 {t('makePayment')}
-              </Link>
+              </button>
             ) : (
               <button
                 type="button"
@@ -320,6 +343,11 @@ export function AccountingLedgerSection() {
           </label>
         </div>
       </div>
+      {paymentToast ? (
+        <p className="portal-finance-payment-toast" role="status" aria-live="polite">
+          {paymentToast}
+        </p>
+      ) : null}
 
       {error ? (
         <p className="portal-inline-note portal-inline-note--flush" role="alert">
@@ -397,6 +425,23 @@ export function AccountingLedgerSection() {
             </div>
           )}
         </>
+      ) : null}
+      {selectedQuarter != null && ledger != null ? (
+        <FinancePaymentModal
+          isOpen={paymentModalOpen}
+          termCode={selectedTermCode}
+          termLabel={selectedQuarter.label}
+          balanceDue={ledger.summary.balance}
+          authToken={authToken}
+          onCancel={() => setPaymentModalOpen(false)}
+          onPaymentSuccess={({ amount, transactionId, invoiceNumber }) => {
+            setPaymentModalOpen(false)
+            setPaymentToast(
+              `Payment of ${formatMoney(amount)} posted successfully. Ref ${transactionId}. Invoice ${invoiceNumber}.`,
+            )
+            setLedgerReloadSeq((v) => v + 1)
+          }}
+        />
       ) : null}
     </section>
   )

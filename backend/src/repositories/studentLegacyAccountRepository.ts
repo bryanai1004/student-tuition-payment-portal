@@ -1020,6 +1020,39 @@ export async function legacyStudentMasterExists(
   return rows.length > 0;
 }
 
+export async function getLegacyStudentPhotoPath(
+  pool: LegacyMysqlClient,
+  studentId: string,
+): Promise<string | null> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT photo_path
+     FROM students
+     WHERE id = ?
+     LIMIT 1`,
+    [studentId.trim()],
+  );
+  if (rows.length === 0) return null;
+  const raw = rows[0]?.photo_path;
+  if (raw == null) return null;
+  const value = String(raw).trim();
+  return value === "" ? null : value;
+}
+
+export async function updateLegacyStudentPhotoPath(
+  pool: LegacyMysqlClient,
+  studentId: string,
+  photoPath: string | null,
+): Promise<boolean> {
+  const [result] = await pool.execute(
+    `UPDATE students
+     SET photo_path = ?
+     WHERE id = ?`,
+    [photoPath, studentId.trim()],
+  );
+  const header = result as { affectedRows?: number };
+  return (header.affectedRows ?? 0) > 0;
+}
+
 export async function legacyStudentPasswordRowExists(
   pool: LegacyMysqlClient,
   studentId: string,

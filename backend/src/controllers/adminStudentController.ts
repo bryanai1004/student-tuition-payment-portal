@@ -1,4 +1,5 @@
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
+import multer from "multer";
 import {
   buildAdminStudentsCsv,
   createAdminStudentLoa,
@@ -9,6 +10,13 @@ import {
   previewNextAdminStudentId,
   updateAdminStudent,
 } from "../services/adminStudentService.js";
+import {
+  AdminStudentPhotoServiceError,
+  STUDENT_PHOTO_ALLOWED_MIME_TYPES,
+  STUDENT_PHOTO_MAX_SIZE_BYTES,
+  getAdminStudentPhotoUrl,
+  uploadAdminStudentPhoto,
+} from "../services/adminStudentPhotoService.js";
 import type {
   AdminStudentCreateBody,
   AdminStudentCreateLoaBody,
@@ -34,6 +42,24 @@ function parseNullableStringField(v: unknown): string | null {
 }
 
 type ParseBodyResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
+const STUDENT_PHOTO_UPLOAD = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: STUDENT_PHOTO_MAX_SIZE_BYTES,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (
+      STUDENT_PHOTO_ALLOWED_MIME_TYPES.includes(
+        file.mimetype as (typeof STUDENT_PHOTO_ALLOWED_MIME_TYPES)[number],
+      )
+    ) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only JPG, JPEG, PNG, and WEBP images are allowed."));
+  },
+});
 
 function parseStudentProgramField(
   raw: unknown,
@@ -459,6 +485,35 @@ function paramStudentId(params: Request["params"]): string | undefined {
   return typeof raw === "string" ? raw : undefined;
 }
 
+export function uploadAdminStudentPhotoMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  const middleware = STUDENT_PHOTO_UPLOAD.single("photo");
+  middleware(req, res, (err: unknown) => {
+    if (!err) {
+      res.locals.photoUploadReady = true;
+      res.locals.photoUploadError = null;
+      next();
+      return;
+    }
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      res.locals.photoUploadReady = false;
+      res.locals.photoUploadError =
+        "Photo must be 5MB or smaller. Supported types: JPG, JPEG, PNG, WEBP.";
+      next();
+      return;
+    }
+    res.locals.photoUploadReady = false;
+    res.locals.photoUploadError =
+      err instanceof Error
+        ? err.message
+        : "Invalid photo upload request. Supported types: JPG, JPEG, PNG, WEBP.";
+    next();
+  });
+}
+
 export async function getAdminStudent(
   req: Request,
   res: Response,
@@ -478,6 +533,71 @@ export async function getAdminStudent(
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Failed to load student" });
+  }
+}
+
+export async function getAdminStudentPhotoUrlHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const studentId = normalizeStudentIdParam(paramStudentId(req.params));
+  if (!studentId) {
+    res.status(400).json({ success: false, message: "Invalid student id." });
+    return;
+  }
+  try {
+    const result = await getAdminStudentPhotoUrl(studentId);
+    res.json(result);
+  } catch (err) {
+    if (err instanceof AdminStudentPhotoServiceError) {
+      res.status(err.status).json({ success: false, message: err.message });
+      return;
+    }
+    console.error("[admin/students/photo-url] failed:", err);
+    res.status(500).json({ success: false, message: "Photo URL request failed." });
+  }
+}
+
+export async function postAdminStudentPhoto(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const studentId = normalizeStudentIdParam(paramStudentId(req.params));
+  if (!studentId) {
+    res.status(400).json({ success: false, message: "Invalid student id." });
+    return;
+  }
+
+  if (!res.locals.photoUploadReady) {
+    const message =
+      typeof res.locals.photoUploadError === "string" &&
+      res.locals.photoUploadError.trim() !== ""
+        ? res.locals.photoUploadError
+        : "Photo upload failed.";
+    res.status(400).json({ success: false, message });
+    return;
+  }
+
+  const file = req.file;
+  if (!file || !file.buffer || file.buffer.length === 0) {
+    res.status(400).json({ success: false, message: "Photo file is required." });
+    return;
+  }
+
+  try {
+    const result = await uploadAdminStudentPhoto({
+      studentId,
+      fileBuffer: file.buffer,
+      contentType: file.mimetype,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof AdminStudentPhotoServiceError) {
+      res.status(err.status).json({ success: false, message: err.message });
+      return;
+    }
+    console.error("[admin/students/photo] upload failed:", err);
+    res.status(500).json({ success: false, message: "Photo upload failed." });
   }
 }
 

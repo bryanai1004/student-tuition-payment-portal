@@ -1856,6 +1856,61 @@ select.portal-profile-input {
   margin-top: 1.1rem;
 }
 
+.portal-finance-payment-modal {
+  max-width: 34rem;
+}
+
+.portal-finance-payment-modal__term {
+  margin: -0.25rem 0 0.25rem;
+  color: var(--portal-text-muted);
+  font-size: 0.875rem;
+}
+
+.portal-finance-payment-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.35rem 0;
+}
+
+.portal-finance-payment-modal__field > span {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--portal-text-muted);
+}
+
+.portal-finance-payment-modal__field > input {
+  width: 100%;
+  min-height: 2.2rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--portal-border, #d4d4d8);
+  border-radius: var(--portal-radius);
+  background: var(--portal-surface, #fff);
+  color: var(--portal-text);
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.portal-finance-payment-modal__field > input:focus-visible {
+  outline: 2px solid var(--portal-accent);
+  outline-offset: 2px;
+}
+
+.portal-finance-payment-modal__field > input[readonly] {
+  background: #f8f9fb;
+  color: var(--portal-text-muted);
+}
+
+.portal-finance-payment-modal__expiry-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.portal-finance-payment-modal__error {
+  color: var(--amu-red-dark);
+}
+
 .portal-my-timetable__block {
   pointer-events: none;
   cursor: default;
@@ -2358,6 +2413,21 @@ select.portal-profile-input {
 .portal-account-ledger__select:focus-visible {
   outline: 2px solid var(--portal-accent, #2563eb);
   outline-offset: 2px;
+}
+
+.portal-finance-payment-toast {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1300;
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid rgba(10, 111, 78, 0.35);
+  border-radius: var(--portal-radius);
+  background: #e8f7ef;
+  color: #0f5132;
+  font-size: 0.85rem;
+  box-shadow: var(--portal-shadow);
 }
 
 /* —— Documents module (pages) —— */
@@ -3266,6 +3336,57 @@ button.portal-doc-quiz-tab.portal-tab--active {
   min-width: 10rem;
 }
 
+.portal-table-wrap--clinical-progress {
+  max-width: 100%;
+  margin-bottom: 0;
+}
+
+table.portal-table.portal-table--clinical-progress {
+  table-layout: fixed;
+  width: 100%;
+  font-size: var(--portal-body-font-size);
+}
+
+table.portal-table.portal-table--clinical-progress th,
+table.portal-table.portal-table--clinical-progress td {
+  padding: 0.8125rem 1rem;
+  vertical-align: middle;
+}
+
+table.portal-table.portal-table--clinical-progress th:nth-child(1),
+table.portal-table.portal-table--clinical-progress td:nth-child(1) {
+  text-align: left;
+}
+
+table.portal-table.portal-table--clinical-progress th:nth-child(2),
+table.portal-table.portal-table--clinical-progress th:nth-child(3),
+table.portal-table.portal-table--clinical-progress th:nth-child(4),
+table.portal-table.portal-table--clinical-progress td:nth-child(2),
+table.portal-table.portal-table--clinical-progress td:nth-child(3),
+table.portal-table.portal-table--clinical-progress td:nth-child(4) {
+  text-align: center;
+}
+
+table.portal-table.portal-table--clinical-progress th {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--portal-text-faint);
+}
+
+table.portal-table.portal-table--clinical-progress td:nth-child(4) {
+  min-width: 0;
+}
+
+table.portal-table.portal-table--clinical-progress tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--portal-surface) 96%, var(--portal-border-subtle));
+}
+
+table.portal-table.portal-table--clinical-progress tbody tr:hover {
+  background: color-mix(in srgb, var(--portal-accent-soft) 55%, var(--portal-surface));
+}
+
 .portal-clinical-exam-readiness .portal-grid-2 {
   margin-bottom: 0;
 }
@@ -3367,6 +3488,10 @@ table.portal-academics-portal-grades-table.portal-table--grades td {
   margin-bottom: 1.25rem;
 }
 
+.portal-academics-sections-tabs .portal-academics-portal-tabs {
+  margin-bottom: 0.45rem;
+}
+
 .portal-academics-empty-state {
   padding: 1.25rem 1.35rem;
 }
@@ -3395,6 +3520,12 @@ table.portal-academics-portal-grades-table.portal-table--grades td {
 
 .portal-academics-registration-history > * + * {
   margin-top: 1.5rem;
+}
+
+.portal-academics-registration-history-term {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
 }
 
 /*
@@ -3953,6 +4084,7 @@ table.portal-academics-registration-history-table.portal-academics-portal-grades
 .portal-academics-term-toolbar {
   justify-content: flex-start;
   align-items: center;
+  width: 100%;
 }
 
 /* Quarter Grades: term totals (selected term only; document-style, compact) */

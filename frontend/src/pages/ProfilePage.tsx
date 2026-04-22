@@ -1,9 +1,11 @@
-import { useEffect, useState, type ChangeEventHandler } from 'react'
+import { useEffect, useRef, useState, type ChangeEventHandler } from 'react'
 import { BackToDashboardLink } from '../components/BackToDashboardLink'
 import { useAccount } from '../context/AccountContext'
 import { useStudentPortalT } from '../LanguageContext'
 import {
   fetchApiJson,
+  fetchMyStudentPhotoUrl,
+  uploadMyStudentPhoto,
   type StudentProfileResponse,
 } from '../lib/api'
 
@@ -97,8 +99,6 @@ const CITIZENSHIP_OPTIONS = [
 
 const MARITAL_OPTIONS = ['Single', 'Married', 'Divorced', 'Widowed', 'Other'] as const
 
-const PHOTO_UPLOAD_HELPER_TEXT = 'Photo upload is not connected yet.'
-
 function nullableString(v: unknown): string | null {
   if (typeof v !== 'string') return null
   const trimmed = v.trim()
@@ -190,7 +190,15 @@ export function ProfilePage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoFilename, setPhotoFilename] = useState<string | null>(null)
+  const [photoLoading, setPhotoLoading] = useState(false)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const [photoSuccess, setPhotoSuccess] = useState<string | null>(null)
+  const [photoReloadKey, setPhotoReloadKey] = useState(0)
+  const photoInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     const id = currentStudentId?.trim()
@@ -236,6 +244,42 @@ export function ProfilePage() {
 
     return () => ac.abort()
   }, [currentStudentId, profileReloadKey, t])
+
+  useEffect(() => {
+    const token = authToken?.trim()
+    const id = currentStudentId?.trim()
+    if (!token || !id) {
+      setPhotoUrl(null)
+      setPhotoLoading(false)
+      setPhotoError(null)
+      setPhotoSuccess(null)
+      return
+    }
+
+    const ac = new AbortController()
+    setPhotoLoading(true)
+    setPhotoError(null)
+
+    ;(async () => {
+      try {
+        const result = await fetchMyStudentPhotoUrl(token, { signal: ac.signal })
+        if (ac.signal.aborted) return
+        setPhotoUrl(result.photoUrl)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setPhotoUrl(null)
+        setPhotoError(
+          e instanceof Error ? e.message : 'Unable to load profile photo right now.',
+        )
+      } finally {
+        if (!ac.signal.aborted) {
+          setPhotoLoading(false)
+        }
+      }
+    })()
+
+    return () => ac.abort()
+  }, [authToken, currentStudentId, photoReloadKey])
 
   useEffect(() => {
     return () => {
@@ -323,6 +367,7 @@ export function ProfilePage() {
         URL.revokeObjectURL(photoPreviewUrl)
       }
       setPhotoPreviewUrl(null)
+      setPhotoFile(null)
       setPhotoFilename(null)
       return
     }
@@ -331,7 +376,46 @@ export function ProfilePage() {
       URL.revokeObjectURL(photoPreviewUrl)
     }
     setPhotoPreviewUrl(nextUrl)
+    setPhotoFile(file)
     setPhotoFilename(file.name)
+    setPhotoError(null)
+    setPhotoSuccess(null)
+  }
+
+  const normalizedPhotoError =
+    photoError && /(authentication required|http 401|401)/i.test(photoError)
+      ? 'Please sign in again to upload your profile photo.'
+      : photoError
+
+  const handlePhotoUpload = async () => {
+    if (!photoFile) return
+    setPhotoUploading(true)
+    setPhotoError(null)
+    setPhotoSuccess(null)
+    try {
+      const uploaded = await uploadMyStudentPhoto(photoFile, authToken)
+      if (photoPreviewUrl) {
+        URL.revokeObjectURL(photoPreviewUrl)
+      }
+      setPhotoPreviewUrl(null)
+      setPhotoFile(null)
+      setPhotoFilename(null)
+      if (photoInputRef.current) {
+        photoInputRef.current.value = ''
+      }
+      if (uploaded.photoUrl) {
+        setPhotoUrl(uploaded.photoUrl)
+      } else {
+        setPhotoReloadKey((k) => k + 1)
+      }
+      setPhotoSuccess('Profile photo uploaded successfully.')
+    } catch (e) {
+      setPhotoError(
+        e instanceof Error ? e.message : 'Unable to upload profile photo right now.',
+      )
+    } finally {
+      setPhotoUploading(false)
+    }
   }
 
   return (
@@ -391,10 +475,10 @@ export function ProfilePage() {
                 Profile Photo
               </h3>
               <div className="portal-profile-photo-frame" aria-live="polite">
-                {photoPreviewUrl ? (
+                {photoPreviewUrl || photoUrl ? (
                   <img
-                    src={photoPreviewUrl}
-                    alt="Selected profile photo preview"
+                    src={photoPreviewUrl ?? photoUrl ?? ''}
+                    alt={photoPreviewUrl ? 'Selected profile photo preview' : 'Profile photo'}
                     className="portal-profile-photo-image"
                   />
                 ) : (
@@ -403,17 +487,41 @@ export function ProfilePage() {
               </div>
               <label className="portal-btn portal-btn--secondary portal-profile-photo-upload">
                 <input
+                  ref={photoInputRef}
                   type="file"
                   accept="image/*"
                   onChange={handlePhotoSelect}
                   className="portal-profile-photo-upload-input"
+                  disabled={photoUploading}
                 />
                 Choose photo
               </label>
-              <p className="portal-card-note">{PHOTO_UPLOAD_HELPER_TEXT}</p>
+              <button
+                type="button"
+                className="portal-btn portal-btn--primary"
+                onClick={handlePhotoUpload}
+                disabled={!photoFile || photoUploading}
+              >
+                {photoUploading ? 'Uploading...' : 'Upload photo'}
+              </button>
+              {photoLoading ? (
+                <p className="portal-card-note portal-profile-photo-filename">
+                  Loading current photo...
+                </p>
+              ) : null}
               {photoFilename ? (
                 <p className="portal-card-note portal-profile-photo-filename">
                   Selected: {photoFilename}
+                </p>
+              ) : null}
+              {photoSuccess ? (
+                <p className="portal-card-note" role="status" aria-live="polite">
+                  {photoSuccess}
+                </p>
+              ) : null}
+              {photoError ? (
+                <p className="portal-card-note" role="alert" aria-live="assertive">
+                  {normalizedPhotoError}
                 </p>
               ) : null}
             </section>

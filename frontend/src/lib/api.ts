@@ -323,6 +323,20 @@ export type AdminStudentDetail = {
   registrationHistory?: AdminStudentRegistrationHistoryTerm[]
 }
 
+export type AdminStudentPhotoPayload = {
+  success: true
+  studentId: string
+  photoPath: string | null
+  photoUrl: string | null
+}
+
+export type StudentSelfPhotoPayload = {
+  success: true
+  studentId: string
+  photoPath: string | null
+  photoUrl: string | null
+}
+
 export type AdminStudentUpdatePayload = {
   name: string
   program: StudentProgram
@@ -843,6 +857,106 @@ export async function createAdminStudentLoa(
   return parseAdminStudentDetailPayload(data)
 }
 
+function parseAdminStudentPhotoPayload(data: unknown): AdminStudentPhotoPayload {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected admin student photo response')
+  }
+  const o = data as Record<string, unknown>
+  if (o.success !== true || typeof o.studentId !== 'string') {
+    throw new Error('Unexpected admin student photo response')
+  }
+  const photoPath = parseNullableString(o.photoPath ?? o.photo_path)
+  const photoUrl = parseNullableString(o.photoUrl ?? o.photo_url)
+  return {
+    success: true,
+    studentId: o.studentId,
+    photoPath,
+    photoUrl,
+  }
+}
+
+function parseStudentSelfPhotoPayload(data: unknown): StudentSelfPhotoPayload {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected student photo response')
+  }
+  const o = data as Record<string, unknown>
+  if (o.success !== true || typeof o.studentId !== 'string') {
+    throw new Error('Unexpected student photo response')
+  }
+  const photoPath = parseNullableString(o.photoPath ?? o.photo_path)
+  const photoUrl = parseNullableString(o.photoUrl ?? o.photo_url)
+  return {
+    success: true,
+    studentId: o.studentId,
+    photoPath,
+    photoUrl,
+  }
+}
+
+export async function fetchAdminStudentPhotoUrl(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<AdminStudentPhotoPayload> {
+  const path = `/api/admin/students/${encodeURIComponent(studentId)}/photo-url`
+  const data = await fetchApiJson(path, {
+    signal: options?.signal,
+  })
+  return parseAdminStudentPhotoPayload(data)
+}
+
+export async function uploadAdminStudentPhoto(
+  studentId: string,
+  photoFile: File,
+  options?: { signal?: AbortSignal },
+): Promise<AdminStudentPhotoPayload> {
+  const path = `/api/admin/students/${encodeURIComponent(studentId)}/photo`
+  const form = new FormData()
+  form.set('photo', photoFile)
+  const headers: Record<string, string> = {}
+  const adminHeaders = readAdminSessionHeaders()
+  if (adminHeaders) Object.assign(headers, adminHeaders)
+  const data = await fetchApiJson(path, {
+    method: 'POST',
+    body: form,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
+    signal: options?.signal,
+  })
+  return parseAdminStudentPhotoPayload(data)
+}
+
+export async function fetchMyStudentPhotoUrl(
+  accessToken?: string | null,
+  options?: { signal?: AbortSignal },
+): Promise<StudentSelfPhotoPayload> {
+  const headers: Record<string, string> = {}
+  const token = accessToken?.trim()
+  if (token) headers.Authorization = `Bearer ${token}`
+  const data = await fetchApiJson('/api/student/me/photo-url', {
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
+    signal: options?.signal,
+  })
+  return parseStudentSelfPhotoPayload(data)
+}
+
+export async function uploadMyStudentPhoto(
+  photoFile: File,
+  accessToken?: string | null,
+  options?: { signal?: AbortSignal },
+): Promise<StudentSelfPhotoPayload> {
+  const headers: Record<string, string> = {}
+  const token = accessToken?.trim()
+  if (token) headers.Authorization = `Bearer ${token}`
+  const form = new FormData()
+  form.set('photo', photoFile)
+  const data = await fetchApiJson('/api/student/me/photo', {
+    method: 'POST',
+    body: form,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
+    signal: options?.signal,
+  })
+  return parseStudentSelfPhotoPayload(data)
+}
+
 export type AdminDivision = 'Chinese' | 'English'
 
 export type PreviewNextStudentIdResponse = {
@@ -1194,6 +1308,24 @@ export type AccountingLedgerResponse = {
   }
 }
 
+export type AuthorizeNetOpaqueData = {
+  dataDescriptor: string
+  dataValue: string
+}
+
+export type AuthorizeNetChargeRequest = {
+  term: string
+  amount: string
+  opaqueData: AuthorizeNetOpaqueData
+}
+
+export type AuthorizeNetChargeResponse = {
+  ok: true
+  amount: string
+  providerTransactionId: string
+  invoiceNumber: string
+}
+
 /** GET /api/students/:studentId/accounting/quarters — legacy `accounting` term/year list (real students). */
 export async function fetchAccountingQuarters(
   studentId: string,
@@ -1237,6 +1369,36 @@ export async function fetchAccountingLedger(
     return data as AccountingLedgerResponse
   }
   throw new Error('Unexpected accounting ledger response')
+}
+
+/** POST /api/payments/authorize/charge */
+export async function postAuthorizeNetCharge(
+  body: AuthorizeNetChargeRequest,
+  options?: { signal?: AbortSignal; authToken?: string },
+): Promise<AuthorizeNetChargeResponse> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  }
+  if (options?.authToken != null && options.authToken.trim() !== '') {
+    headers.Authorization = `Bearer ${options.authToken.trim()}`
+  }
+  const data = (await fetchApiJson('/api/payments/authorize/charge', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })) as unknown
+  if (
+    data != null &&
+    typeof data === 'object' &&
+    (data as { ok?: unknown }).ok === true &&
+    typeof (data as { amount?: unknown }).amount === 'string' &&
+    typeof (data as { providerTransactionId?: unknown }).providerTransactionId === 'string' &&
+    typeof (data as { invoiceNumber?: unknown }).invoiceNumber === 'string'
+  ) {
+    return data as AuthorizeNetChargeResponse
+  }
+  throw new Error('Unexpected Authorize.net charge response')
 }
 
 /** GET /api/admin/finance/students — paginated roster with quarter balance. */

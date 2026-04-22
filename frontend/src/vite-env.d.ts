@@ -7,6 +7,8 @@ interface ImportMetaEnv {
    * Required at build time; requests use `${VITE_API_BASE_URL}/api/...`.
    */
   readonly VITE_API_BASE_URL: string
+  readonly VITE_AUTHORIZE_API_LOGIN_ID?: string
+  readonly VITE_AUTHORIZE_CLIENT_KEY?: string
 }
 
 interface ImportMeta {

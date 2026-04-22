@@ -1,13 +1,22 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  type ChangeEvent,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   createAdminStudentLoa,
   fetchAcademicTerms,
   fetchAdminStudentDetail,
+  fetchAdminStudentPhotoUrl,
   fetchAdminStudentDocuments,
   fetchCurrentAcademicTerm,
   resetAdminStudentDocumentRequirement,
   resetAllAdminStudentDocuments,
+  uploadAdminStudentPhoto,
   type AcademicTerm,
   type AdminStudentDetail,
   type AdminStudentRegistrationHistoryItem,
@@ -132,6 +141,14 @@ function buildQuarterOptions(
 
 const LOA_QUARTER_OPTIONS = ['Winter', 'Spring', 'Summer', 'Fall'] as const
 
+const STUDENT_PHOTO_MAX_SIZE_BYTES = 5 * 1024 * 1024
+const STUDENT_PHOTO_ALLOWED_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+])
+
 const EMPTY_LOA_FORM = {
   loaQuarter: '',
   loaYear: '',
@@ -209,6 +226,12 @@ export function AdminStudentDetailPage() {
   const [loaForm, setLoaForm] = useState(EMPTY_LOA_FORM)
   const [loaSaveError, setLoaSaveError] = useState<string | null>(null)
   const [loaSaving, setLoaSaving] = useState(false)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [photoPath, setPhotoPath] = useState<string | null>(null)
+  const [photoLoading, setPhotoLoading] = useState(false)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const [photoNotice, setPhotoNotice] = useState<string | null>(null)
 
   useEffect(() => {
     setActiveTab('registration')
@@ -229,6 +252,12 @@ export function AdminStudentDetailPage() {
     setLoaForm(EMPTY_LOA_FORM)
     setLoaSaveError(null)
     setLoaSaving(false)
+    setPhotoUrl(null)
+    setPhotoPath(null)
+    setPhotoLoading(false)
+    setPhotoUploading(false)
+    setPhotoError(null)
+    setPhotoNotice(null)
   }, [studentId])
 
   useEffect(() => {
@@ -392,6 +421,31 @@ export function AdminStudentDetailPage() {
     return () => ac.abort()
   }, [activeTab, studentId, effectiveDocumentsTermId, loadDocumentsForTerm])
 
+  useEffect(() => {
+    if (!detail || !studentId.trim()) return
+    const ac = new AbortController()
+    setPhotoLoading(true)
+    setPhotoError(null)
+    ;(async () => {
+      try {
+        const payload = await fetchAdminStudentPhotoUrl(studentId, {
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        setPhotoPath(payload.photoPath)
+        setPhotoUrl(payload.photoUrl)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setPhotoPath(null)
+        setPhotoUrl(null)
+        setPhotoError(e instanceof Error ? e.message : 'Could not load photo.')
+      } finally {
+        if (!ac.signal.aborted) setPhotoLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [detail, studentId])
+
   const refreshDocumentsAfterMutation = useCallback(async () => {
     const termId = effectiveDocumentsTermId
     if (!termId || !studentId.trim()) return
@@ -459,6 +513,7 @@ export function AdminStudentDetailPage() {
   const loaYearOptions = useMemo(() => buildLoaYearOptions(), [])
   const hasExistingLoa = detail?.loaSummary.hasLoa === true
   const showLoaCreateForm = loaSelection === 'yes' && loaCreateFormOpen
+  const hasPhoto = Boolean(photoUrl && photoUrl.trim() !== '')
 
   const handleLoaSelectionChange = useCallback((nextValue: 'no' | 'yes') => {
     setLoaSelection(nextValue)
@@ -525,6 +580,44 @@ export function AdminStudentDetailPage() {
       }
     },
     [loaForm, studentId],
+  )
+
+  const handlePhotoSelect = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0] ?? null
+      event.target.value = ''
+      if (!file) return
+      if (!STUDENT_PHOTO_ALLOWED_TYPES.has(file.type)) {
+        setPhotoError('Only JPG, JPEG, PNG, and WEBP images are allowed.')
+        setPhotoNotice(null)
+        return
+      }
+      if (file.size > STUDENT_PHOTO_MAX_SIZE_BYTES) {
+        setPhotoError('Photo must be 5MB or smaller.')
+        setPhotoNotice(null)
+        return
+      }
+      if (!studentId.trim()) {
+        setPhotoError('Missing student id.')
+        setPhotoNotice(null)
+        return
+      }
+
+      setPhotoUploading(true)
+      setPhotoError(null)
+      setPhotoNotice(null)
+      try {
+        const payload = await uploadAdminStudentPhoto(studentId, file)
+        setPhotoPath(payload.photoPath)
+        setPhotoUrl(payload.photoUrl)
+        setPhotoNotice('Photo uploaded successfully.')
+      } catch (e) {
+        setPhotoError(e instanceof Error ? e.message : 'Photo upload failed.')
+      } finally {
+        setPhotoUploading(false)
+      }
+    },
+    [studentId],
   )
 
   return (
@@ -992,13 +1085,54 @@ export function AdminStudentDetailPage() {
                       Profile Photo
                     </h3>
                     <div className="portal-profile-photo-frame">
-                      <span className="portal-profile-photo-placeholder portal-profile-photo-placeholder--initials">
-                        {profileInitials(detail.name)}
-                      </span>
+                      {hasPhoto ? (
+                        <img
+                          src={photoUrl ?? ''}
+                          alt={`${detail.name} photo`}
+                          className="portal-profile-photo-image"
+                        />
+                      ) : (
+                        <span className="portal-profile-photo-placeholder portal-profile-photo-placeholder--initials">
+                          {profileInitials(detail.name)}
+                        </span>
+                      )}
                     </div>
+                    <label className="portal-btn portal-btn--secondary portal-profile-photo-upload">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        onChange={handlePhotoSelect}
+                        className="portal-profile-photo-upload-input"
+                        disabled={photoUploading || photoLoading}
+                      />
+                      {photoUploading
+                        ? 'Uploading...'
+                        : hasPhoto
+                          ? 'Replace Photo'
+                          : 'Upload Photo'}
+                    </label>
                     <p className="portal-card-note">
-                      Photo upload is not connected yet.
+                      {photoLoading
+                        ? 'Loading photo...'
+                        : hasPhoto
+                          ? 'Stored in secure private bucket.'
+                          : 'No photo uploaded yet.'}
                     </p>
+                    {photoPath ? (
+                      <p className="portal-card-note portal-profile-photo-filename">
+                        Path: {photoPath}
+                      </p>
+                    ) : null}
+                    {photoNotice ? (
+                      <p className="portal-card-note" style={{ color: '#1f6f43' }}>
+                        {photoNotice}
+                      </p>
+                    ) : null}
+                    {photoError ? (
+                      <p className="portal-card-note" role="alert" style={{ color: '#b42318' }}>
+                        {photoError}
+                      </p>
+                    ) : null}
                   </section>
                   <dl className="admin-student-profile-details">
                   <div className="portal-row">

@@ -117,8 +117,14 @@ export function ClinicalProgressPage() {
             <h3 id="clinical-progress-table" className="portal-module-panel-heading">
               {t('clinicalProgressRecordsHeading')}
             </h3>
-            <div className="portal-table-wrap">
-              <table className="portal-table portal-table--clinical-schedule">
+            <div className="portal-table-wrap portal-table-wrap--clinical-progress">
+              <table className="portal-table portal-table--clinical-schedule portal-table--clinical-progress">
+                <colgroup>
+                  <col style={{ width: '40%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '20%' }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th scope="col">{t('clinicalProgressColCourse')}</th>
@@ -160,17 +166,23 @@ export function ClinicalProgressPage() {
             <h3 id="clinical-exam-history-table" className="portal-module-panel-heading">
               {t('clinicalProgressExamHistoryHeading')}
             </h3>
-            <div className="portal-table-wrap">
+            <div className="portal-table-wrap portal-table-wrap--clinical-progress">
               <table
-                className="portal-table portal-table--clinical-schedule"
+                className="portal-table portal-table--clinical-schedule portal-table--clinical-progress"
                 aria-label={t('clinicalProgressExamHistoryAria')}
               >
+                <colgroup>
+                  <col style={{ width: '40%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '20%' }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th scope="col">{t('clinicalProgressExamColExam')}</th>
+                    <th scope="col">{t('clinicalProgressExamColTerm')}</th>
                     <th scope="col">{t('clinicalProgressExamColStatus')}</th>
                     <th scope="col">{t('clinicalProgressExamColGrade')}</th>
-                    <th scope="col">{t('clinicalProgressExamColTerm')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -181,9 +193,9 @@ export function ClinicalProgressPage() {
                     return (
                       <tr key={row.code}>
                         <td>{row.examName}</td>
+                        <td>{formatExamTermCell(row.term, row.year, dash)}</td>
                         <td>{examStatusLabel(row.status, t)}</td>
                         <td>{gradeCell}</td>
-                        <td>{formatExamTermCell(row.term, row.year, dash)}</td>
                       </tr>
                     )
                   })}

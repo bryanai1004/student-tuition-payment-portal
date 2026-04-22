@@ -243,6 +243,8 @@ export type LegacyStudentMasterInsert = {
  */
 export declare function getNextLegacyStudentId(pool: LegacyMysqlClient, division: "Chinese" | "English", entryYear: number, entryMonth: number): Promise<string>;
 export declare function legacyStudentMasterExists(pool: LegacyMysqlClient, studentId: string): Promise<boolean>;
+export declare function getLegacyStudentPhotoPath(pool: LegacyMysqlClient, studentId: string): Promise<string | null>;
+export declare function updateLegacyStudentPhotoPath(pool: LegacyMysqlClient, studentId: string, photoPath: string | null): Promise<boolean>;
 export declare function legacyStudentPasswordRowExists(pool: LegacyMysqlClient, studentId: string): Promise<boolean>;
 /**
  * Insert one legacy `students` row with safe defaults for columns not exposed in the admin create form.

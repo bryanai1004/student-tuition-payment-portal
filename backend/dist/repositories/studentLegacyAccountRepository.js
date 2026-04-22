@@ -660,6 +660,26 @@ export async function legacyStudentMasterExists(pool, studentId) {
     const [rows] = await pool.query(`SELECT 1 AS ok FROM students WHERE id = ? LIMIT 1`, [studentId]);
     return rows.length > 0;
 }
+export async function getLegacyStudentPhotoPath(pool, studentId) {
+    const [rows] = await pool.query(`SELECT photo_path
+     FROM students
+     WHERE id = ?
+     LIMIT 1`, [studentId.trim()]);
+    if (rows.length === 0)
+        return null;
+    const raw = rows[0]?.photo_path;
+    if (raw == null)
+        return null;
+    const value = String(raw).trim();
+    return value === "" ? null : value;
+}
+export async function updateLegacyStudentPhotoPath(pool, studentId, photoPath) {
+    const [result] = await pool.execute(`UPDATE students
+     SET photo_path = ?
+     WHERE id = ?`, [photoPath, studentId.trim()]);
+    const header = result;
+    return (header.affectedRows ?? 0) > 0;
+}
 export async function legacyStudentPasswordRowExists(pool, studentId) {
     const [rows] = await pool.query(`SELECT 1 AS ok FROM password_stu WHERE id = ? LIMIT 1`, [studentId]);
     return rows.length > 0;
