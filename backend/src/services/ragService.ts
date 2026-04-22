@@ -14,8 +14,9 @@ import {
   type IdentityContext,
 } from "./conversationFactsService.js";
 import {
-  getOpenAiEmbeddingModel,
-  getOpenAiModel,
+  CHAT_MODEL,
+  EMBEDDING_MODEL,
+  client as OPENAI_CLIENT,
 } from "../config/openai.js";
 
 const TOP_K = 5;
@@ -27,8 +28,6 @@ const MAX_REWRITE_OUTPUT_CHARS = 320;
 const OPENAI_MAX_ATTEMPTS = 2;
 
 type RagIntent = "direct" | "strict" | "guidance" | "out_of_scope";
-
-type DirectKind = "greeting" | "language" | "capability" | "thanks";
 
 const STUDENT_GROUNDED_RULES = `Use only:
 1. the verified student context provided below,
@@ -170,6 +169,9 @@ async function withOpenAiRetry<T>(
   let lastError: unknown;
   for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt += 1) {
     try {
+      console.log("[AI CALL]");
+      console.log("using chat:", CHAT_MODEL);
+      console.log("using embedding:", EMBEDDING_MODEL);
       return await operation();
     } catch (error) {
       lastError = error;
@@ -190,6 +192,10 @@ async function withOpenAiRetry<T>(
     }
   }
   throw lastError instanceof Error ? lastError : new Error("OpenAI request failed");
+}
+
+function logGptResponseSource(): void {
+  console.log("[AI RESPONSE SOURCE]: GPT");
 }
 
 let cachedChunks: KnowledgeChunkRow[] | null = null;
@@ -753,7 +759,7 @@ async function rewriteQuestionForRetrieval(
   try {
     const completion = await withOpenAiRetry("rewriteQuestionForRetrieval", () =>
       client.chat.completions.create({
-      model: getOpenAiModel(),
+      model: CHAT_MODEL,
       messages: [
         {
           role: "system",
@@ -778,41 +784,6 @@ async function rewriteQuestionForRetrieval(
   } catch {
     return question;
   }
-}
-
-const GUIDANCE_FALLBACK_EN =
-  "I couldn't find a clear, direct answer in the AMU catalog excerpts I have right now. Based on the available catalog material, I can still help explain related topics such as tuition payment rules, refund policy, graduation requirements, course planning, or registration procedures. For final academic or payment decisions, you should confirm with AMU registrar/advisor.";
-
-const GUIDANCE_FALLBACK_ZH =
-  "我目前无法在现有 AMU 目录摘录中找到明确、直接的答案。根据现有目录内容，我仍可以继续帮助你解释相关主题，例如学费支付规则、退费政策、毕业要求、课程规划或注册流程；但涉及最终的选课、缴费或学术决定时，仍建议你向 AMU registrar/advisor 确认。";
-
-const GUIDANCE_SUPPORT_FALLBACK_EN =
-  "I could not directly confirm this from the AMU catalog excerpts I have right now. Based on the available catalog material, I can still help with related topics such as tuition and fees, FAFSA / financial aid references, admissions requirements, and general academic planning. For a final decision about eligibility, payment arrangements, or financial support, you should confirm with AMU admissions / registrar / financial aid office.";
-
-const GUIDANCE_SUPPORT_FALLBACK_ZH =
-  "我目前无法仅根据现有 AMU 目录摘录直接确认这一点。不过根据现有目录内容，我仍可以帮助你查看相关主题，例如学费与费用、FAFSA / 财务援助、入学要求以及一般性的课程规划。若涉及最终的申请资格、缴费安排或财务援助，仍建议你向 AMU admissions / registrar / financial aid office 确认。";
-
-function looksLikeStrictCatalogRefusal(answer: string): boolean {
-  if (/could not find a clear answer in the amu catalog excerpts/i.test(answer)) {
-    return true;
-  }
-  if (/无法在[^。]*目录摘录[^。]*找到[^。]*答案/.test(answer)) return true;
-  if (/未在[^。]*提供的[^。]*摘录[^。]*找到/.test(answer)) return true;
-  return false;
-}
-
-function applyGuidanceFallbackIfNeeded(
-  answer: string,
-  question: string,
-  subtype: GuidanceSubtype,
-): string {
-  if (!looksLikeStrictCatalogRefusal(answer)) return answer;
-  if (subtype === "support") {
-    return isMostlyChinese(question)
-      ? GUIDANCE_SUPPORT_FALLBACK_ZH
-      : GUIDANCE_SUPPORT_FALLBACK_EN;
-  }
-  return isMostlyChinese(question) ? GUIDANCE_FALLBACK_ZH : GUIDANCE_FALLBACK_EN;
 }
 
 /** Heuristic: treat as Chinese when CJK clearly dominates the visible text. */
@@ -853,20 +824,6 @@ function isDefinitionalPolicyQuestion(lower: string): boolean {
       lower,
     );
   return definitional && policyNouns;
-}
-
-/** Substantive catalog/policy content — blocks treating the message as a pure direct turn. */
-function hasSubstantiveCatalogCue(trimmed: string, lower: string): boolean {
-  if (
-    /refund|tuition|late\s+payment|payment\s+plan|graduation\s+requirement|degree\s+requirement|attendance|add\/drop|add\s+and\s+drop|withdrawal|transcript|enrollment|registration|academic\s+integrity|probation|credit\s+hour|semester\s+hour|gpa|syllabus|prerequisite|corequisite/i.test(
-      lower,
-    )
-  ) {
-    return true;
-  }
-  return /退费|学费|退款|滞纳|出勤|旷课|毕业要求|学位|加退选|退选|成绩单|学分|注册|截止日期|校历|政策|纪律|必修|选修|先修/.test(
-    trimmed,
-  );
 }
 
 /** Affordability, payment stress, admissions fit, eligibility — school-related support guidance. */
@@ -944,182 +901,6 @@ function isGuidanceQuestion(trimmed: string, lower: string): boolean {
   return guidanceEn || guidanceZh;
 }
 
-/**
- * If the question plausibly relates to catalog, policy, or school academic/financial support,
- * do not mark it out-of-scope.
- */
-function isPlausiblyAmuCatalogOrSupport(trimmed: string, lower: string): boolean {
-  if (hasSubstantiveCatalogCue(trimmed, lower)) return true;
-  if (isDefinitionalPolicyQuestion(lower)) return true;
-  if (isGuidanceQuestion(trimmed, lower)) return true;
-  return false;
-}
-
-/**
- * Conservative: clearly unrelated to AMU catalog / academic support.
- * Call only when isPlausiblyAmuCatalogOrSupport is false.
- */
-function isOutOfScopeQuestion(question: string): boolean {
-  const trimmed = question.trim();
-  const lower = trimmed.toLowerCase();
-
-  if (
-    /\b(find a girlfriend|find a boyfriend|get a girlfriend|get a boyfriend|will i find a girlfriend|will i find a boyfriend|dating at|dating in|romantic relationship)\b/i.test(
-      lower,
-    ) ||
-    /\b(will anyone like me|people like me|become popular (at|in))\b/i.test(
-      lower,
-    ) ||
-    /\b(invest in amu|invest in the university|invest in alhambra|buy (a |an )?(part|stake|share|piece) of (amu|the university|alhambra medical)|business opportunity|good (business )?investment)\b/i.test(
-      lower,
-    ) ||
-    /\b(who is the (richest|wealthiest)|most attractive student|hottest student|best[- ]looking student|nicest.{0,30}romantically)\b/i.test(
-      lower,
-    ) ||
-    /\b(how (do i|to) (get |become )rich|get rich quick|should i break up|break up with my (boyfriend|girlfriend))\b/i.test(
-      lower,
-    ) ||
-    /\bwhat should i do with my life\b/i.test(lower)
-  ) {
-    return true;
-  }
-
-  if (
-    /找到(了)?(女朋友|男朋友)|谈恋爱|找对象|脱单|谁会喜欢我|有人喜欢我|喜欢我吗/.test(
-      trimmed,
-    ) ||
-    /变(得)?(受欢迎|有名)|谁最有钱|哪个.{0,8}最(漂亮|帅|美)|最有(魅力|吸引力)/.test(
-      trimmed,
-    ) ||
-    /给.{0,6}AMU.{0,6}投资|投资.{0,6}AMU|买下.{0,10}(学校|大学)|入股.{0,10}(学校|大学)/.test(
-      trimmed,
-    ) ||
-    /怎么变有钱|如何变有钱|发财|暴富/.test(trimmed) ||
-    /我的人生.{0,8}怎么办|人生.{0,8}该怎么办|人生.{0,8}该如何/.test(
-      trimmed,
-    ) ||
-    /(该|要不要|该不该).{0,6}分手|和(男|女)朋友分手/.test(trimmed)
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-function buildOutOfScopeReply(question: string): string {
-  if (isMostlyChinese(question)) {
-    return "我目前主要帮助回答 AMU 的课程、学费、退费政策、毕业要求、出勤规定、选课规划和注册流程等问题。这个问题不属于我能根据 AMU 目录可靠回答的范围。如果你想了解，也可以问我有关 AMU 学费、课程规划、毕业要求或注册规则等方面的问题。";
-  }
-  return "I'm mainly designed to help with AMU catalog and academic support questions, such as tuition, refund policy, graduation requirements, course planning, attendance rules, and registration procedures. I can't reliably answer that question based on the AMU catalog. If you want, you can ask me about AMU tuition, course planning, graduation requirements, or registration rules.";
-}
-
-function classifyDirectKind(trimmed: string, lower: string): DirectKind {
-  const haystack = trimmed + lower;
-
-  if (
-    /(speak|说|会).{0,12}(中文|汉语|chinese|mandarin)|可以说中文|中文可以吗|用中文回答|用中文|多语言|什么语言|\bdo\s+you\s+speak\b|\bcan\s+you\s+speak\b|\bin\s+which\s+languages?\b/i.test(
-      haystack,
-    )
-  ) {
-    return "language";
-  }
-  if (
-    /^(hi|hello|hey|yo|hiya|sup|good\s+(morning|afternoon|evening)|greetings|howdy)[\s!,?.]*$/i.test(
-      trimmed,
-    ) ||
-    /^(你好|您好|嗨|在吗|早上好|下午好|晚上好)[\s!！?？，,。.]*$/u.test(trimmed)
-  ) {
-    return "greeting";
-  }
-  if (/^(thanks|thank\s+you|thx|ty|3q)[\s!.]*$/i.test(lower)) {
-    return "thanks";
-  }
-  if (
-    /what\s+can\s+you\s+do|who\s+are\s+you|what\s+are\s+you|你是(什么|谁)|你能(做|干)什么|你(能|会)帮我|你会做什么|你能帮我做什么/i.test(
-      haystack,
-    )
-  ) {
-    return "capability";
-  }
-  return "capability";
-}
-
-function isDirectIntent(trimmed: string, lower: string): boolean {
-  if (hasSubstantiveCatalogCue(trimmed, lower)) return false;
-
-  const greetingOnly =
-    /^(hi|hello|hey|yo|hiya|sup|good\s+(morning|afternoon|evening)|greetings|howdy)[\s!,?.]*$/i.test(
-      trimmed,
-    ) ||
-    /^(你好|您好|嗨|在吗|早上好|下午好|晚上好)[\s!！?？，,。.]*$/u.test(trimmed);
-
-  const thanksOnly = /^(thanks|thank\s+you|thx|ty|3q)[\s!.]*$/i.test(lower);
-
-  const languageMeta =
-    /(speak|说|会).{0,12}(中文|汉语|chinese|mandarin)|可以说中文|中文可以吗|用中文|多语言|什么语言/i.test(
-      trimmed + lower,
-    ) ||
-    /\bdo\s+you\s+speak\b|\bcan\s+you\s+speak\b|\bin\s+which\s+languages?\b/i.test(
-      lower,
-    );
-
-  const capabilityMeta =
-    /what\s+can\s+you\s+do|who\s+are\s+you|what\s+are\s+you|你是(什么|谁)|你能(做|干)什么|你(能|会)帮我|你会做什么|你能帮我做什么/i.test(
-      trimmed + lower,
-    );
-
-  if (greetingOnly || thanksOnly) return trimmed.length <= 48;
-  if (languageMeta) return trimmed.length < 140;
-  if (capabilityMeta) return trimmed.length < 220;
-  return false;
-}
-
-function buildDirectReply(question: string): string {
-  const trimmed = question.trim();
-  const lower = trimmed.toLowerCase();
-  const zh = isMostlyChinese(trimmed);
-  const kind = classifyDirectKind(trimmed, lower);
-
-  if (zh) {
-    switch (kind) {
-      case "language":
-        return "可以，我可以用中文回答 AMU catalog 相关问题，例如学费、退费政策、毕业要求、出勤规定、add/drop 时间、课程结构等。";
-      case "greeting":
-        return "你好！我可以帮助你回答 AMU catalog 相关问题，例如学费、退费政策、毕业要求、出勤规定、课程安排和学术政策。";
-      case "thanks":
-        return "不客气！有需要时可以继续问我 AMU 课程目录相关问题。";
-      default:
-        return "我可以根据 AMU catalog 回答与学费、退费政策、毕业要求、出勤规定、课程结构和学术流程相关的问题。";
-    }
-  }
-
-  switch (kind) {
-    case "language":
-      return "Yes — I can answer AMU catalog questions in Chinese or English.";
-    case "greeting":
-      return "Hi! I can help answer AMU catalog questions such as tuition, refund policy, graduation requirements, attendance rules, course structure, and academic procedures.";
-    case "thanks":
-      return "You're welcome! Ask any time if you have AMU catalog questions.";
-    default:
-      return "I can help answer AMU catalog questions related to tuition, refund policy, graduation requirements, attendance rules, curriculum structure, and academic procedures.";
-  }
-}
-
-function detectIntent(question: string): RagIntent {
-  const trimmed = question.trim();
-  const lower = trimmed.toLowerCase();
-
-  if (isDirectIntent(trimmed, lower)) return "direct";
-  if (
-    !isPlausiblyAmuCatalogOrSupport(trimmed, lower) &&
-    isOutOfScopeQuestion(trimmed)
-  ) {
-    return "out_of_scope";
-  }
-  if (isGuidanceQuestion(trimmed, lower)) return "guidance";
-  return "strict";
-}
-
 function languageInstructionForLlm(
   question: string,
   identityContext?: IdentityContext | null,
@@ -1146,52 +927,6 @@ The current request has already been classified as general or casual, so use FLE
 Do not reinterpret it as an AMU school-fact lookup just because the message contains "AMU".
 If the message is a follow-up, keep answering the same subject from the recent conversation unless the user clearly changes topic.
 ${languageInstructionForLlm(question, identityContext)}`;
-}
-
-function asksAboutTakingSomeonesClass(question: string): boolean {
-  const trimmed = question.trim();
-  const lower = trimmed.toLowerCase();
-  return (
-    /\b(can\s+i|could\s+i|would\s+i\s+be\s+able\s+to)\s+(take|get\s+into|attend)\s+(his|her|their)\s+class(es)?\b/i.test(
-      lower,
-    ) ||
-    /\b(can|could)\s+(he|she|they)\s+teach\s+(at\s+)?amu\b/i.test(lower) ||
-    /\b(study\s+under|be\s+taught\s+by)\s+(him|her|them)\b/i.test(lower) ||
-    /在AMU.{0,10}(上|修).{0,6}(他们|她们|他|她).{0,4}的课|在AMU能上他们的课|能上他们的课吗|能上他的课吗|能上她的课吗|跟他们上课|跟他上课|跟她上课/.test(
-      trimmed,
-    )
-  );
-}
-
-function recentConversationSuggestsHistoricalPeople(
-  history: ChatHistoryItem[] | undefined,
-): boolean {
-  if (history == null || history.length === 0) return false;
-  const haystack = history.map((item) => item.content).join("\n");
-  return (
-    /\b(ancient|historical\s+figure|history|historian|deceased|dead|century|bce|bc|ce|dynasty|emperor|king|queen|general|philosopher|strategist|warlord)\b/i.test(
-      haystack,
-    ) ||
-    /古代|历史人物|歷史人物|历史上|歷史上|已故|去世|朝代|皇帝|国王|國王|将军|將軍|哲学家|哲學家|军事家|軍事家|谋略家|謀略家/.test(
-      haystack,
-    )
-  );
-}
-
-function buildGeneralRealityCheckReply(
-  question: string,
-  history: ChatHistoryItem[] | undefined,
-): string | null {
-  if (
-    asksAboutTakingSomeonesClass(question) &&
-    recentConversationSuggestsHistoricalPeople(history)
-  ) {
-    if (isMostlyChinese(question)) {
-      return "如果你说的还是刚才那几位历史人物，那当然不能。因为他们是历史人物，不可能在现在的 AMU 亲自开课或给学生上课。要是你想学和他们相关的内容，我可以继续帮你看看 AMU 目录里有没有相关的历史、思想或人文类课程。";
-    }
-    return "If you mean the same historical figures from the previous turn, then no. Historical figures cannot literally teach classes at modern-day AMU. If you want, I can help check whether AMU offers courses related to their history, ideas, or influence instead.";
-  }
-  return null;
 }
 
 function buildGroundedAcademicSystemPrompt(
@@ -1343,17 +1078,6 @@ function shouldSuggestTechnicalContact(
   );
 }
 
-function usesAcademicGuidanceFallback(answer: string): boolean {
-  return answer === GUIDANCE_FALLBACK_EN || answer === GUIDANCE_FALLBACK_ZH;
-}
-
-function usesSupportGuidanceFallback(answer: string): boolean {
-  return (
-    answer === GUIDANCE_SUPPORT_FALLBACK_EN ||
-    answer === GUIDANCE_SUPPORT_FALLBACK_ZH
-  );
-}
-
 /** Strong academic-advising / official-confirmation cues (question text). */
 function hasStrongAcademicAdvisingCue(trimmed: string, lower: string): boolean {
   if (
@@ -1463,7 +1187,6 @@ function shouldSuggestAcademicContact(
   question: string,
   intent: RagIntent,
   guidanceSubtype: GuidanceSubtype | undefined,
-  answer: string,
 ): boolean {
   if (intent !== "guidance" || guidanceSubtype === undefined) return false;
   if (shouldSuggestTechnicalContact(question, intent)) return false;
@@ -1472,7 +1195,6 @@ function shouldSuggestAcademicContact(
   const lower = trimmed.toLowerCase();
 
   if (guidanceSubtype === "academic") {
-    if (usesAcademicGuidanceFallback(answer)) return true;
     return hasStrongAcademicAdvisingCue(trimmed, lower);
   }
 
@@ -1493,7 +1215,7 @@ function appendSupportContactBlocks(
   if (shouldSuggestTechnicalContact(question, intent)) {
     parts.push(zh ? TECH_CONTACT_BLOCK_ZH : TECH_CONTACT_BLOCK_EN);
   } else if (
-    shouldSuggestAcademicContact(question, intent, guidanceSubtype, answer)
+    shouldSuggestAcademicContact(question, intent, guidanceSubtype)
   ) {
     parts.push(zh ? ACADEMIC_CONTACT_BLOCK_ZH : ACADEMIC_CONTACT_BLOCK_EN);
   }
@@ -1561,123 +1283,28 @@ function buildSchoolFactSourceContent(): string {
   return lines.join("\n");
 }
 
-export function answerSchoolFactQuestion(question: string): RagAnswerResult {
+export async function answerSchoolFactQuestion(
+  question: string,
+): Promise<RagAnswerResult> {
   const q = validateQuestion(question);
-  const zh = isMostlyChinese(q);
-  const requested = detectSchoolFactKinds(q);
-  const lines: string[] = [
-    zh
-      ? `在这个产品里，AMU 指的是 ${AMU_SCHOOL_FACTS.institutionName}。`
-      : `In this product, AMU means ${AMU_SCHOOL_FACTS.institutionName}.`,
-  ];
+  const client = getOpenAiClient();
+  const requested = [...detectSchoolFactKinds(q)].join(", ");
+  const response = await withOpenAiRetry("answerSchoolFactQuestion", () =>
+    client.responses.create({
+      model: CHAT_MODEL,
+      input: `You are answering AMU school-fact questions.
+Use only the controlled AMU facts below. If something is not present, explicitly say you cannot confirm it from controlled AMU facts.
+Keep the response concise and helpful.
 
-  if (requested.has("address") || requested.has("location")) {
-    if (AMU_SCHOOL_FACTS.address || AMU_SCHOOL_FACTS.location) {
-      const addressOrLocation =
-        AMU_SCHOOL_FACTS.address ?? AMU_SCHOOL_FACTS.location ?? "";
-      lines.push(
-        zh
-          ? `我能从受控的 AMU 信息源确认的地址/位置是：${addressOrLocation}`
-          : `The controlled AMU source confirms this address/location: ${addressOrLocation}`,
-      );
-    } else {
-      lines.push(
-        zh
-          ? "我目前无法从受控的 AMU 信息源确认学校地址或位置，因此不能提供未验证的信息。"
-          : "I cannot confirm AMU's address or location from controlled AMU sources, so I won't provide an unverified answer.",
-      );
-    }
-  }
+User question: ${q}
+Requested fact kinds: ${requested}
 
-  if (requested.has("phone")) {
-    lines.push(
-      AMU_SCHOOL_FACTS.phone
-        ? zh
-          ? `我能确认的电话是：${AMU_SCHOOL_FACTS.phone}`
-          : `The confirmed phone number is: ${AMU_SCHOOL_FACTS.phone}`
-        : zh
-          ? "我目前无法从受控的 AMU 信息源确认学校电话。"
-          : "I cannot confirm an AMU phone number from controlled AMU sources.",
-    );
-  }
-
-  if (requested.has("email")) {
-    lines.push(
-      AMU_SCHOOL_FACTS.email
-        ? zh
-          ? `我能确认的邮箱是：${AMU_SCHOOL_FACTS.email}`
-          : `The confirmed email address is: ${AMU_SCHOOL_FACTS.email}`
-        : zh
-          ? "我目前无法从受控的 AMU 信息源确认学校邮箱。"
-          : "I cannot confirm an AMU email address from controlled AMU sources.",
-    );
-  }
-
-  if (
-    requested.has("contact") &&
-    !requested.has("phone") &&
-    !requested.has("email")
-  ) {
-    if (AMU_SCHOOL_FACTS.phone || AMU_SCHOOL_FACTS.email) {
-      const contactParts = [
-        AMU_SCHOOL_FACTS.phone ? `phone: ${AMU_SCHOOL_FACTS.phone}` : null,
-        AMU_SCHOOL_FACTS.email ? `email: ${AMU_SCHOOL_FACTS.email}` : null,
-      ].filter((part): part is string => part != null);
-      lines.push(
-        zh
-          ? `我能确认的联系方式是：${contactParts.join("；")}`
-          : `The confirmed contact information is: ${contactParts.join("; ")}`,
-      );
-    } else {
-      lines.push(
-        zh
-          ? "我目前无法从受控的 AMU 信息源确认学校联系方式。"
-          : "I cannot confirm AMU contact information from controlled AMU sources.",
-      );
-    }
-  }
-
-  if (requested.has("campus")) {
-    lines.push(
-      AMU_SCHOOL_FACTS.campusInfo
-        ? zh
-          ? `我能确认的校区信息是：${AMU_SCHOOL_FACTS.campusInfo}`
-          : `The confirmed campus information is: ${AMU_SCHOOL_FACTS.campusInfo}`
-        : zh
-          ? "我目前无法从受控的 AMU 信息源确认校区信息。"
-          : "I cannot confirm campus information from controlled AMU sources.",
-    );
-  }
-
-  if (requested.has("housing")) {
-    if (AMU_SCHOOL_FACTS.housingAvailable == null && !AMU_SCHOOL_FACTS.housingNote) {
-      lines.push(
-        zh
-          ? "我目前无法从受控的 AMU 信息源确认学校是否提供宿舍或住房。"
-          : "I cannot confirm from controlled AMU sources whether the school provides housing or dorms.",
-      );
-    } else if (AMU_SCHOOL_FACTS.housingAvailable === true) {
-      lines.push(
-        zh
-          ? `受控的 AMU 信息源显示学校提供住房。${AMU_SCHOOL_FACTS.housingNote ?? ""}`.trim()
-          : `The controlled AMU source indicates the school provides housing. ${AMU_SCHOOL_FACTS.housingNote ?? ""}`.trim(),
-      );
-    } else if (AMU_SCHOOL_FACTS.housingAvailable === false) {
-      lines.push(
-        zh
-          ? `受控的 AMU 信息源显示学校不提供住房。${AMU_SCHOOL_FACTS.housingNote ?? ""}`.trim()
-          : `The controlled AMU source indicates the school does not provide housing. ${AMU_SCHOOL_FACTS.housingNote ?? ""}`.trim(),
-      );
-    } else if (AMU_SCHOOL_FACTS.housingNote) {
-      lines.push(
-        zh
-          ? `我能确认的住房说明是：${AMU_SCHOOL_FACTS.housingNote}`
-          : `The confirmed housing note is: ${AMU_SCHOOL_FACTS.housingNote}`,
-      );
-    }
-  }
-
-  const answer = lines.join("\n");
+Controlled AMU facts:
+${buildSchoolFactSourceContent()}`,
+    }),
+  );
+  const answer = response.output_text?.trim() ?? "(no response)";
+  logGptResponseSource();
   return {
     question: q,
     answer,
@@ -1833,45 +1460,44 @@ function buildLocalSearchReferenceLine(question: string, zh: boolean): string | 
     : `If you want a rough starting point, well-known chains like ${refs.join(", ")} can be useful reference points, but that does not mean they are nearby.`;
 }
 
-export function answerLocalSearchQuestion(question: string): RagAnswerResult {
+export async function answerLocalSearchQuestion(
+  question: string,
+): Promise<RagAnswerResult> {
   const q = validateQuestion(question);
   const zh = isMostlyChinese(q);
   const keywords = buildLocalSearchKeywordSuggestions(q, zh);
   const referenceLine = buildLocalSearchReferenceLine(q, zh);
+  const client = getOpenAiClient();
+  const response = await withOpenAiRetry("answerLocalSearchQuestion", () =>
+    client.responses.create({
+      model: CHAT_MODEL,
+      input: `User question: ${q}
 
-  const lines = zh
-    ? [
-        "我这边没有实时的本地商户数据，没办法保证推荐是最新或离你最近的。",
-        `建议你直接在 Google Maps 或 Yelp 搜索 "${keywords[0]}"${keywords[1] ? `，也可以试试 "${keywords[1]}"` : ""}，这样会比我硬猜更靠谱。`,
-        referenceLine,
-        "如果你告诉我你更想吃什么口味、预算大概多少，或者希望控制在多远的距离内，我可以继续帮你把搜索词缩小一点。",
-      ]
-    : [
-        "I don't have live local business listings, so I can't promise anything is the newest or actually closest to you.",
-        `Your best bet is to search Google Maps or Yelp for "${keywords[0]}"${keywords[1] ? ` or "${keywords[1]}"` : ""}, which will be much more reliable than me guessing.`,
-        referenceLine,
-        "If you tell me the vibe, cuisine, budget, or how far you're willing to go, I can help narrow the search terms down.",
-      ];
+Answer as a helpful assistant for local place discovery.
+- Do not claim real-time local search results.
+- Do not invent specific nearby businesses as factual.
+- Suggest practical search steps (e.g., Google Maps/Yelp) and useful keywords.
+- Keep it concise and conversational.
+
+Suggested search keywords:
+- ${keywords.join("\n- ")}
+
+Reference hint (optional):
+${referenceLine ?? "None"}`,
+    }),
+  );
+  const answer = response.output_text?.trim() ?? "(no response)";
+  logGptResponseSource();
 
   return {
     question: q,
-    answer: lines.filter((line): line is string => Boolean(line)).join("\n"),
+    answer,
     sources: [],
   };
 }
 
-export function buildTransientAssistantFailureReply(question: string): string {
-  return isMostlyChinese(question)
-    ? "刚刚好像出了点问题，我再帮你看一下"
-    : "Something seems to have gone wrong just now. Let me check that again for you.";
-}
-
 function getOpenAiClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error("Missing OPENAI_API_KEY");
-  }
-  return new OpenAI({ apiKey });
+  return OPENAI_CLIENT;
 }
 
 export async function answerGeneralQuestion(
@@ -1881,14 +1507,6 @@ export async function answerGeneralQuestion(
 ): Promise<RagAnswerResult> {
   const q = validateQuestion(question);
   const history = sanitizeChatHistory(rawHistory);
-  const realityCheckReply = buildGeneralRealityCheckReply(q, history);
-  if (realityCheckReply != null) {
-    return {
-      question: q,
-      answer: realityCheckReply,
-      sources: [],
-    };
-  }
   const client = getOpenAiClient();
   const identityBlock = formatIdentityContextForPrompt(options?.identityContext);
   const historyPrefix =
@@ -1898,7 +1516,7 @@ export async function answerGeneralQuestion(
 
   const completion = await withOpenAiRetry("answerGeneralQuestion", () =>
     client.chat.completions.create({
-    model: getOpenAiModel(),
+    model: CHAT_MODEL,
     messages: [
       { role: "system", content: buildGeneralSystemPrompt(q, options?.identityContext) },
       {
@@ -1910,9 +1528,11 @@ export async function answerGeneralQuestion(
     }),
   );
 
+  const answer = completion.choices[0]?.message?.content?.trim() ?? "(no response)";
+  logGptResponseSource();
   return {
     question: q,
-    answer: completion.choices[0]?.message?.content?.trim() ?? "(no response)",
+    answer,
     sources: [],
   };
 }
@@ -1929,7 +1549,7 @@ export async function answerStudentRecordQuestionFromFacts(
 
   const completion = await withOpenAiRetry("answerStudentRecordQuestionFromFacts", () =>
     client.chat.completions.create({
-    model: getOpenAiModel(),
+    model: CHAT_MODEL,
     messages: [
       { role: "system", content: buildStudentRecordSystemPrompt(q, identityContext) },
       {
@@ -1947,9 +1567,11 @@ ${q}`,
     }),
   );
 
+  const answer = completion.choices[0]?.message?.content?.trim() ?? "(no response)";
+  logGptResponseSource();
   return {
     question: q,
-    answer: completion.choices[0]?.message?.content?.trim() ?? "(no response)",
+    answer,
     sources: [],
   };
 }
@@ -1974,7 +1596,7 @@ export async function answerGraduationQuestion(
 
   const embedRes = await withOpenAiRetry("answerGraduationQuestion.embedding", () =>
     client.embeddings.create({
-    model: getOpenAiEmbeddingModel(),
+    model: EMBEDDING_MODEL,
     input: retrievalQuery,
     }),
   );
@@ -1999,7 +1621,7 @@ export async function answerGraduationQuestion(
   const contextBlock = formatRetrievedDocumentContextBlock(top);
   const completion = await withOpenAiRetry("answerGraduationQuestion.chat", () =>
     client.chat.completions.create({
-    model: getOpenAiModel(),
+    model: CHAT_MODEL,
     messages: [
       {
         role: "system",
@@ -2023,9 +1645,11 @@ ${q}`,
     }),
   );
 
+  const answer = completion.choices[0]?.message?.content?.trim() ?? "(no response)";
+  logGptResponseSource();
   return {
     question: q,
-    answer: completion.choices[0]?.message?.content?.trim() ?? "(no response)",
+    answer,
     sources: top.map(({ chunk, score }) => toRetrieved(chunk, score)),
   };
 }
@@ -2055,7 +1679,7 @@ export async function answerAmuQuestion(
 
   const embedRes = await withOpenAiRetry("answerAmuQuestion.embedding", () =>
     client.embeddings.create({
-    model: getOpenAiEmbeddingModel(),
+    model: EMBEDDING_MODEL,
     input: retrievalQuery,
     }),
   );
@@ -2073,9 +1697,18 @@ export async function answerAmuQuestion(
   const top = scored.slice(0, TOP_K);
 
   if (top.length === 0) {
+    const response = await client.responses.create({
+      model: CHAT_MODEL,
+      input: `User question: ${q}
+
+No relevant documents were found.
+Answer helpfully using general knowledge.`,
+    });
+    const answer = response.output_text?.trim() ?? "(no response)";
+    logGptResponseSource();
     return {
       question: q,
-      answer: "I cannot find this in AMU documents.",
+      answer,
       sources: [],
     };
   }
@@ -2116,7 +1749,7 @@ ${q}`;
 
   const completion = await withOpenAiRetry("answerAmuQuestion.chat", () =>
     client.chat.completions.create({
-    model: getOpenAiModel(),
+    model: CHAT_MODEL,
     messages: [
       {
         role: "system",
@@ -2132,9 +1765,11 @@ ${q}`;
     }),
   );
 
+  const answer = completion.choices[0]?.message?.content?.trim() ?? "(no response)";
+  logGptResponseSource();
   return {
     question: q,
-    answer: completion.choices[0]?.message?.content?.trim() ?? "(no response)",
+    answer,
     sources: top.map(({ chunk, score }) => toRetrieved(chunk, score)),
   };
 }

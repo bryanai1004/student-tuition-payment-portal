@@ -2,8 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import OpenAI from 'openai';
-import { getOpenAiEmbeddingModel, getOpenAiModel } from '../src/config/openai.js';
+import { CHAT_MODEL, EMBEDDING_MODEL, client } from '../src/config/openai.js';
 
 type KnowledgeChunk = {
   id: string;
@@ -81,12 +80,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const chatModel = getOpenAiModel();
-  const embeddingModel = getOpenAiEmbeddingModel();
-
   const embedRes = await client.embeddings.create({
-    model: embeddingModel,
+    model: EMBEDDING_MODEL,
     input: TEST_QUESTION,
   });
   const questionEmbedding = embedRes.data[0]?.embedding;
@@ -113,7 +108,7 @@ Question:
 ${TEST_QUESTION}`;
 
   const completion = await client.chat.completions.create({
-    model: chatModel,
+    model: CHAT_MODEL,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userMessage },

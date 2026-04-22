@@ -2,9 +2,8 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import OpenAI from 'openai';
 import { PDFParse } from 'pdf-parse';
-import { getOpenAiEmbeddingModel } from '../src/config/openai.js';
+import { client, EMBEDDING_MODEL } from '../src/config/openai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_ROOT = path.resolve(__dirname, '..');
@@ -91,13 +90,12 @@ async function extractPdfText(filePath: string): Promise<string> {
   }
 }
 
-async function embedBatches(client: OpenAI, contents: string[]): Promise<number[][]> {
-  const embeddingModel = getOpenAiEmbeddingModel();
+async function embedBatches(contents: string[]): Promise<number[][]> {
   const embeddings: number[][] = [];
   for (let i = 0; i < contents.length; i += EMBED_BATCH_SIZE) {
     const batch = contents.slice(i, i + EMBED_BATCH_SIZE);
     const res = await client.embeddings.create({
-      model: embeddingModel,
+      model: EMBEDDING_MODEL,
       input: batch,
     });
     const sorted = [...res.data].sort((a, b) => a.index - b.index);
@@ -115,8 +113,6 @@ if (!process.env.OPENAI_API_KEY) {
   console.error('Missing OPENAI_API_KEY in backend/.env');
   process.exit(1);
 }
-
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const pdfPaths = await findPdfFiles(KNOWLEDGE_DIR);
 if (pdfPaths.length === 0) {
@@ -147,11 +143,8 @@ if (pending.length === 0) {
   process.exit(1);
 }
 
-console.log(`Embedding ${pending.length} chunks (${getOpenAiEmbeddingModel()})...`);
-const vectors = await embedBatches(
-  client,
-  pending.map((p) => p.content),
-);
+console.log(`Embedding ${pending.length} chunks (${EMBEDDING_MODEL})...`);
+const vectors = await embedBatches(pending.map((p) => p.content));
 
 const knowledgeChunks: KnowledgeChunk[] = pending.map((p, i) => ({
   id: makeChunkId(p.source, p.chunkIndex),

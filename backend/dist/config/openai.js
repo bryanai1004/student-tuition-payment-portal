@@ -1,41 +1,26 @@
 import OpenAI from "openai";
-const DEFAULT_OPENAI_MODEL = "gpt-5-thinking";
-const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
-function getTrimmedEnv(name) {
-    const value = process.env[name];
-    if (value == null)
-        return null;
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
+export const client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
+export const CHAT_MODEL = process.env.OPENAI_MODEL || "gpt-5.4";
+export const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
+if (CHAT_MODEL.includes("embedding")) {
+    throw new Error("Chat model misconfigured");
 }
-/**
- * Source-of-truth model for text generation calls.
- */
-export function getOpenAiModel() {
-    return getTrimmedEnv("OPENAI_MODEL") ?? DEFAULT_OPENAI_MODEL;
+if (!EMBEDDING_MODEL.includes("embedding")) {
+    throw new Error("Embedding model misconfigured");
 }
-/**
- * Embedding model defaults to OPENAI_MODEL, with an explicit embedding fallback.
- */
-export function getOpenAiEmbeddingModel() {
-    return (getTrimmedEnv("OPENAI_EMBEDDING_MODEL") ??
-        getTrimmedEnv("OPENAI_MODEL") ??
-        DEFAULT_OPENAI_EMBEDDING_MODEL);
-}
+console.log("[OPENAI CONFIG]");
+console.log("chat model:", CHAT_MODEL);
+console.log("embedding model:", EMBEDDING_MODEL);
 export function logOpenAiModelConfiguration() {
-    console.log(`[openai] model: ${getOpenAiModel()}`);
+    console.log("[OPENAI CONFIG]");
+    console.log("chat model:", CHAT_MODEL);
+    console.log("embedding model:", EMBEDDING_MODEL);
 }
 export async function verifyOpenAiResponsesApi() {
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
-    if (!apiKey) {
-        console.warn("[openai] verification skipped: missing OPENAI_API_KEY");
-        return;
-    }
-    const MODEL = process.env.OPENAI_MODEL || "gpt-5-thinking";
-    console.log("[OPENAI MODEL USED]:", MODEL);
-    const client = new OpenAI({ apiKey });
     await client.responses.create({
-        model: MODEL,
+        model: CHAT_MODEL,
         input: "ping",
     });
     console.log("[OPENAI RESPONSE RECEIVED]");
