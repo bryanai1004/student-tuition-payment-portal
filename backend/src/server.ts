@@ -1,7 +1,10 @@
 import { env } from "./config/env.js";
 import { app } from "./app.js";
 import { closePool, testDatabaseConnection } from "./lib/db.js";
-import { logOpenAiModelConfiguration } from "./config/openai.js";
+import {
+  logOpenAiModelConfiguration,
+  verifyOpenAiResponsesApi,
+} from "./config/openai.js";
 
 if (env.nodeEnv === "development") {
   console.log("DB CONFIG", {
@@ -29,6 +32,10 @@ async function start(): Promise<void> {
   const server = app.listen(env.port, () => {
     console.log(`API http://127.0.0.1:${env.port}`);
     logOpenAiModelConfiguration();
+    void verifyOpenAiResponsesApi().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn("[openai] verification failed:", message);
+    });
     console.log(
       `Verify demo JSON: http://127.0.0.1:${env.port}/api/demo/account?term=Fall&year=2026`,
     );

@@ -7,4 +7,5 @@ export declare function getOpenAiModel(): string;
  */
 export declare function getOpenAiEmbeddingModel(): string;
 export declare function logOpenAiModelConfiguration(): void;
+export declare function verifyOpenAiResponsesApi(): Promise<void>;
 //# sourceMappingURL=openai.d.ts.map

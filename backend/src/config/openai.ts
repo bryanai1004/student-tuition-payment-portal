@@ -1,3 +1,5 @@
+import OpenAI from "openai";
+
 const DEFAULT_OPENAI_MODEL = "gpt-5-thinking";
 const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
 
@@ -28,4 +30,23 @@ export function getOpenAiEmbeddingModel(): string {
 
 export function logOpenAiModelConfiguration(): void {
   console.log(`[openai] model: ${getOpenAiModel()}`);
+}
+
+export async function verifyOpenAiResponsesApi(): Promise<void> {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    console.warn("[openai] verification skipped: missing OPENAI_API_KEY");
+    return;
+  }
+
+  const MODEL = process.env.OPENAI_MODEL || "gpt-5-thinking";
+  console.log("[OPENAI MODEL USED]:", MODEL);
+
+  const client = new OpenAI({ apiKey });
+  await client.responses.create({
+    model: MODEL,
+    input: "ping",
+  });
+
+  console.log("[OPENAI RESPONSE RECEIVED]");
 }
