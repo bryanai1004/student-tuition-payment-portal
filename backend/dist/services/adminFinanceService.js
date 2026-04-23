@@ -162,6 +162,12 @@ export async function getQuarterSettingsPayload(term, year) {
         ddlSaveNote,
     };
 }
+/** Active system late fee rows must be reversible when DDL says no late fee yet (no due date / due date in the future). */
+function shouldReverseActiveSystemLateFeesRegardlessOfLedger(eligibility) {
+    return (!eligibility.eligible &&
+        (eligibility.reason === "due_date_not_passed" ||
+            eligibility.reason === "missing_due_date"));
+}
 async function evaluateLateFeeEligibility(studentId, term, year, paymentDueDate) {
     const due = paymentDueDate?.trim() ?? "";
     if (due === "") {
@@ -246,7 +252,8 @@ export async function previewLateFeeReconciliationForQuarter(term, year, payment
         }
         if (activeFees.length === 0)
             continue;
-        if (eligible.lateFeeOutstanding > 0) {
+        if (eligible.lateFeeOutstanding > 0 ||
+            shouldReverseActiveSystemLateFeesRegardlessOfLedger(eligible)) {
             wouldReverseInvalidSystemLateFeeCount += activeFees.length;
             if (sampleReversalStudentId == null) {
                 sampleReversalStudentId = studentId;
@@ -341,7 +348,9 @@ export async function reconcileLateFeesForQuarter(term, year) {
             skippedCount += 1;
             continue;
         }
-        let reversibleRemaining = roundMoney(Math.max(0, eligibility.lateFeeOutstanding));
+        let reversibleRemaining = shouldReverseActiveSystemLateFeesRegardlessOfLedger(eligibility)
+            ? roundMoney(activeFees.reduce((sum, fee) => roundMoney(sum + Math.max(0, fee.activeAmount)), 0))
+            : roundMoney(Math.max(0, eligibility.lateFeeOutstanding));
         for (const fee of activeFees) {
             if (reversibleRemaining <= 0) {
                 protectedSettledCount += 1;

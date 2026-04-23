@@ -1,6 +1,8 @@
 import { Router } from "express";
 import {
+  getAdminStudentAcademicRecords,
   getAdminStudent,
+  getAdminStudentRegistrationTerms,
   getAdminStudentPhotoUrlHandler,
   getAdminStudents,
   getNextAdminStudentId,
@@ -16,6 +18,7 @@ import {
   deleteAdminCourseSection,
   getAdminCourseSectionCourseMeta,
   getAdminCourseSectionEnrollments,
+  getAdminCourseSectionRosterHandler,
   getAdminExportFeedbackCsv,
   getAdminCourseSections,
   getAdminExportRegisteredStudentsCsv,
@@ -87,7 +90,10 @@ import {
   postStudentEnroll,
   postStudentWithdraw,
 } from "../controllers/studentEnrollmentController.js";
-import { getStudentClinicalProgressHandler } from "../controllers/studentClinicalProgressController.js";
+import {
+  getAdminStudentClinicalProgressHandler,
+  getStudentClinicalProgressHandler,
+} from "../controllers/studentClinicalProgressController.js";
 import {
   deleteAdminAcademicTerm,
   getAcademicTerms,
@@ -215,6 +221,18 @@ adminRouter.post(
   postAdminStudentPhoto,
 );
 adminRouter.get("/students/:studentId/photo-url", getAdminStudentPhotoUrlHandler);
+adminRouter.get(
+  "/students/:studentId/registration-terms",
+  getAdminStudentRegistrationTerms,
+);
+adminRouter.get(
+  "/students/:studentId/academic-records",
+  getAdminStudentAcademicRecords,
+);
+adminRouter.get(
+  "/students/:studentId/clinical-progress",
+  getAdminStudentClinicalProgressHandler,
+);
 adminRouter.get("/students/:studentId", getAdminStudent);
 adminRouter.put("/students/:studentId", putAdminStudent);
 adminRouter.get(
@@ -228,6 +246,10 @@ adminRouter.get(
 adminRouter.get(
   "/course-sections/enrollments",
   getAdminCourseSectionEnrollments,
+);
+adminRouter.get(
+  "/sections/:sectionId/roster",
+  getAdminCourseSectionRosterHandler,
 );
 adminRouter.get(
   "/course-sections/course-meta",

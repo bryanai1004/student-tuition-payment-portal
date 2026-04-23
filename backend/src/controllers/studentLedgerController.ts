@@ -49,7 +49,9 @@ export async function getAccountingLedger(
       return;
     }
 
-    const payload = await getAccountingLedgerPayload(studentId, term, year);
+    const payload = await getAccountingLedgerPayload(studentId, term, year, {
+      studentPortalLedgerPresentation: true,
+    });
     if (!payload) {
       res.status(400).json({ error: "Invalid term or year" });
       return;

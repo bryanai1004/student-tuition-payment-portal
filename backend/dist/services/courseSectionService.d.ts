@@ -14,6 +14,17 @@ export declare function listCourseSectionsByAcademicTermId(academicTermId: strin
 /** Every section in the term (all courses). Returns `null` if term id is unknown. */
 export declare function listAllCourseSectionsByAcademicTermId(academicTermId: string): Promise<CourseSectionDetail[] | null>;
 export type CourseSectionCreateWithTermIdInput = Omit<CourseSectionCreateInput, "term" | "year">;
+export type SectionRosterItem = {
+    studentId: string;
+    studentName: string;
+    enrollmentStatus: string | null;
+    courseCode: string | null;
+    sectionCode: string | null;
+    term: string | null;
+    year: number | null;
+    program: string | null;
+    email: string | null;
+};
 export declare function createCourseSectionWithAcademicTermId(academicTermId: string, input: CourseSectionCreateWithTermIdInput): Promise<CourseSectionDetail>;
 /**
  * Applies field updates and always sets `term` / `year` from `academic_term_id`.
@@ -23,4 +34,5 @@ export declare function updateCourseSectionWithAcademicTermId(id: number, academ
 export declare function createCourseSection(input: CourseSectionCreateInput): Promise<CourseSectionDetail>;
 export declare function updateCourseSection(id: number, patch: CourseSectionUpdateInput): Promise<CourseSectionDetail | null>;
 export declare function deleteCourseSection(id: number): Promise<boolean>;
+export declare function getSectionRoster(sectionId: number): Promise<SectionRosterItem[]>;
 //# sourceMappingURL=courseSectionService.d.ts.map

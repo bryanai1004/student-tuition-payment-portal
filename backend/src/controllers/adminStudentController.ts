@@ -6,10 +6,12 @@ import {
   createAdminStudent,
   deleteSelectedAdminStudents,
   getAdminStudentDetail,
+  listAdminStudentRegistrationTerms,
   listAdminStudentsPage,
   previewNextAdminStudentId,
   updateAdminStudent,
 } from "../services/adminStudentService.js";
+import { getStudentAcademicsPayload } from "../services/studentAcademicsService.js";
 import {
   AdminStudentPhotoServiceError,
   STUDENT_PHOTO_ALLOWED_MIME_TYPES,
@@ -533,6 +535,42 @@ export async function getAdminStudent(
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Failed to load student" });
+  }
+}
+
+export async function getAdminStudentRegistrationTerms(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const studentId = normalizeStudentIdParam(paramStudentId(req.params));
+  if (!studentId) {
+    res.status(400).json({ error: "Invalid student id." });
+    return;
+  }
+  try {
+    const terms = await listAdminStudentRegistrationTerms(studentId);
+    res.json({ terms });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to load registration terms." });
+  }
+}
+
+export async function getAdminStudentAcademicRecords(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const studentId = normalizeStudentIdParam(paramStudentId(req.params));
+  if (!studentId) {
+    res.status(400).json({ error: "Invalid student id." });
+    return;
+  }
+  try {
+    const payload = await getStudentAcademicsPayload(studentId);
+    res.json(payload);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to load academic records." });
   }
 }
 

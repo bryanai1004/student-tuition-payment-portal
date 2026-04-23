@@ -103,7 +103,11 @@ function summarizeTermChargesFromLedger(rows) {
         }
         if (credit > 0) {
             totalCredits = roundMoney(totalCredits + credit);
-            const inferred = inferPaymentChargeTypeFromMemo(row.memo);
+            let inferred = inferPaymentChargeTypeFromMemo(row.memo);
+            if (inferred == null &&
+                row.billingAdjustmentSource === "system_late_fee_reversal") {
+                inferred = "late_fee";
+            }
             if (inferred != null) {
                 paymentTotals[inferred] = roundMoney(paymentTotals[inferred] + credit);
             }
@@ -214,6 +218,95 @@ function summarizeLedgerRows(rows) {
         balance: roundMoney(totalCharges - totalPayments),
     };
 }
+const STUDENT_LATE_FEE_REVERSED_MEMO = "Late Payment Fee (reversed)";
+/**
+ * Student portal ledger presentation:
+ * - When the quarter payment DDL is missing or not yet passed (school-local), omit all
+ *   system-generated late fee / reversal lines so a pushed due date clears them from view.
+ * - When the DDL is in effect, replace a fully reversed system late fee (linked reversal credits
+ *   cover the fee debit) with one neutral line so the fee does not read as an active charge.
+ */
+function filterLedgerRowsForStudentPortalPresentation(rows, paymentDueDate) {
+    const due = paymentDueDate?.trim() ?? "";
+    const ddlSupportsLateFeeCharge = due !== "" && isPastSchoolLocalDueDate(due);
+    if (!ddlSupportsLateFeeCharge) {
+        return rows.filter((r) => !(r.billingAdjustmentSource === "system_late_fee" ||
+            r.billingAdjustmentSource === "system_late_fee_reversal" ||
+            r.sourceType === "auto_late_fee"));
+    }
+    const reversalCreditByFeeId = new Map();
+    for (const r of rows) {
+        if (r.billingAdjustmentSource !== "system_late_fee_reversal")
+            continue;
+        const rid = r.reversalOfAdjustmentId;
+        if (rid == null || !Number.isFinite(rid))
+            continue;
+        const feeId = Math.trunc(Number(rid));
+        const credit = roundMoney(Math.max(0, Number(r.credit) || 0));
+        if (credit <= 0)
+            continue;
+        reversalCreditByFeeId.set(feeId, roundMoney((reversalCreditByFeeId.get(feeId) ?? 0) + credit));
+    }
+    const fullyReversedFeeIds = new Set();
+    for (const r of rows) {
+        const isFee = r.sourceType === "auto_late_fee" ||
+            r.billingAdjustmentSource === "system_late_fee";
+        if (!isFee)
+            continue;
+        const sid = r.sourceId;
+        if (typeof sid !== "number" || !Number.isFinite(sid))
+            continue;
+        const feeId = Math.trunc(sid);
+        const debit = roundMoney(Math.max(0, Number(r.debit) || 0));
+        if (debit <= 0)
+            continue;
+        const rev = roundMoney(reversalCreditByFeeId.get(feeId) ?? 0);
+        if (rev >= debit) {
+            fullyReversedFeeIds.add(feeId);
+        }
+    }
+    if (fullyReversedFeeIds.size === 0) {
+        return rows;
+    }
+    const syntheticEmitted = new Set();
+    const out = [];
+    for (const r of rows) {
+        if (r.billingAdjustmentSource === "system_late_fee_reversal" &&
+            r.reversalOfAdjustmentId != null &&
+            fullyReversedFeeIds.has(Math.trunc(Number(r.reversalOfAdjustmentId)))) {
+            continue;
+        }
+        const isFee = r.sourceType === "auto_late_fee" ||
+            r.billingAdjustmentSource === "system_late_fee";
+        if (isFee &&
+            typeof r.sourceId === "number" &&
+            fullyReversedFeeIds.has(Math.trunc(r.sourceId))) {
+            const fid = Math.trunc(r.sourceId);
+            if (!syntheticEmitted.has(fid)) {
+                syntheticEmitted.add(fid);
+                out.push({
+                    ...r,
+                    date: r.date,
+                    type: "Adjustment",
+                    code: "",
+                    memo: STUDENT_LATE_FEE_REVERSED_MEMO,
+                    debit: 0,
+                    credit: 0,
+                    sourceType: "system",
+                    sourceId: null,
+                    billingAdjustmentSource: undefined,
+                    reversalOfAdjustmentId: undefined,
+                    isEditable: false,
+                    isDeletable: false,
+                    clinicalBookingPaymentHold: r.clinicalBookingPaymentHold ?? null,
+                });
+            }
+            continue;
+        }
+        out.push(r);
+    }
+    return out;
+}
 /** Positive `system_clinical` charges map to `portal_billing_adjustments.id` on ledger `sourceId`. */
 function clinicalBookingChargeAdjustmentIds(adjustments) {
     const s = new Set();
@@ -311,6 +404,11 @@ function ledgerRowsFromPortalAdjustments(adjustments, chargeDate) {
         if (raw === 0)
             continue;
         const baseMeta = adjustmentMetaForLedger(adj);
+        const src = adj.adjustmentSource ?? "manual";
+        const revOf = adj.reversalOfAdjustmentId != null &&
+            Number.isFinite(adj.reversalOfAdjustmentId)
+            ? Math.trunc(Number(adj.reversalOfAdjustmentId))
+            : null;
         if (raw > 0) {
             rows.push({
                 date: chargeDate,
@@ -319,6 +417,8 @@ function ledgerRowsFromPortalAdjustments(adjustments, chargeDate) {
                 memo: adj.description.trim() || "Adjustment",
                 debit: raw,
                 credit: 0,
+                billingAdjustmentSource: src,
+                reversalOfAdjustmentId: revOf,
                 ...baseMeta,
             });
         }
@@ -330,6 +430,8 @@ function ledgerRowsFromPortalAdjustments(adjustments, chargeDate) {
                 memo: adj.description.trim() || "Adjustment",
                 debit: 0,
                 credit: roundMoney(Math.abs(raw)),
+                billingAdjustmentSource: src,
+                reversalOfAdjustmentId: revOf,
                 ...baseMeta,
             });
         }
@@ -477,12 +579,17 @@ export async function getAccountingLedgerPayload(studentId, term, year, options)
         const portalAdjRows = ledgerRowsFromPortalAdjustments(portalAdjustments, isoEffectiveDateForPortalCharges());
         const mergedRows = [...rows, ...portalAdjRows];
         applyClinicalBookingPaymentHoldsToLedgerRows(mergedRows, portalAdjustments, quarterHolds);
-        const summary = summarizeLedgerRows(mergedRows);
+        let presentationRows = mergedRows;
+        if (options?.studentPortalLedgerPresentation === true) {
+            const { paymentDueDate } = await getFinanceQuarterDdlFromAcademicTerms(pool, resolvedTerm.trim(), resolvedYear);
+            presentationRows = filterLedgerRowsForStudentPortalPresentation(mergedRows, paymentDueDate);
+        }
+        const summary = summarizeLedgerRows(presentationRows);
         return {
             studentId,
             term: resolvedTerm,
             year: resolvedYear,
-            rows: mergedRows,
+            rows: presentationRows,
             summary,
         };
     }
@@ -492,12 +599,17 @@ export async function getAccountingLedgerPayload(studentId, term, year, options)
     ]);
     const rows = buildPortalLedgerRowsFromContext(ctx);
     applyClinicalBookingPaymentHoldsToLedgerRows(rows, ctx.adjustments, quarterHolds);
-    const summary = summarizeLedgerRows(rows);
+    let presentationRows = rows;
+    if (options?.studentPortalLedgerPresentation === true) {
+        const { paymentDueDate } = await getFinanceQuarterDdlFromAcademicTerms(pool, (ctx.term.trim() || termTrim).trim(), ctx.year);
+        presentationRows = filterLedgerRowsForStudentPortalPresentation(rows, paymentDueDate);
+    }
+    const summary = summarizeLedgerRows(presentationRows);
     return {
         studentId,
         term: ctx.term.trim() || termTrim,
         year: ctx.year,
-        rows,
+        rows: presentationRows,
         summary,
     };
 }
@@ -506,6 +618,7 @@ export async function getStudentQuarterBalance(studentId, term, year) {
     const payload = await getAccountingLedgerPayload(studentId, term.trim(), year, {
         skipExpiredClinicalBookingReconciliation: true,
         skipLateFeeEvaluation: true,
+        studentPortalLedgerPresentation: true,
     });
     return payload?.summary.balance ?? 0;
 }

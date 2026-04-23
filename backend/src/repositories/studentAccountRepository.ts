@@ -69,6 +69,10 @@ let portalBillingAdjustmentsHasAdjustmentSource: boolean | undefined;
 let portalBillingAdjustmentsAdjustmentSourceDetect: Promise<boolean> | null =
   null;
 
+/** In-process cache: whether `reversal_of_adjustment_id` exists. */
+let portalBillingAdjustmentsHasReversalOfColumn: boolean | undefined;
+let portalBillingAdjustmentsReversalOfDetect: Promise<boolean> | null = null;
+
 async function hasPortalBillingAdjustmentsAdjustmentSourceColumn(
   pool: Pool,
 ): Promise<boolean> {
@@ -95,6 +99,34 @@ async function hasPortalBillingAdjustmentsAdjustmentSourceColumn(
       });
   }
   return portalBillingAdjustmentsAdjustmentSourceDetect;
+}
+
+async function hasPortalBillingAdjustmentsReversalOfColumn(
+  pool: Pool,
+): Promise<boolean> {
+  if (portalBillingAdjustmentsHasReversalOfColumn !== undefined) {
+    return portalBillingAdjustmentsHasReversalOfColumn;
+  }
+  if (!portalBillingAdjustmentsReversalOfDetect) {
+    portalBillingAdjustmentsReversalOfDetect = pool
+      .query<RowDataPacket[]>(
+        `SELECT 1 AS ok
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'portal_billing_adjustments'
+           AND COLUMN_NAME = 'reversal_of_adjustment_id'
+         LIMIT 1`,
+      )
+      .then(([rows]) => {
+        const has = rows.length > 0;
+        portalBillingAdjustmentsHasReversalOfColumn = has;
+        return has;
+      })
+      .finally(() => {
+        portalBillingAdjustmentsReversalOfDetect = null;
+      });
+  }
+  return portalBillingAdjustmentsReversalOfDetect;
 }
 
 /**
@@ -167,15 +199,27 @@ export async function loadPortalBillingAdjustmentsForQuarter(
   term: string,
   year: number,
 ): Promise<BillingAdjustmentRecord[]> {
-  const adjustmentsSelectHasSource =
-    await hasPortalBillingAdjustmentsAdjustmentSourceColumn(pool);
-  const adjustmentsSql = adjustmentsSelectHasSource
-    ? `SELECT id, description, amount, category, adjustment_source AS adjustmentSource
-       FROM portal_billing_adjustments
-       WHERE student_external_id = ? AND term = ? AND year = ?`
-    : `SELECT id, description, amount, category
-       FROM portal_billing_adjustments
-       WHERE student_external_id = ? AND term = ? AND year = ?`;
+  const [adjustmentsSelectHasSource, adjustmentsSelectHasReversalOf] =
+    await Promise.all([
+      hasPortalBillingAdjustmentsAdjustmentSourceColumn(pool),
+      hasPortalBillingAdjustmentsReversalOfColumn(pool),
+    ]);
+
+  const cols = [
+    "id",
+    "description",
+    "amount",
+    "category",
+    ...(adjustmentsSelectHasSource
+      ? ["adjustment_source AS adjustmentSource"]
+      : []),
+    ...(adjustmentsSelectHasReversalOf
+      ? ["reversal_of_adjustment_id AS reversalOfAdjustmentId"]
+      : []),
+  ];
+  const adjustmentsSql = `SELECT ${cols.join(", ")}
+     FROM portal_billing_adjustments
+     WHERE student_external_id = ? AND term = ? AND year = ?`;
 
   const [adjQ] = await pool.query<RowDataPacket[]>(adjustmentsSql, [
     studentId,
@@ -183,17 +227,27 @@ export async function loadPortalBillingAdjustmentsForQuarter(
     year,
   ]);
   const adjustmentRowList = adjQ as RowDataPacket[];
-  return adjustmentRowList.map((r) => ({
-    id: r.id != null ? Number(r.id) : undefined,
-    description: String(r.description),
-    amount: Number(r.amount),
-    category: asBillingCategory(r.category),
-    adjustmentSource: adjustmentsSelectHasSource
-      ? asAdjustmentSource(
-          (r as { adjustmentSource?: unknown }).adjustmentSource,
-        )
-      : "manual",
-  }));
+  return adjustmentRowList.map((r) => {
+    const rec: BillingAdjustmentRecord = {
+      id: r.id != null ? Number(r.id) : undefined,
+      description: String(r.description),
+      amount: Number(r.amount),
+      category: asBillingCategory(r.category),
+      adjustmentSource: adjustmentsSelectHasSource
+        ? asAdjustmentSource(
+            (r as { adjustmentSource?: unknown }).adjustmentSource,
+          )
+        : "manual",
+    };
+    if (adjustmentsSelectHasReversalOf) {
+      const raw = (r as { reversalOfAdjustmentId?: unknown })
+        .reversalOfAdjustmentId;
+      if (raw != null && Number.isFinite(Number(raw))) {
+        rec.reversalOfAdjustmentId = Math.trunc(Number(raw));
+      }
+    }
+    return rec;
+  });
 }
 
 async function loadPortalTermBillingContextCore(

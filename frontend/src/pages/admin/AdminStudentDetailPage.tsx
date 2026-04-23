@@ -10,6 +10,8 @@ import { Link, useParams } from 'react-router-dom'
 import {
   createAdminStudentLoa,
   fetchAcademicTerms,
+  fetchAdminStudentClinicalProgress,
+  fetchAdminStudentAcademicRecords,
   fetchAdminStudentDetail,
   fetchAdminStudentPhotoUrl,
   fetchAdminStudentDocuments,
@@ -19,10 +21,14 @@ import {
   uploadAdminStudentPhoto,
   type AcademicTerm,
   type AdminStudentDetail,
-  type AdminStudentRegistrationHistoryItem,
+  type AdminStudentRegistrationHistoryRow,
+  type AdminStudentRegistrationTermOption,
   type DocumentRequirementType,
+  type StudentClinicalProgressResponse,
   type StudentDocumentsResponse,
 } from '../../lib/api'
+import { groupRowsByTermYear } from '../../lib/academicsTranscriptDisplay'
+import { socket, type EnrollmentChangedEvent } from '../../lib/socket'
 
 function dashText(value: string | null | undefined): string {
   const s = value?.trim() ?? ''
@@ -48,6 +54,15 @@ function formatUsMdY(iso: string | null | undefined): string {
 function formatEntryYear(y: number | null | undefined): string {
   if (y == null || !Number.isFinite(y)) return '—'
   return String(Math.trunc(y))
+}
+
+function formatExamTermCell(term: string | null, year: number | null): string {
+  const t = term?.trim() ?? ''
+  const hasYear = year != null && Number.isFinite(year)
+  if (!t && !hasYear) return '—'
+  if (t && hasYear) return `${t} ${year}`
+  if (t) return t
+  return String(year)
 }
 
 const ADMIN_DOC_REQUIREMENT_ORDER: DocumentRequirementType[] = [
@@ -100,43 +115,21 @@ function pickDefaultDocumentsAcademicTermId(
   return pickerList[0]?.id ?? null
 }
 
-const SEASON_ORDER: Record<string, number> = {
-  FALL: 4,
-  SUMMER: 3,
-  SPRING: 2,
-  WINTER: 1,
+function registrationTermKey(term: string, year: number): string {
+  return `${Math.trunc(year)}::${term.trim().toUpperCase()}`
 }
 
-/** Sort key for labels like `Fall 2025` (newer / later season sorts higher). */
-function termSortKey(term: string): number {
-  const t = term.trim()
-  if (!t) return 0
-  const parts = t.split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return 0
-  const year = Number(parts[parts.length - 1])
-  const seasonBlob = parts.slice(0, -1).join(' ').toUpperCase()
-  let seasonRank = 0
-  for (const [k, rank] of Object.entries(SEASON_ORDER)) {
-    if (seasonBlob.includes(k)) {
-      seasonRank = rank
-      break
-    }
-  }
-  const y = Number.isFinite(year) ? year : 0
-  return y * 10 + seasonRank
-}
-
-function buildQuarterOptions(
-  history: AdminStudentDetail['registrationHistory'],
-  latestRegistrationTerm: string | null,
-): string[] {
-  const fromHistory = (history ?? [])
-    .map((h) => h.term.trim())
-    .filter((x) => x.length > 0)
-  const uniq = new Set(fromHistory)
-  const latest = latestRegistrationTerm?.trim()
-  if (latest) uniq.add(latest)
-  return Array.from(uniq).sort((a, b) => termSortKey(b) - termSortKey(a))
+function parseLatestRegistrationTermLabel(
+  label: string | null | undefined,
+): AdminStudentRegistrationTermOption | null {
+  const text = label?.trim() ?? ''
+  if (!text) return null
+  const m = /^(.*\S)\s+(\d{4})$/.exec(text)
+  if (!m) return null
+  const term = m[1].trim()
+  const year = Number.parseInt(m[2], 10)
+  if (!term || !Number.isFinite(year)) return null
+  return { term, year, label: text }
 }
 
 const LOA_QUARTER_OPTIONS = ['Winter', 'Spring', 'Summer', 'Fall'] as const
@@ -167,8 +160,8 @@ function buildLoaYearOptions(now = new Date()): string[] {
 }
 
 function cellHistory(
-  item: AdminStudentRegistrationHistoryItem,
-  key: keyof AdminStudentRegistrationHistoryItem,
+  item: AdminStudentRegistrationHistoryRow,
+  key: keyof AdminStudentRegistrationHistoryRow,
 ): string {
   const v = item[key]
   if (v === undefined || v === null) return '—'
@@ -195,11 +188,23 @@ export function AdminStudentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [academicRecordsReloadKey, setAcademicRecordsReloadKey] = useState(0)
   const [activeTab, setActiveTab] = useState<
-    'registration' | 'profile' | 'documents'
+    'registration' | 'profile' | 'documents' | 'clinical-progress'
   >('registration')
-  /** User override; cleared when navigating to another student. */
-  const [selectedQuarter, setSelectedQuarter] = useState('')
+  const [registrationTerms, setRegistrationTerms] = useState<
+    AdminStudentRegistrationTermOption[]
+  >([])
+  const [selectedRegistrationTermKey, setSelectedRegistrationTermKey] =
+    useState('')
+  const [registrationAllHistoryRows, setRegistrationAllHistoryRows] = useState<
+    AdminStudentRegistrationHistoryRow[]
+  >([])
+  const [registrationHistoryLoading, setRegistrationHistoryLoading] =
+    useState(false)
+  const [registrationHistoryError, setRegistrationHistoryError] = useState<
+    string | null
+  >(null)
 
   const [docTerms, setDocTerms] = useState<AcademicTerm[] | null>(null)
   const [docTermsLoading, setDocTermsLoading] = useState(false)
@@ -218,6 +223,12 @@ export function AdminStudentDetailPage() {
   const [documentsActionError, setDocumentsActionError] = useState<
     string | null
   >(null)
+  const [clinicalProgressData, setClinicalProgressData] =
+    useState<StudentClinicalProgressResponse | null>(null)
+  const [clinicalProgressLoading, setClinicalProgressLoading] = useState(false)
+  const [clinicalProgressError, setClinicalProgressError] = useState<string | null>(
+    null,
+  )
   const [resettingRequirement, setResettingRequirement] =
     useState<DocumentRequirementType | null>(null)
   const [resettingAllDocuments, setResettingAllDocuments] = useState(false)
@@ -235,7 +246,11 @@ export function AdminStudentDetailPage() {
 
   useEffect(() => {
     setActiveTab('registration')
-    setSelectedQuarter('')
+    setRegistrationTerms([])
+    setSelectedRegistrationTermKey('')
+    setRegistrationAllHistoryRows([])
+    setRegistrationHistoryLoading(false)
+    setRegistrationHistoryError(null)
     setDocTerms(null)
     setDocTermsLoading(false)
     setDocTermsError(null)
@@ -245,6 +260,9 @@ export function AdminStudentDetailPage() {
     setDocumentsLoading(false)
     setDocumentsError(null)
     setDocumentsActionError(null)
+    setClinicalProgressData(null)
+    setClinicalProgressLoading(false)
+    setClinicalProgressError(null)
     setResettingRequirement(null)
     setResettingAllDocuments(false)
     setLoaSelection('no')
@@ -258,6 +276,7 @@ export function AdminStudentDetailPage() {
     setPhotoUploading(false)
     setPhotoError(null)
     setPhotoNotice(null)
+    setAcademicRecordsReloadKey(0)
   }, [studentId])
 
   useEffect(() => {
@@ -305,31 +324,136 @@ export function AdminStudentDetailPage() {
     return () => ac.abort()
   }, [studentId, reloadKey])
 
-  const quarterOptions = useMemo(() => {
-    if (!detail) return []
-    return buildQuarterOptions(
-      detail.registrationHistory,
-      detail.latestRegistrationTerm,
-    )
-  }, [detail])
-
-  const effectiveQuarter = useMemo(() => {
-    if (!detail || quarterOptions.length === 0) return ''
-    if (selectedQuarter && quarterOptions.includes(selectedQuarter)) {
-      return selectedQuarter
+  useEffect(() => {
+    const currentStudentId = studentId.trim()
+    if (!currentStudentId) return
+    const handleEnrollmentChanged = (event: EnrollmentChangedEvent) => {
+      if (event.type !== 'enrollment.changed') return
+      if ((event.studentId ?? '').trim() !== currentStudentId) return
+      setAcademicRecordsReloadKey((k) => k + 1)
     }
-    const latest = detail.latestRegistrationTerm?.trim() ?? ''
-    if (latest && quarterOptions.includes(latest)) return latest
-    return quarterOptions[0] ?? ''
-  }, [detail, quarterOptions, selectedQuarter])
+    socket.connect()
+    socket.on('enrollment.changed', handleEnrollmentChanged)
+    return () => {
+      socket.off('enrollment.changed', handleEnrollmentChanged)
+    }
+  }, [studentId])
 
-  const registrationItems = useMemo(() => {
-    if (!detail || !effectiveQuarter.trim()) return []
-    const bucket = detail.registrationHistory?.find(
-      (h) => h.term === effectiveQuarter,
+  useEffect(() => {
+    if (!studentId.trim()) return
+    const ac = new AbortController()
+    setRegistrationTerms([])
+    setRegistrationAllHistoryRows([])
+    setRegistrationHistoryLoading(true)
+    setRegistrationHistoryError(null)
+    ;(async () => {
+      try {
+        const payload = await fetchAdminStudentAcademicRecords(studentId, {
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        const rows = payload.enrollmentHistory
+          .map((item): AdminStudentRegistrationHistoryRow | null => {
+            const term = item.term?.trim() ?? ''
+            const year = Number.isFinite(item.year)
+              ? Math.trunc(item.year)
+              : Number.NaN
+            if (!term || !Number.isFinite(year)) return null
+            return {
+              courseCode: item.courseCode?.trim() ?? '',
+              courseTitle: item.courseTitle?.trim() || null,
+              section: null,
+              units:
+                typeof item.credits === 'number' && Number.isFinite(item.credits)
+                  ? item.credits
+                  : null,
+              status: item.status?.trim() || null,
+              term,
+              year,
+              termLabel: `${term} ${year}`,
+            }
+          })
+          .filter(
+            (row): row is AdminStudentRegistrationHistoryRow => row !== null,
+          )
+        setRegistrationAllHistoryRows(rows)
+        const availableTerms = payload.availableTerms
+          .map((item): AdminStudentRegistrationTermOption | null => {
+            const term = item.term?.trim() ?? ''
+            const year = Number.isFinite(item.year)
+              ? Math.trunc(item.year)
+              : Number.NaN
+            if (!term || !Number.isFinite(year)) return null
+            const label = item.label?.trim() || `${term} ${year}`
+            return { term, year, label }
+          })
+          .filter(
+            (item): item is AdminStudentRegistrationTermOption => item !== null,
+          )
+        const terms =
+          availableTerms.length > 0
+            ? availableTerms
+            : groupRowsByTermYear(rows).map((g) => ({
+                term: g.term,
+                year: g.year,
+                label: `${g.term} ${g.year}`,
+              }))
+        setRegistrationTerms(terms)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setRegistrationTerms([])
+        setRegistrationAllHistoryRows([])
+        setRegistrationHistoryError(
+          e instanceof Error ? e.message : 'Could not load academic records.',
+        )
+      } finally {
+        if (!ac.signal.aborted) setRegistrationHistoryLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [studentId, academicRecordsReloadKey])
+
+  const registrationFallbackTerm = useMemo(
+    () => parseLatestRegistrationTermLabel(detail?.latestRegistrationTerm),
+    [detail?.latestRegistrationTerm],
+  )
+
+  const registrationTermOptions = useMemo(() => {
+    if (registrationTerms.length > 0) return registrationTerms
+    return registrationFallbackTerm ? [registrationFallbackTerm] : []
+  }, [registrationTerms, registrationFallbackTerm])
+
+  const selectedRegistrationTerm = useMemo(() => {
+    if (registrationTermOptions.length === 0) return null
+    return (
+      registrationTermOptions.find(
+        (opt) => registrationTermKey(opt.term, opt.year) === selectedRegistrationTermKey,
+      ) ?? null
     )
-    return bucket?.items ?? []
-  }, [detail, effectiveQuarter])
+  }, [registrationTermOptions, selectedRegistrationTermKey])
+
+  useEffect(() => {
+    if (registrationTermOptions.length === 0) {
+      setSelectedRegistrationTermKey('')
+      return
+    }
+    if (selectedRegistrationTerm) return
+    const defaultTerm = registrationTermOptions[0]
+    if (!defaultTerm) return
+    setSelectedRegistrationTermKey(
+      registrationTermKey(defaultTerm.term, defaultTerm.year),
+    )
+  }, [registrationTermOptions, selectedRegistrationTerm])
+
+  const registrationHistoryRows = useMemo(() => {
+    if (!selectedRegistrationTerm) return []
+    return registrationAllHistoryRows.filter(
+      (row) =>
+        row.year === selectedRegistrationTerm.year &&
+        row.term.trim().toLowerCase() ===
+          selectedRegistrationTerm.term.trim().toLowerCase(),
+    )
+  }, [registrationAllHistoryRows, selectedRegistrationTerm])
 
   const defaultDocumentsTermId = useMemo(() => {
     if (!docTerms || docTerms.length === 0) return null
@@ -420,6 +544,31 @@ export function AdminStudentDetailPage() {
     })()
     return () => ac.abort()
   }, [activeTab, studentId, effectiveDocumentsTermId, loadDocumentsForTerm])
+
+  useEffect(() => {
+    if (activeTab !== 'clinical-progress' || !studentId.trim()) return
+    const ac = new AbortController()
+    setClinicalProgressLoading(true)
+    setClinicalProgressError(null)
+    ;(async () => {
+      try {
+        const data = await fetchAdminStudentClinicalProgress(studentId, {
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        setClinicalProgressData(data)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setClinicalProgressData(null)
+        setClinicalProgressError(
+          e instanceof Error ? e.message : 'Could not load clinical progress.',
+        )
+      } finally {
+        if (!ac.signal.aborted) setClinicalProgressLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [activeTab, studentId, reloadKey])
 
   useEffect(() => {
     if (!detail || !studentId.trim()) return
@@ -726,6 +875,18 @@ export function AdminStudentDetailPage() {
             >
               Documents
             </button>
+            <button
+              type="button"
+              role="tab"
+              id="admin-student-tab-clinical-progress"
+              aria-selected={activeTab === 'clinical-progress'}
+              aria-controls="admin-student-panel-clinical-progress"
+              tabIndex={activeTab === 'clinical-progress' ? 0 : -1}
+              className={`admin-detail-tab${activeTab === 'clinical-progress' ? ' admin-detail-tab--active' : ''}`}
+              onClick={() => setActiveTab('clinical-progress')}
+            >
+              Clinical Progress
+            </button>
           </div>
 
           {activeTab === 'registration' ? (
@@ -982,59 +1143,94 @@ export function AdminStudentDetailPage() {
                   <select
                     id="admin-student-quarter-select"
                     className="admin-input admin-detail-quarter-select"
-                    value={
-                      quarterOptions.length === 0 ? '' : effectiveQuarter
+                    value={selectedRegistrationTerm?.term ? selectedRegistrationTermKey : ''}
+                    onChange={(e) => setSelectedRegistrationTermKey(e.target.value)}
+                    disabled={
+                      registrationTermOptions.length === 0 || registrationHistoryLoading
                     }
-                    onChange={(e) => setSelectedQuarter(e.target.value)}
-                    disabled={quarterOptions.length === 0}
                   >
-                    {quarterOptions.length === 0 ? (
+                    {registrationTermOptions.length === 0 ? (
                       <option value="">No terms on file</option>
                     ) : (
-                      quarterOptions.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))
+                      registrationTermOptions.map((termOption) => {
+                        const optionKey = registrationTermKey(
+                          termOption.term,
+                          termOption.year,
+                        )
+                        return (
+                          <option key={optionKey} value={optionKey}>
+                            {termOption.label}
+                          </option>
+                        )
+                      })
                     )}
                   </select>
                 </div>
-                {registrationItems.length === 0 ? (
+                {registrationHistoryLoading ? (
+                  <p className="portal-card-note admin-detail-empty" aria-busy="true">
+                    Loading academic records…
+                  </p>
+                ) : null}
+                {registrationHistoryError ? (
+                  <p
+                    className="portal-card-note admin-detail-empty"
+                    role="alert"
+                    style={{ color: '#b42318' }}
+                  >
+                    {registrationHistoryError}
+                  </p>
+                ) : null}
+                {selectedRegistrationTerm && registrationHistoryLoading ? (
+                  <p className="portal-card-note admin-detail-empty" aria-busy="true">
+                    Loading registration history…
+                  </p>
+                ) : null}
+                {selectedRegistrationTerm &&
+                !registrationHistoryLoading &&
+                !registrationHistoryError &&
+                registrationHistoryRows.length === 0 ? (
                   <p
                     className="portal-card-note admin-detail-empty"
                     role="status"
                   >
-                    No registration records for this quarter.
+                    No registration records for this term.
                   </p>
                 ) : (
-                  <div className="portal-table-wrap admin-table-wrap">
-                    <table className="portal-table portal-data-table admin-registration-history-table">
-                      <thead>
-                        <tr>
-                          <th scope="col">Course code</th>
-                          <th scope="col">Course title</th>
-                          <th scope="col">Credits</th>
-                          <th scope="col">Instructor</th>
-                          <th scope="col">Status</th>
-                          <th scope="col">Grade</th>
-                          <th scope="col">Schedule</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {registrationItems.map((row, idx) => (
-                          <tr key={`${effectiveQuarter}-${idx}`}>
-                            <td>{cellHistory(row, 'courseCode')}</td>
-                            <td>{cellHistory(row, 'courseTitle')}</td>
-                            <td>{cellHistory(row, 'credits')}</td>
-                            <td>{cellHistory(row, 'instructor')}</td>
-                            <td>{cellHistory(row, 'status')}</td>
-                            <td>{cellHistory(row, 'grade')}</td>
-                            <td>{cellHistory(row, 'schedule')}</td>
+                  selectedRegistrationTerm &&
+                  !registrationHistoryLoading &&
+                  !registrationHistoryError &&
+                  registrationHistoryRows.length > 0 ? (
+                    <div className="portal-table-wrap admin-table-wrap">
+                      <table className="portal-table portal-data-table admin-registration-history-table">
+                        <thead>
+                          <tr>
+                            <th scope="col">Course code</th>
+                            <th scope="col">Course title</th>
+                            <th scope="col">Section</th>
+                            <th scope="col">Units</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Term</th>
+                            <th scope="col">Year</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {registrationHistoryRows.map((row, idx) => (
+                            <tr
+                              key={`${row.courseCode}-${row.term}-${row.year}-${row.section ?? 'na'}-${idx}`}
+                            >
+                              <td>{cellHistory(row, 'courseCode')}</td>
+                              <td>{cellHistory(row, 'courseTitle')}</td>
+                              <td>{cellHistory(row, 'section')}</td>
+                              <td>{cellHistory(row, 'units')}</td>
+                              <td>{cellHistory(row, 'status')}</td>
+                              <td>{cellHistory(row, 'termLabel')}</td>
+                              <td>{cellHistory(row, 'year')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null
                 )}
               </section>
 
@@ -1488,6 +1684,155 @@ export function AdminStudentDetailPage() {
                         })
                       : null}
                   </>
+                ) : null}
+              </section>
+            </div>
+          ) : null}
+
+          {activeTab === 'clinical-progress' ? (
+            <div
+              className="portal-stack"
+              style={{ gap: '1.25rem' }}
+              id="admin-student-panel-clinical-progress"
+              role="tabpanel"
+              aria-labelledby="admin-student-tab-clinical-progress"
+            >
+              <section
+                className="portal-card portal-stack"
+                aria-labelledby="admin-student-clinical-progress-summary"
+              >
+                <h2
+                  id="admin-student-clinical-progress-summary"
+                  className="portal-section-heading"
+                >
+                  Clinical progress summary
+                </h2>
+                {clinicalProgressLoading ? (
+                  <p className="portal-card-note admin-detail-empty" aria-busy="true">
+                    Loading clinical progress…
+                  </p>
+                ) : null}
+                {clinicalProgressError ? (
+                  <p
+                    className="portal-card-note admin-detail-empty"
+                    role="alert"
+                    style={{ color: '#b42318' }}
+                  >
+                    {clinicalProgressError}
+                  </p>
+                ) : null}
+                {!clinicalProgressLoading &&
+                !clinicalProgressError &&
+                !clinicalProgressData ? (
+                  <p className="portal-card-note admin-detail-empty" role="status">
+                    No clinical progress data available.
+                  </p>
+                ) : null}
+                {!clinicalProgressLoading &&
+                !clinicalProgressError &&
+                clinicalProgressData ? (
+                  <dl>
+                    <div className="portal-row">
+                      <dt>Completed Clinics</dt>
+                      <dd>{clinicalProgressData.completedCount}</dd>
+                    </div>
+                    <div className="portal-row">
+                      <dt>Total Clinical Hours</dt>
+                      <dd>{clinicalProgressData.totalHours}</dd>
+                    </div>
+                  </dl>
+                ) : null}
+              </section>
+
+              <section
+                className="portal-card portal-stack"
+                aria-labelledby="admin-student-clinical-progress-records"
+              >
+                <h2
+                  id="admin-student-clinical-progress-records"
+                  className="portal-section-heading"
+                >
+                  Clinic details
+                </h2>
+                {!clinicalProgressLoading &&
+                !clinicalProgressError &&
+                clinicalProgressData ? (
+                  clinicalProgressData.records.length === 0 ? (
+                    <p className="portal-card-note admin-detail-empty" role="status">
+                      No completed clinic records.
+                    </p>
+                  ) : (
+                    <div className="portal-table-wrap admin-table-wrap">
+                      <table className="portal-table portal-data-table">
+                        <thead>
+                          <tr>
+                            <th scope="col">Code</th>
+                            <th scope="col">Course Title</th>
+                            <th scope="col">Term</th>
+                            <th scope="col">Hours</th>
+                            <th scope="col">Grade</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {clinicalProgressData.records.map((row, idx) => (
+                            <tr key={`${row.code}-${row.term}-${row.year}-${idx}`}>
+                              <td>{row.code || '—'}</td>
+                              <td>{row.courseTitle || '—'}</td>
+                              <td>
+                                {row.term} {row.year}
+                              </td>
+                              <td>{row.hours}</td>
+                              <td>{row.grade || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                ) : null}
+              </section>
+
+              <section
+                className="portal-card portal-stack"
+                aria-labelledby="admin-student-clinical-progress-exams"
+              >
+                <h2
+                  id="admin-student-clinical-progress-exams"
+                  className="portal-section-heading"
+                >
+                  Clinical exam history
+                </h2>
+                {!clinicalProgressLoading &&
+                !clinicalProgressError &&
+                clinicalProgressData ? (
+                  clinicalProgressData.exams.length === 0 ? (
+                    <p className="portal-card-note admin-detail-empty" role="status">
+                      No clinical exam history records.
+                    </p>
+                  ) : (
+                    <div className="portal-table-wrap admin-table-wrap">
+                      <table className="portal-table portal-data-table">
+                        <thead>
+                          <tr>
+                            <th scope="col">Exam</th>
+                            <th scope="col">Term</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Grade</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {clinicalProgressData.exams.map((row) => (
+                            <tr key={row.code}>
+                              <td>{row.examName}</td>
+                              <td>{formatExamTermCell(row.term, row.year)}</td>
+                              <td>{row.status}</td>
+                              <td>{row.grade?.trim() ? row.grade : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
                 ) : null}
               </section>
             </div>

@@ -1,5 +1,6 @@
 import multer from "multer";
-import { buildAdminStudentsCsv, createAdminStudentLoa, createAdminStudent, deleteSelectedAdminStudents, getAdminStudentDetail, listAdminStudentsPage, previewNextAdminStudentId, updateAdminStudent, } from "../services/adminStudentService.js";
+import { buildAdminStudentsCsv, createAdminStudentLoa, createAdminStudent, deleteSelectedAdminStudents, getAdminStudentDetail, listAdminStudentRegistrationTerms, listAdminStudentsPage, previewNextAdminStudentId, updateAdminStudent, } from "../services/adminStudentService.js";
+import { getStudentAcademicsPayload } from "../services/studentAcademicsService.js";
 import { AdminStudentPhotoServiceError, STUDENT_PHOTO_ALLOWED_MIME_TYPES, STUDENT_PHOTO_MAX_SIZE_BYTES, getAdminStudentPhotoUrl, uploadAdminStudentPhoto, } from "../services/adminStudentPhotoService.js";
 function isRecord(v) {
     return v != null && typeof v === "object" && !Array.isArray(v);
@@ -439,6 +440,36 @@ export async function getAdminStudent(req, res) {
     catch (e) {
         console.error(e);
         res.status(500).json({ error: "Failed to load student" });
+    }
+}
+export async function getAdminStudentRegistrationTerms(req, res) {
+    const studentId = normalizeStudentIdParam(paramStudentId(req.params));
+    if (!studentId) {
+        res.status(400).json({ error: "Invalid student id." });
+        return;
+    }
+    try {
+        const terms = await listAdminStudentRegistrationTerms(studentId);
+        res.json({ terms });
+    }
+    catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to load registration terms." });
+    }
+}
+export async function getAdminStudentAcademicRecords(req, res) {
+    const studentId = normalizeStudentIdParam(paramStudentId(req.params));
+    if (!studentId) {
+        res.status(400).json({ error: "Invalid student id." });
+        return;
+    }
+    try {
+        const payload = await getStudentAcademicsPayload(studentId);
+        res.json(payload);
+    }
+    catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to load academic records." });
     }
 }
 export async function getAdminStudentPhotoUrlHandler(req, res) {

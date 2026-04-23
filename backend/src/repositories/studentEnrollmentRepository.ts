@@ -518,6 +518,13 @@ export type PortalEnrollmentAcademicStatus =
   | "dropped"
   | "unknown";
 
+function normalizeNullableYear(raw: unknown): number | null {
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return Math.trunc(n);
+}
+
 function normalizePortalEnrollmentAcademicStatus(
   raw: unknown,
 ): PortalEnrollmentAcademicStatus {
@@ -539,6 +546,68 @@ export type AdminSectionEnrollmentRepositoryRow = {
   grade: string | null;
   withdrawn_at: string | null;
 };
+
+export type PortalEnrollmentSectionRosterRepositoryRow = {
+  studentId: string;
+  studentName: string | null;
+  enrollmentStatus: string | null;
+  term: string | null;
+  year: number | null;
+  courseCode: string | null;
+  sectionCode: string | null;
+  program: string | null;
+  email: string | null;
+};
+
+/**
+ * Current section roster sourced from `portal_enrollments` keyed by `course_section_id`.
+ * Includes all current statuses exactly as stored on `portal_enrollments.status`.
+ */
+export async function listPortalEnrollmentRosterBySectionId(
+  sectionId: number,
+): Promise<PortalEnrollmentSectionRosterRepositoryRow[]> {
+  const sid = Math.trunc(Number(sectionId));
+  if (!Number.isFinite(sid) || sid <= 0) return [];
+
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT
+       TRIM(e.student_external_id) AS student_id,
+       NULLIF(TRIM(s.name), '') AS student_name,
+       NULLIF(TRIM(e.status), '') AS enrollment_status,
+       NULLIF(TRIM(e.term), '') AS term,
+       e.year AS year,
+       NULLIF(TRIM(cs.course_code), '') AS course_code,
+       NULLIF(TRIM(cs.section_code), '') AS section_code,
+       NULLIF(TRIM(s.program), '') AS program,
+       NULLIF(TRIM(s.email), '') AS email
+     FROM portal_enrollments e
+     INNER JOIN course_sections cs
+       ON e.course_section_id = cs.id
+     LEFT JOIN students s
+       ON TRIM(s.id) COLLATE utf8mb4_unicode_ci =
+          TRIM(e.student_external_id) COLLATE utf8mb4_unicode_ci
+     WHERE e.course_section_id = ?
+     ORDER BY
+       CASE WHEN s.name IS NULL OR TRIM(s.name) = '' THEN 1 ELSE 0 END ASC,
+       TRIM(s.name) ASC,
+       TRIM(e.student_external_id) ASC`,
+    [sid],
+  );
+
+  return rows
+    .map((row) => ({
+      studentId: String(row.student_id ?? "").trim(),
+      studentName: trimNullableString(row.student_name),
+      enrollmentStatus: trimNullableString(row.enrollment_status),
+      term: trimNullableString(row.term),
+      year: normalizeNullableYear(row.year),
+      courseCode: trimNullableString(row.course_code),
+      sectionCode: trimNullableString(row.section_code),
+      program: trimNullableString(row.program),
+      email: trimNullableString(row.email),
+    }))
+    .filter((row) => row.studentId !== "");
+}
 
 export async function listAdminEnrollmentRowsForSection(
   courseCode: string,
@@ -652,6 +721,138 @@ export type PortalEnrollmentAcademicRow = {
   section_code: string | null;
   schedule_track: string | null;
 };
+
+export type AdminStudentRegistrationTermRow = {
+  term: string;
+  year: number;
+};
+
+export type AdminStudentRegistrationHistoryRow = {
+  courseCode: string;
+  courseTitle: string | null;
+  section: string | null;
+  units: number | null;
+  status: string | null;
+  term: string;
+  year: number;
+};
+
+function portalQuarterOrderSql(termSql: string): string {
+  return `CASE UPPER(TRIM(${termSql}))
+    WHEN 'FALL' THEN 4
+    WHEN 'SUMMER' THEN 3
+    WHEN 'SPRING' THEN 2
+    WHEN 'WINTER' THEN 1
+    ELSE 0
+  END`;
+}
+
+/** Distinct portal enrollment term/year options for one student; newest first. */
+export async function listPortalEnrollmentTermsForStudent(
+  studentExternalId: string,
+): Promise<AdminStudentRegistrationTermRow[]> {
+  const sid = studentExternalId.trim();
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT
+       TRIM(e.term) AS term,
+       e.year AS year
+     FROM portal_enrollments e
+     WHERE e.student_external_id COLLATE utf8mb4_unicode_ci =
+           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+     GROUP BY TRIM(e.term), e.year
+     ORDER BY e.year DESC,
+       ${portalQuarterOrderSql("e.term")} DESC`,
+    [sid],
+  );
+  return rows
+    .map((row) => ({
+      term: String(row.term ?? "").trim(),
+      year: Number(row.year),
+    }))
+    .filter((row) => row.term !== "" && Number.isFinite(row.year));
+}
+
+/** One row per portal enrollment course for one student + term/year. */
+export async function listPortalEnrollmentHistoryForStudentTerm(
+  studentExternalId: string,
+  term: string,
+  year: number,
+): Promise<AdminStudentRegistrationHistoryRow[]> {
+  const sid = studentExternalId.trim();
+  const trimmedTerm = term.trim();
+  const sql = `
+    SELECT
+      TRIM(pc.course_code) AS course_code,
+      NULLIF(TRIM(pc.title), '') AS course_title,
+      COALESCE(
+        NULLIF(TRIM(e.section_code), ''),
+        NULLIF(TRIM(cs_direct.section_code), ''),
+        NULLIF(TRIM(cs_leg.section_code), '')
+      ) AS section_code,
+      pc.units AS units,
+      NULLIF(TRIM(e.status), '') AS enrollment_status,
+      TRIM(e.term) AS term,
+      e.year AS year
+    FROM portal_enrollments e
+    INNER JOIN portal_courses pc
+      ON pc.course_id COLLATE utf8mb4_unicode_ci =
+         e.course_id COLLATE utf8mb4_unicode_ci
+    LEFT JOIN course_sections cs_direct
+      ON e.course_section_id IS NOT NULL
+      AND cs_direct.id = e.course_section_id
+      AND TRIM(cs_direct.term) COLLATE utf8mb4_unicode_ci =
+          TRIM(e.term) COLLATE utf8mb4_unicode_ci
+      AND cs_direct.year = e.year
+    LEFT JOIN course_sections cs_leg
+      ON e.course_section_id IS NULL
+      AND TRIM(cs_leg.course_code) COLLATE utf8mb4_unicode_ci =
+          TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+      AND TRIM(cs_leg.term) COLLATE utf8mb4_unicode_ci =
+          TRIM(e.term) COLLATE utf8mb4_unicode_ci
+      AND cs_leg.year = e.year
+      AND cs_leg.id = (
+        SELECT MIN(cs2.id)
+        FROM course_sections cs2
+        WHERE TRIM(cs2.course_code) COLLATE utf8mb4_unicode_ci =
+              TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+          AND TRIM(cs2.term) COLLATE utf8mb4_unicode_ci =
+              TRIM(e.term) COLLATE utf8mb4_unicode_ci
+          AND cs2.year = e.year
+      )
+    WHERE e.student_external_id COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND TRIM(e.term) COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.year = ?
+    ORDER BY
+      TRIM(pc.course_code) ASC,
+      section_code ASC,
+      e.id ASC
+  `;
+  const [rows] = await pool.query<RowDataPacket[]>(sql, [sid, trimmedTerm, year]);
+  return rows.map((row) => {
+    const unitsRaw = row.units;
+    return {
+      courseCode: String(row.course_code ?? "").trim(),
+      courseTitle:
+        row.course_title == null ? null : String(row.course_title).trim() || null,
+      section:
+        row.section_code == null ? null : String(row.section_code).trim() || null,
+      units:
+        unitsRaw == null || unitsRaw === ""
+          ? null
+          : Number.isFinite(Number(unitsRaw))
+            ? Number(unitsRaw)
+            : null,
+      status:
+        row.enrollment_status == null
+          ? null
+          : String(row.enrollment_status).trim() || null,
+      term: String(row.term ?? "").trim(),
+      year: Number(row.year),
+    };
+  });
+}
 
 /**
  * Latest portal enrollment term/year for a student (same ordering as legacy registration “latest”).

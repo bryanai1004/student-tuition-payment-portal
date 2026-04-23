@@ -145,6 +145,11 @@ export type BillingAdjustmentRecord = {
      * Includes `system_clinical` for automatic clinical slot booking charges.
      */
     adjustmentSource?: BillingAdjustmentSource;
+    /**
+     * From `portal_billing_adjustments.reversal_of_adjustment_id` when present.
+     * Links `system_late_fee_reversal` rows to the original adjustment id.
+     */
+    reversalOfAdjustmentId?: number | null;
 };
 /** Raw rows loaded from MySQL for one student term */
 export type AccountContext = {

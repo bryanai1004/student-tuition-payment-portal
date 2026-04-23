@@ -301,6 +301,23 @@ export type AdminStudentRegistrationHistoryTerm = {
   items: AdminStudentRegistrationHistoryItem[]
 }
 
+export type AdminStudentRegistrationTermOption = {
+  term: string
+  year: number
+  label: string
+}
+
+export type AdminStudentRegistrationHistoryRow = {
+  courseCode: string
+  courseTitle: string | null
+  section: string | null
+  units: number | null
+  status: string | null
+  term: string
+  year: number
+  termLabel: string
+}
+
 /** Same contract as student account `clinicalProgress` (admin detail includes when available). */
 export type ClinicalProgress = {
   level: number
@@ -658,6 +675,76 @@ function parseOptionalRegistrationHistory(
   return out.length > 0 ? out : undefined
 }
 
+function parseAdminStudentRegistrationTermOption(
+  raw: Record<string, unknown>,
+): AdminStudentRegistrationTermOption | null {
+  const termRaw = raw.term
+  const yearRaw = raw.year
+  const labelRaw = raw.label
+  if (typeof termRaw !== 'string' || termRaw.trim() === '') return null
+  const year =
+    typeof yearRaw === 'number' && Number.isFinite(yearRaw)
+      ? Math.trunc(yearRaw)
+      : typeof yearRaw === 'string' && /^\d+$/.test(yearRaw.trim())
+        ? Number.parseInt(yearRaw.trim(), 10)
+        : NaN
+  if (!Number.isFinite(year)) return null
+  const label =
+    typeof labelRaw === 'string' && labelRaw.trim() !== ''
+      ? labelRaw
+      : `${termRaw} ${year}`
+  return { term: termRaw, year, label }
+}
+
+function parseAdminStudentRegistrationHistoryRow(
+  raw: Record<string, unknown>,
+): AdminStudentRegistrationHistoryRow | null {
+  const courseCodeRaw = raw.courseCode ?? raw.course_code
+  const termRaw = raw.term
+  const yearRaw = raw.year
+  if (typeof courseCodeRaw !== 'string' || courseCodeRaw.trim() === '') return null
+  if (typeof termRaw !== 'string' || termRaw.trim() === '') return null
+  const year =
+    typeof yearRaw === 'number' && Number.isFinite(yearRaw)
+      ? Math.trunc(yearRaw)
+      : typeof yearRaw === 'string' && /^\d+$/.test(yearRaw.trim())
+        ? Number.parseInt(yearRaw.trim(), 10)
+        : NaN
+  if (!Number.isFinite(year)) return null
+  const units =
+    typeof raw.units === 'number' && Number.isFinite(raw.units)
+      ? raw.units
+      : typeof raw.units === 'string' && raw.units.trim() !== ''
+        ? Number.isFinite(Number(raw.units))
+          ? Number(raw.units)
+          : null
+        : null
+  const termLabelRaw = raw.termLabel ?? raw.term_label
+  return {
+    courseCode: courseCodeRaw.trim(),
+    courseTitle:
+      typeof raw.courseTitle === 'string'
+        ? raw.courseTitle
+        : typeof raw.course_title === 'string'
+          ? raw.course_title
+          : null,
+    section:
+      typeof raw.section === 'string'
+        ? raw.section
+        : typeof raw.section_code === 'string'
+          ? raw.section_code
+          : null,
+    units,
+    status: typeof raw.status === 'string' ? raw.status : null,
+    term: termRaw.trim(),
+    year,
+    termLabel:
+      typeof termLabelRaw === 'string' && termLabelRaw.trim() !== ''
+        ? termLabelRaw
+        : `${termRaw} ${year}`,
+  }
+}
+
 function parseAdminStudentListRow(o: Record<string, unknown>): AdminStudentListItem {
   if (typeof o.studentId !== 'string' || typeof o.name !== 'string') {
     throw new Error('Unexpected admin students response')
@@ -864,6 +951,75 @@ export async function fetchAdminStudentDetail(
   const path = `/api/admin/students/${encodeURIComponent(studentId)}`
   const data = await fetchApiJson(path, { signal: options?.signal })
   return parseAdminStudentDetailPayload(data)
+}
+
+export async function fetchAdminStudentRegistrationTerms(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<AdminStudentRegistrationTermOption[]> {
+  const path = `/api/admin/students/${encodeURIComponent(studentId)}/registration-terms`
+  const data = await fetchApiJson(path, { signal: options?.signal })
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected registration terms response')
+  }
+  const rawTerms = (data as Record<string, unknown>).terms
+  if (!Array.isArray(rawTerms)) return []
+  const out: AdminStudentRegistrationTermOption[] = []
+  for (const row of rawTerms) {
+    if (row == null || typeof row !== 'object') continue
+    const parsed = parseAdminStudentRegistrationTermOption(
+      row as Record<string, unknown>,
+    )
+    if (parsed) out.push(parsed)
+  }
+  return out
+}
+
+export async function fetchAdminStudentRegistrationHistory(
+  studentId: string,
+  params: { term: string; year: number; signal?: AbortSignal },
+): Promise<AdminStudentRegistrationHistoryRow[]> {
+  const query = new URLSearchParams()
+  query.set('term', params.term)
+  query.set('year', String(Math.trunc(params.year)))
+  const path = `/api/admin/students/${encodeURIComponent(studentId)}/registration-history?${query.toString()}`
+  const data = await fetchApiJson(path, { signal: params.signal })
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected registration history response')
+  }
+  const rawItems = (data as Record<string, unknown>).items
+  if (!Array.isArray(rawItems)) return []
+  const out: AdminStudentRegistrationHistoryRow[] = []
+  for (const row of rawItems) {
+    if (row == null || typeof row !== 'object') continue
+    const parsed = parseAdminStudentRegistrationHistoryRow(
+      row as Record<string, unknown>,
+    )
+    if (parsed) out.push(parsed)
+  }
+  return out
+}
+
+export async function fetchAdminStudentAcademicRecords(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<StudentAcademicsResponse> {
+  const path = `/api/admin/students/${encodeURIComponent(studentId)}/academic-records`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  return parseStudentAcademicsResponse(data)
+}
+
+/** GET /api/admin/students/:studentId/clinical-progress */
+export async function fetchAdminStudentClinicalProgress(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<StudentClinicalProgressResponse> {
+  const path = `/api/admin/students/${encodeURIComponent(studentId)}/clinical-progress`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  if (!isStudentClinicalProgressResponse(data)) {
+    throw new Error('Unexpected admin clinical progress response')
+  }
+  return data
 }
 
 export async function updateAdminStudent(
@@ -2109,12 +2265,7 @@ export type StudentAcademicsResponse = {
   courseRecords: StudentAcademicCourseRecord[]
 }
 
-export async function fetchStudentAcademics(
-  studentId: string,
-  options?: { signal?: AbortSignal },
-): Promise<StudentAcademicsResponse> {
-  const path = `/api/students/${encodeURIComponent(studentId)}/academics`
-  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+function parseStudentAcademicsResponse(data: unknown): StudentAcademicsResponse {
   if (data == null || typeof data !== 'object') {
     throw new Error('Unexpected student academics response')
   }
@@ -2140,6 +2291,15 @@ export async function fetchStudentAcademics(
     throw new Error('Unexpected student academics response')
   }
   return data as StudentAcademicsResponse
+}
+
+export async function fetchStudentAcademics(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<StudentAcademicsResponse> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/academics`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  return parseStudentAcademicsResponse(data)
 }
 
 /** GET /api/students/:studentId/clinical-schedule — JSON array of assignment rows. */
@@ -4916,6 +5076,77 @@ export async function fetchAdminCourseSections(params: {
     { signal: params.signal },
   )) as unknown
   return parseAdminCourseSectionList(data)
+}
+
+export type AdminSectionRosterItem = {
+  studentId: string
+  studentName: string
+  enrollmentStatus: string | null
+  courseCode: string | null
+  sectionCode: string | null
+  term: string | null
+  year: number | null
+  program: string | null
+  email: string | null
+}
+
+function parseAdminSectionRosterResponse(data: unknown): AdminSectionRosterItem[] {
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected admin section roster response')
+  }
+  const rows: AdminSectionRosterItem[] = []
+  for (const item of data) {
+    if (item == null || typeof item !== 'object') continue
+    const r = item as Record<string, unknown>
+    const sid = r.studentId ?? r.student_id
+    if (typeof sid !== 'string' || sid.trim() === '') continue
+    const yearRaw = r.year
+    rows.push({
+      studentId: sid.trim(),
+      studentName:
+        typeof r.studentName === 'string' && r.studentName.trim() !== ''
+          ? r.studentName.trim()
+          : sid.trim(),
+      enrollmentStatus:
+        typeof r.enrollmentStatus === 'string' && r.enrollmentStatus.trim() !== ''
+          ? r.enrollmentStatus.trim()
+          : null,
+      courseCode:
+        typeof r.courseCode === 'string' && r.courseCode.trim() !== ''
+          ? r.courseCode.trim()
+          : null,
+      sectionCode:
+        typeof r.sectionCode === 'string' && r.sectionCode.trim() !== ''
+          ? r.sectionCode.trim()
+          : null,
+      term: typeof r.term === 'string' && r.term.trim() !== '' ? r.term.trim() : null,
+      year:
+        yearRaw == null || yearRaw === '' || !Number.isFinite(Number(yearRaw))
+          ? null
+          : Math.trunc(Number(yearRaw)),
+      program:
+        typeof r.program === 'string' && r.program.trim() !== ''
+          ? r.program.trim()
+          : null,
+      email:
+        typeof r.email === 'string' && r.email.trim() !== ''
+          ? r.email.trim()
+          : null,
+    })
+  }
+  return rows
+}
+
+export async function fetchAdminSectionRoster(
+  sectionId: number,
+  options?: { signal?: AbortSignal },
+): Promise<AdminSectionRosterItem[]> {
+  if (!Number.isFinite(sectionId) || !Number.isInteger(sectionId) || sectionId <= 0) {
+    throw new Error('Invalid section id.')
+  }
+  const path = `/api/admin/sections/${encodeURIComponent(String(Math.trunc(sectionId)))}/roster`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  return parseAdminSectionRosterResponse(data)
 }
 
 /** GET /api/admin/course-sections/enrollments — portal roster (all statuses) for View students modal. */

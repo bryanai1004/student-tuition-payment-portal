@@ -22,6 +22,10 @@ import {
   loadLegacyStudentProfileRow,
   updateLegacyStudentMasterRow,
 } from "../repositories/studentLegacyAccountRepository.js";
+import {
+  listPortalEnrollmentHistoryForStudentTerm,
+  listPortalEnrollmentTermsForStudent,
+} from "../repositories/studentEnrollmentRepository.js";
 import type {
   AdminDivision,
   AdminStudentClinicalProgressSummary,
@@ -29,6 +33,8 @@ import type {
   AdminStudentCreateLoaBody,
   AdminStudentDetail,
   AdminStudentEnrollmentFilterOptions,
+  AdminStudentRegistrationHistoryItem,
+  AdminStudentRegistrationTerm,
   AdminStudentListItem,
   AdminStudentLoaTermOption,
   AdminStudentLoaSummary,
@@ -97,6 +103,14 @@ function formatLatestRegistrationTerm(
       ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase()
       : t;
   return `${norm} ${yearN}`;
+}
+
+function formatAdminRegistrationTermLabel(termRaw: unknown, yearRaw: unknown): string {
+  const term = str(termRaw);
+  const year = Number(yearRaw);
+  if (term === "" || !Number.isFinite(year)) return "";
+  const normalized = `${term.charAt(0).toUpperCase()}${term.slice(1).toLowerCase()}`;
+  return `${normalized} ${Math.trunc(year)}`;
 }
 
 function requirementsIdToApi(v: unknown): string | null {
@@ -602,6 +616,45 @@ export async function getAdminStudentDetail(
     console.error("[admin] buildClinicalProgress failed", studentId, e);
     return base;
   }
+}
+
+export async function listAdminStudentRegistrationTerms(
+  studentIdRaw: string,
+): Promise<AdminStudentRegistrationTerm[]> {
+  const studentId = studentIdRaw.trim();
+  if (studentId === "") return [];
+  const rows = await listPortalEnrollmentTermsForStudent(studentId);
+  return rows.map((row) => ({
+    term: row.term,
+    year: Math.trunc(row.year),
+    label: formatAdminRegistrationTermLabel(row.term, row.year),
+  }));
+}
+
+export async function listAdminStudentRegistrationHistoryForTerm(
+  studentIdRaw: string,
+  termRaw: string,
+  yearRaw: number,
+): Promise<AdminStudentRegistrationHistoryItem[]> {
+  const studentId = studentIdRaw.trim();
+  const term = termRaw.trim();
+  const year = Math.trunc(yearRaw);
+  if (studentId === "" || term === "" || !Number.isFinite(year)) return [];
+  const rows = await listPortalEnrollmentHistoryForStudentTerm(
+    studentId,
+    term,
+    year,
+  );
+  return rows.map((row) => ({
+    courseCode: row.courseCode,
+    courseTitle: row.courseTitle,
+    section: row.section,
+    units: row.units,
+    status: row.status,
+    term: row.term,
+    year: Math.trunc(row.year),
+    termLabel: formatAdminRegistrationTermLabel(row.term, row.year),
+  }));
 }
 
 export type AdminStudentCreateLoaResult =

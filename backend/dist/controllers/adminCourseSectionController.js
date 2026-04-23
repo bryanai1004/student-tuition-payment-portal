@@ -3,7 +3,7 @@ import { getAcademicTermById } from "../repositories/academicTermRepository.js";
 import { listAdminEnrollmentRowsForSection } from "../repositories/studentEnrollmentRepository.js";
 import { buildFeedbackCsvForSection } from "../services/adminExportFeedbackCsvService.js";
 import { buildRegisteredStudentsCsvForSection } from "../services/adminExportRegisteredStudentsCsvService.js";
-import { createCourseSectionWithAcademicTermId, deleteCourseSection, InvalidAcademicTermError, listAllCourseSectionsByAcademicTermId, listCourseSectionsByAcademicTermId, updateCourseSectionWithAcademicTermId, } from "../services/courseSectionService.js";
+import { createCourseSectionWithAcademicTermId, deleteCourseSection, getSectionRoster, InvalidAcademicTermError, listAllCourseSectionsByAcademicTermId, listCourseSectionsByAcademicTermId, updateCourseSectionWithAcademicTermId, } from "../services/courseSectionService.js";
 import { resolveCourseMeta } from "../services/resolveCourseMetaService.js";
 function devMessage(e) {
     return e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
@@ -189,6 +189,26 @@ export async function getAdminCourseSectionEnrollments(req, res) {
         if (env.nodeEnv === "development")
             body.message = devMessage(e);
         res.status(500).json(body);
+    }
+}
+/**
+ * GET /api/admin/sections/:sectionId/roster
+ * Current section membership from `portal_enrollments` keyed by `course_section_id`.
+ */
+export async function getAdminCourseSectionRosterHandler(req, res) {
+    const rawSectionId = req.params.sectionId;
+    const sectionId = Number(rawSectionId);
+    if (!Number.isFinite(sectionId) || !Number.isInteger(sectionId) || sectionId <= 0) {
+        res.status(400).json({ error: "Invalid section id." });
+        return;
+    }
+    try {
+        const roster = await getSectionRoster(sectionId);
+        res.json(roster);
+    }
+    catch (e) {
+        console.error("[admin/sections/:sectionId/roster] list failed:", e);
+        res.status(500).json({ error: "Failed to load section roster." });
     }
 }
 /**

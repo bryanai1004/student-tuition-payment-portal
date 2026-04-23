@@ -60,6 +60,21 @@ export type AdminStudentLoaSummary = {
     plannedReturnTerm: string | null;
     reason: string | null;
 };
+export type AdminStudentRegistrationTerm = {
+    term: string;
+    year: number;
+    label: string;
+};
+export type AdminStudentRegistrationHistoryItem = {
+    courseCode: string;
+    courseTitle: string | null;
+    section: string | null;
+    units: number | null;
+    status: string | null;
+    term: string;
+    year: number;
+    termLabel: string;
+};
 /**
  * GET /api/admin/students — paginated roster payload (`items` is one page only).
  * Query: `page`, `pageSize`, `search`, optional `clinicalSummary`.

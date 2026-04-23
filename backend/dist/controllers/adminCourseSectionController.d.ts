@@ -11,6 +11,11 @@ export declare function getAdminCourseSections(req: Request, res: Response): Pro
  */
 export declare function getAdminCourseSectionEnrollments(req: Request, res: Response): Promise<void>;
 /**
+ * GET /api/admin/sections/:sectionId/roster
+ * Current section membership from `portal_enrollments` keyed by `course_section_id`.
+ */
+export declare function getAdminCourseSectionRosterHandler(req: Request, res: Response): Promise<void>;
+/**
  * GET /api/admin/course-sections/:id/export-registered-students.csv
  * UTF-8 CSV with BOM for Excel; roster is course+term+year (see adminExportRegisteredStudentsCsvService).
  */

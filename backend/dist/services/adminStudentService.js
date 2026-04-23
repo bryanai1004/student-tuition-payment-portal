@@ -1,5 +1,6 @@
 import { pool } from "../lib/db.js";
 import { createLegacyStudentLoaRow, createLegacyStudentMasterRow, createLegacyStudentPasswordRow, deleteLegacyStudentMasterRow, deleteLegacyStudentPasswordRow, findLatestLegacyStudentLoaRow, findLatestLegacyTermYear, getNextLegacyStudentId, hasLegacyStudentAccounting, hasLegacyStudentMarks, hasLegacyStudentRegistration, legacyStudentMasterExists, legacyStudentPasswordRowExists, countLegacyAdminStudentListRows, listLegacyAdminStudentLoaTermFacetRows, listLegacyAdminStudentEnrollmentFacetRows, listLegacyAdminStudentListRows, listLegacyAdminStudentListRowsPage, listLegacyAdminStudentListRowsByStudentIds, loadLegacyStudentProfileRow, updateLegacyStudentMasterRow, } from "../repositories/studentLegacyAccountRepository.js";
+import { listPortalEnrollmentHistoryForStudentTerm, listPortalEnrollmentTermsForStudent, } from "../repositories/studentEnrollmentRepository.js";
 import { combineAddressLine, legacyDbDateToIso, resolveEnrollmentDate, } from "./studentProfileService.js";
 import { batchBuildClinicalProgressForStudentIds, buildClinicalProgress, } from "./clinicalProgressService.js";
 import { getAdminStudentIntakeLabel, parseAdminStudentEnrollmentInfo, } from "./adminStudentEnrollmentMetadata.js";
@@ -37,6 +38,14 @@ function formatLatestRegistrationTerm(termRaw, yearRaw) {
         ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase()
         : t;
     return `${norm} ${yearN}`;
+}
+function formatAdminRegistrationTermLabel(termRaw, yearRaw) {
+    const term = str(termRaw);
+    const year = Number(yearRaw);
+    if (term === "" || !Number.isFinite(year))
+        return "";
+    const normalized = `${term.charAt(0).toUpperCase()}${term.slice(1).toLowerCase()}`;
+    return `${normalized} ${Math.trunc(year)}`;
 }
 function requirementsIdToApi(v) {
     if (v == null || v === "")
@@ -424,6 +433,35 @@ export async function getAdminStudentDetail(studentIdRaw) {
         console.error("[admin] buildClinicalProgress failed", studentId, e);
         return base;
     }
+}
+export async function listAdminStudentRegistrationTerms(studentIdRaw) {
+    const studentId = studentIdRaw.trim();
+    if (studentId === "")
+        return [];
+    const rows = await listPortalEnrollmentTermsForStudent(studentId);
+    return rows.map((row) => ({
+        term: row.term,
+        year: Math.trunc(row.year),
+        label: formatAdminRegistrationTermLabel(row.term, row.year),
+    }));
+}
+export async function listAdminStudentRegistrationHistoryForTerm(studentIdRaw, termRaw, yearRaw) {
+    const studentId = studentIdRaw.trim();
+    const term = termRaw.trim();
+    const year = Math.trunc(yearRaw);
+    if (studentId === "" || term === "" || !Number.isFinite(year))
+        return [];
+    const rows = await listPortalEnrollmentHistoryForStudentTerm(studentId, term, year);
+    return rows.map((row) => ({
+        courseCode: row.courseCode,
+        courseTitle: row.courseTitle,
+        section: row.section,
+        units: row.units,
+        status: row.status,
+        term: row.term,
+        year: Math.trunc(row.year),
+        termLabel: formatAdminRegistrationTermLabel(row.term, row.year),
+    }));
 }
 export async function createAdminStudentLoa(studentIdRaw, body) {
     const studentId = studentIdRaw.trim();

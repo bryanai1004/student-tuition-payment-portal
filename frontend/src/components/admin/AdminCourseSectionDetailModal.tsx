@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   downloadAdminRegisteredStudentsCsv,
+  fetchAdminSectionRoster,
   type AdminCourseSection,
+  type AdminSectionRosterItem,
 } from '../../lib/api'
+import { socket, type EnrollmentChangedEvent } from '../../lib/socket'
 import { adminSchedulingQueryString } from '../../lib/adminSchedulingSearchParams'
 import {
   getPreferredCourseTitle,
@@ -51,11 +54,62 @@ export function AdminCourseSectionDetailModal({
 }: Props) {
   const [csvExporting, setCsvExporting] = useState(false)
   const [csvExportError, setCsvExportError] = useState<string | null>(null)
+  const [rosterLoading, setRosterLoading] = useState(false)
+  const [rosterError, setRosterError] = useState<string | null>(null)
+  const [rosterRows, setRosterRows] = useState<AdminSectionRosterItem[]>([])
+
+  const loadRoster = useCallback(
+    async (sectionId: number, signal?: AbortSignal) => {
+      setRosterLoading(true)
+      setRosterError(null)
+      try {
+        const rows = await fetchAdminSectionRoster(sectionId, { signal })
+        if (signal?.aborted) return
+        setRosterRows(rows)
+      } catch (e) {
+        if (signal?.aborted) return
+        setRosterRows([])
+        setRosterError(
+          e instanceof Error ? e.message : 'Failed to load section roster.',
+        )
+      } finally {
+        if (!signal?.aborted) setRosterLoading(false)
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
     setCsvExportError(null)
     setCsvExporting(false)
   }, [section?.id])
+
+  useEffect(() => {
+    if (section == null) {
+      setRosterRows([])
+      setRosterError(null)
+      setRosterLoading(false)
+      return
+    }
+    const ac = new AbortController()
+    void loadRoster(section.id, ac.signal)
+    return () => ac.abort()
+  }, [section?.id, loadRoster])
+
+  useEffect(() => {
+    if (section == null) return
+    const currentSectionId = section.id
+    const handleEnrollmentChanged = (event: EnrollmentChangedEvent) => {
+      if (event.type !== 'enrollment.changed') return
+      if (event.sectionId !== currentSectionId) return
+      void loadRoster(currentSectionId)
+    }
+    socket.connect()
+    socket.on('enrollment.changed', handleEnrollmentChanged)
+    return () => {
+      socket.off('enrollment.changed', handleEnrollmentChanged)
+    }
+  }, [section?.id, loadRoster])
 
   if (section == null) return null
 
@@ -134,6 +188,47 @@ export function AdminCourseSectionDetailModal({
           {row('Instructor', section.instructor?.trim() ? section.instructor : '—')}
           {row('Notes', section.notes?.trim() ? section.notes : '—')}
         </dl>
+        {rosterError != null ? (
+          <p className="portal-card-note portal-profile-state--error" role="alert">
+            {rosterError}
+          </p>
+        ) : null}
+        {rosterLoading ? (
+          <p className="portal-text-muted" role="status" aria-live="polite">
+            Loading roster…
+          </p>
+        ) : rosterRows.length === 0 ? (
+          <p className="portal-text-muted">
+            No students are currently registered in this section.
+          </p>
+        ) : (
+          <div className="portal-table-wrap admin-table-wrap" style={{ marginTop: '0.75rem' }}>
+            <table className="portal-table">
+              <thead>
+                <tr>
+                  <th scope="col">Student ID</th>
+                  <th scope="col">Student name</th>
+                  <th scope="col">Enrollment status</th>
+                  <th scope="col">Program</th>
+                  <th scope="col">Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rosterRows.map((item) => (
+                  <tr key={item.studentId}>
+                    <td>
+                      <code className="admin-code">{item.studentId}</code>
+                    </td>
+                    <td>{item.studentName}</td>
+                    <td>{item.enrollmentStatus ?? '—'}</td>
+                    <td>{item.program ?? '—'}</td>
+                    <td>{item.email ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         {csvExportError != null ? (
           <p
             className="portal-card-note portal-profile-state--error"

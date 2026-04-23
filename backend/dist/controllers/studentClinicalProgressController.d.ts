@@ -6,4 +6,11 @@ import type { Request, Response } from "express";
  * Fixed five-row exam history from legacy `marks` (CL% codes), matching the transcript source.
  */
 export declare function getStudentClinicalProgressHandler(req: Request, res: Response): Promise<void>;
+/**
+ * GET /api/admin/students/:studentId/clinical-progress
+ *
+ * Admin read-only clinical progress for one student.
+ * Reuses the exact same clinic/marks pipeline as the student endpoint.
+ */
+export declare function getAdminStudentClinicalProgressHandler(req: Request, res: Response): Promise<void>;
 //# sourceMappingURL=studentClinicalProgressController.d.ts.map

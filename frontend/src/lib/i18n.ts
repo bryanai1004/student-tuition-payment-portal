@@ -334,7 +334,7 @@ export const STUDENT_PORTAL_EN = {
   removeAttachmentNamed: 'Remove',
   poweredByAhmc: 'Powered by AHMC WanPanel AI',
   'aiAssist.disclaimer':
-    'Disclaimer: This AI assistant provides general information only and may make mistakes. Responses do not constitute official academic or administrative advice from AMU.',
+    'This AI assistant provides general information only and may make mistakes. Responses do not constitute official academic or administrative advice from AMU.',
   messageToAmuAssistant: 'Message to AMU AI Assistant',
   askAQuestionPlaceholder: 'Ask a question…',
   sendMessage: 'Send message',
@@ -1695,7 +1695,7 @@ const STUDENT_PORTAL_ZH: Record<StudentPortalKey, string> = {
   removeAttachmentNamed: '移除',
   poweredByAhmc: '由 AHMC WanPanel AI 提供技術支援',
   'aiAssist.disclaimer':
-    '免責聲明：本 AI 助手僅提供一般資訊，可能存在錯誤。回覆內容不構成 AMU 官方學術或行政意見。',
+    '本 AI 助手僅提供一般資訊，可能存在錯誤。回覆內容不構成 AMU 官方學術或行政意見。',
   messageToAmuAssistant: '傳送訊息給 AMU AI 助理',
   askAQuestionPlaceholder: '提出問題…',
   sendMessage: '送出訊息',

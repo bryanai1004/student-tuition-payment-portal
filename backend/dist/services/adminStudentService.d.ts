@@ -1,4 +1,4 @@
-import type { AdminStudentCreateBody, AdminStudentCreateLoaBody, AdminStudentDetail, AdminStudentEnrollmentFilterOptions, AdminStudentListItem, AdminStudentRosterLoaFilter, AdminStudentRosterProgramFilter, AdminStudentRosterTrackFilter, AdminStudentUpdateBody } from "../types/adminStudent.js";
+import type { AdminStudentCreateBody, AdminStudentCreateLoaBody, AdminStudentDetail, AdminStudentEnrollmentFilterOptions, AdminStudentRegistrationHistoryItem, AdminStudentRegistrationTerm, AdminStudentListItem, AdminStudentRosterLoaFilter, AdminStudentRosterProgramFilter, AdminStudentRosterTrackFilter, AdminStudentUpdateBody } from "../types/adminStudent.js";
 export type AdminStudentListPageResult = {
     items: AdminStudentListItem[];
     total: number;
@@ -43,6 +43,8 @@ export type BuildAdminStudentsCsvResult = {
 };
 export declare function buildAdminStudentsCsv(input: BuildAdminStudentsCsvInput): Promise<BuildAdminStudentsCsvResult>;
 export declare function getAdminStudentDetail(studentIdRaw: string): Promise<AdminStudentDetail | null>;
+export declare function listAdminStudentRegistrationTerms(studentIdRaw: string): Promise<AdminStudentRegistrationTerm[]>;
+export declare function listAdminStudentRegistrationHistoryForTerm(studentIdRaw: string, termRaw: string, yearRaw: number): Promise<AdminStudentRegistrationHistoryItem[]>;
 export type AdminStudentCreateLoaResult = {
     ok: true;
     detail: AdminStudentDetail;

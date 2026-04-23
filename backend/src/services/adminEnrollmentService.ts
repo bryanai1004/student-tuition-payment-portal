@@ -3,6 +3,7 @@ import {
   deletePortalEnrollmentByStudentCourseTermYear,
   softWithdrawPortalEnrollmentByCourseSection,
 } from "../repositories/studentEnrollmentRepository.js";
+import { emitEnrollmentChanged } from "./realtimeEventBus.js";
 
 export async function removeAdminPortalEnrollment(params: {
   studentId: string;
@@ -54,6 +55,14 @@ export async function removeAdminPortalEnrollment(params: {
       ok: false,
       error: "course_section_id or course_code is required.",
     };
+  }
+
+  if (removedCount > 0) {
+    emitEnrollmentChanged({
+      studentId: sid,
+      sectionId: Number.isFinite(csid) && csid > 0 ? csid : null,
+      action: "dropped",
+    });
   }
 
   return { ok: true, removedCount };

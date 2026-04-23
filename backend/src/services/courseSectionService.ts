@@ -10,6 +10,7 @@ import {
   type CourseSectionTermFilter,
   type CourseSectionUpdateInput,
 } from "../repositories/courseSectionRepository.js";
+import { listPortalEnrollmentRosterBySectionId } from "../repositories/studentEnrollmentRepository.js";
 
 export type {
   CourseSectionCreateInput,
@@ -63,6 +64,18 @@ export type CourseSectionCreateWithTermIdInput = Omit<
   "term" | "year"
 >;
 
+export type SectionRosterItem = {
+  studentId: string;
+  studentName: string;
+  enrollmentStatus: string | null;
+  courseCode: string | null;
+  sectionCode: string | null;
+  term: string | null;
+  year: number | null;
+  program: string | null;
+  email: string | null;
+};
+
 export async function createCourseSectionWithAcademicTermId(
   academicTermId: string,
   input: CourseSectionCreateWithTermIdInput,
@@ -110,4 +123,26 @@ export async function updateCourseSection(
 
 export async function deleteCourseSection(id: number): Promise<boolean> {
   return deleteCourseSectionById(id);
+}
+
+export async function getSectionRoster(
+  sectionId: number,
+): Promise<SectionRosterItem[]> {
+  const normalizedSectionId = Math.trunc(Number(sectionId));
+  if (!Number.isFinite(normalizedSectionId) || normalizedSectionId <= 0) {
+    throw new Error("INVALID_SECTION_ID");
+  }
+
+  const rows = await listPortalEnrollmentRosterBySectionId(normalizedSectionId);
+  return rows.map((row) => ({
+    studentId: row.studentId,
+    studentName: row.studentName ?? row.studentId,
+    enrollmentStatus: row.enrollmentStatus,
+    courseCode: row.courseCode,
+    sectionCode: row.sectionCode,
+    term: row.term,
+    year: row.year,
+    program: row.program,
+    email: row.email,
+  }));
 }

@@ -1,5 +1,6 @@
 import { getAcademicTermById } from "../repositories/academicTermRepository.js";
 import { createCourseSection as insertCourseSection, deleteCourseSectionById, listCourseSectionsByCourseCode, listCourseSectionsWithEnrollmentAggregates, updateCourseSection as patchCourseSection, } from "../repositories/courseSectionRepository.js";
+import { listPortalEnrollmentRosterBySectionId } from "../repositories/studentEnrollmentRepository.js";
 /** Thrown when `academic_term_id` does not match a row in `academic_terms`. */
 export class InvalidAcademicTermError extends Error {
     name = "InvalidAcademicTermError";
@@ -62,5 +63,23 @@ export async function updateCourseSection(id, patch) {
 }
 export async function deleteCourseSection(id) {
     return deleteCourseSectionById(id);
+}
+export async function getSectionRoster(sectionId) {
+    const normalizedSectionId = Math.trunc(Number(sectionId));
+    if (!Number.isFinite(normalizedSectionId) || normalizedSectionId <= 0) {
+        throw new Error("INVALID_SECTION_ID");
+    }
+    const rows = await listPortalEnrollmentRosterBySectionId(normalizedSectionId);
+    return rows.map((row) => ({
+        studentId: row.studentId,
+        studentName: row.studentName ?? row.studentId,
+        enrollmentStatus: row.enrollmentStatus,
+        courseCode: row.courseCode,
+        sectionCode: row.sectionCode,
+        term: row.term,
+        year: row.year,
+        program: row.program,
+        email: row.email,
+    }));
 }
 //# sourceMappingURL=courseSectionService.js.map

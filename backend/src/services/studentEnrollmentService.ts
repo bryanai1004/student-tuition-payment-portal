@@ -14,6 +14,7 @@ import {
 import { InvalidAcademicTermError } from "./courseSectionService.js";
 import { getStudentQuarterBalance } from "./studentLedgerService.js";
 import { isPastSchoolLocalDueDate } from "../lib/schoolLocalDate.js";
+import { emitEnrollmentChanged } from "./realtimeEventBus.js";
 
 export type { EnrollSectionInput };
 
@@ -176,7 +177,23 @@ export async function enrollStudentForAcademicTerm(
     return validation;
   }
 
-  return enrollStudentInSections(studentId, row.term_name, row.year, sections, {
-    resolvedSections: validation.resolvedSections,
-  });
+  const result = await enrollStudentInSections(
+    studentId,
+    row.term_name,
+    row.year,
+    sections,
+    {
+      resolvedSections: validation.resolvedSections,
+    },
+  );
+  if (result.ok && result.insertedCount > 0) {
+    for (const section of validation.resolvedSections) {
+      emitEnrollmentChanged({
+        studentId,
+        sectionId: section.course_section_id,
+        action: "registered",
+      });
+    }
+  }
+  return result;
 }

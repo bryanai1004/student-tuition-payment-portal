@@ -68,6 +68,22 @@ export type AdminSectionEnrollmentRepositoryRow = {
     grade: string | null;
     withdrawn_at: string | null;
 };
+export type PortalEnrollmentSectionRosterRepositoryRow = {
+    studentId: string;
+    studentName: string | null;
+    enrollmentStatus: string | null;
+    term: string | null;
+    year: number | null;
+    courseCode: string | null;
+    sectionCode: string | null;
+    program: string | null;
+    email: string | null;
+};
+/**
+ * Current section roster sourced from `portal_enrollments` keyed by `course_section_id`.
+ * Includes all current statuses exactly as stored on `portal_enrollments.status`.
+ */
+export declare function listPortalEnrollmentRosterBySectionId(sectionId: number): Promise<PortalEnrollmentSectionRosterRepositoryRow[]>;
 export declare function listAdminEnrollmentRowsForSection(courseCode: string, term: string, year: number, options?: {
     courseSectionId?: number | null;
 }): Promise<AdminSectionEnrollmentRepositoryRow[]>;
@@ -88,6 +104,23 @@ export type PortalEnrollmentAcademicRow = {
     section_code: string | null;
     schedule_track: string | null;
 };
+export type AdminStudentRegistrationTermRow = {
+    term: string;
+    year: number;
+};
+export type AdminStudentRegistrationHistoryRow = {
+    courseCode: string;
+    courseTitle: string | null;
+    section: string | null;
+    units: number | null;
+    status: string | null;
+    term: string;
+    year: number;
+};
+/** Distinct portal enrollment term/year options for one student; newest first. */
+export declare function listPortalEnrollmentTermsForStudent(studentExternalId: string): Promise<AdminStudentRegistrationTermRow[]>;
+/** One row per portal enrollment course for one student + term/year. */
+export declare function listPortalEnrollmentHistoryForStudentTerm(studentExternalId: string, term: string, year: number): Promise<AdminStudentRegistrationHistoryRow[]>;
 /**
  * Latest portal enrollment term/year for a student (same ordering as legacy registration “latest”).
  */

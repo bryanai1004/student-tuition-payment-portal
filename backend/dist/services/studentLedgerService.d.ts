@@ -1,3 +1,4 @@
+import type { BillingAdjustmentSource } from "../types/studentAccount.js";
 export type LedgerQuarterOption = {
     term: string;
     year: number;
@@ -24,6 +25,10 @@ export type LedgerRowDto = {
     isEditable: boolean;
     isDeletable: boolean;
     clinicalBookingPaymentHold?: LedgerClinicalBookingPaymentHoldDto | null;
+    /** From `portal_billing_adjustments` when the row was synthesized from that table. */
+    billingAdjustmentSource?: BillingAdjustmentSource;
+    /** Populated for `system_late_fee_reversal` when `reversal_of_adjustment_id` exists. */
+    reversalOfAdjustmentId?: number | null;
 };
 export type LedgerSummaryDto = {
     totalCharges: number;
@@ -42,6 +47,11 @@ export type AccountingLedgerPayloadOptions = {
     skipExpiredClinicalBookingReconciliation?: boolean;
     /** Internal recursion guard and read-only contexts that must not mutate ledger rows. */
     skipLateFeeEvaluation?: boolean;
+    /**
+     * Student portal only: omit fully reversed system late fee pairs and, when the quarter
+     * payment DDL is not yet in effect, all system late fee / reversal lines from rows + summary.
+     */
+    studentPortalLedgerPresentation?: boolean;
 };
 export declare function getAccountingLedgerPayload(studentId: string, term: string, year: number, options?: AccountingLedgerPayloadOptions): Promise<{
     studentId: string;

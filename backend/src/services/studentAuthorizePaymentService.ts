@@ -213,6 +213,7 @@ function summarizeTermChargesFromLedger(
     debit: number;
     credit: number;
     sourceType?: string;
+    billingAdjustmentSource?: string;
   }>,
 ): {
   chargeTotals: Record<PaymentChargeType, number>;
@@ -265,7 +266,14 @@ function summarizeTermChargesFromLedger(
     }
     if (credit > 0) {
       totalCredits = roundToMoney(totalCredits + credit);
-      const inferred = inferPaymentChargeTypeFromMemo(memo);
+      let inferred = inferPaymentChargeTypeFromMemo(memo);
+      if (
+        inferred == null &&
+        String(row.billingAdjustmentSource ?? "").trim() ===
+          "system_late_fee_reversal"
+      ) {
+        inferred = "late_fee";
+      }
       if (inferred != null) {
         paymentTotals[inferred] = roundToMoney(paymentTotals[inferred] + credit);
       }
@@ -379,7 +387,12 @@ async function buildCurrentTermBillingSummary(args: {
   year: number;
   paymentDeadline: string | null;
 }): Promise<CurrentTermBillingSummary> {
-  const ledger = await getAccountingLedgerPayload(args.studentId, args.term, args.year);
+  const ledger = await getAccountingLedgerPayload(
+    args.studentId,
+    args.term,
+    args.year,
+    { studentPortalLedgerPresentation: true },
+  );
   const rows = ledger?.rows ?? [];
   const summarized = summarizeTermChargesFromLedger(rows);
   const paid = distributeUnassignedPayments(
