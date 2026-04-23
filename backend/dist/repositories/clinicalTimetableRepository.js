@@ -150,7 +150,7 @@ export async function listClinicTimetableSlotsForAdmin(options) {
                     THEN 1 ELSE 0 END
                 ) AS ball
            FROM clinical_enrollments ce
-          WHERE LOWER(TRIM(ce.status)) <> 'dropped'
+          WHERE LOWER(TRIM(ce.status)) = 'enrolled'
           GROUP BY ce.timetable_id
        ) ce_cnt ON ce_cnt.timetable_id = ct.seqNum
       WHERE 1=1
@@ -384,7 +384,7 @@ export async function countClinicTimetableReferences(seqNum) {
         (SELECT COUNT(*)
            FROM clinical_enrollments
           WHERE timetable_id = ?
-            AND LOWER(TRIM(status)) <> 'dropped') AS active_enrollments,
+            AND LOWER(TRIM(status)) = 'enrolled') AS active_enrollments,
         (SELECT COUNT(*)
            FROM clinical_enrollments
           WHERE timetable_id = ?

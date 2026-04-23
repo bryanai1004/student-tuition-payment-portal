@@ -1,102 +1,76 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import dotenv from 'dotenv';
-import { CHAT_MODEL, EMBEDDING_MODEL, client } from '../src/config/openai.js';
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import dotenv from "dotenv";
+import {
+  CHAT_MODEL,
+  assertChatModelForCompletions,
+  client,
+  createOpenAiEmbeddingVectors,
+} from "../src/config/openai.js";
+import {
+  buildRetrievalQueryVariants,
+  detectCatalogProgramHint,
+  rankCatalogChunksByEmbeddingMaxWithHint,
+  selectCatalogChunksForContext,
+} from "../src/lib/catalogRetrieval.js";
+import {
+  cosineSimilarity,
+  loadKnowledgeChunks,
+  type KnowledgeChunkRow,
+} from "../src/lib/ragKnowledge.js";
 
-type KnowledgeChunk = {
-  id: string;
-  source: string;
-  chunkIndex: number;
-  content: string;
-  embedding: number[];
-};
-
-const TOP_K = 5;
-
-const TEST_QUESTION = 'What is the tuition refund policy?';
+const TEST_QUESTION = "What is the tuition refund policy?";
 
 const SYSTEM_PROMPT = `You are an assistant for Alhambra Medical University (AMU).
 Answer ONLY using the provided retrieved catalog content.
 Do NOT use outside knowledge.
-If the answer is not clearly supported by the provided content, say exactly:
-"I could not find a clear answer in the AMU catalog excerpts provided."
-When possible, mention which catalog/source the answer came from (using the source labels shown in the excerpts).`;
+If the answer is not clearly supported by the provided content, say plainly that the retrieved catalog excerpts do not spell out that rule.
+When possible, cite the catalog naturally (for example "Based on the MAHM 2025–26 catalog...").`;
 
 dotenv.config({
-  path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.env'),
+  path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".env"),
 });
 
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) {
-    throw new Error(
-      `Vector length mismatch: ${a.length} vs ${b.length}`,
-    );
-  }
-  let dot = 0;
-  let normASq = 0;
-  let normBSq = 0;
-  for (let i = 0; i < a.length; i++) {
-    const ai = a[i]!;
-    const bi = b[i]!;
-    dot += ai * bi;
-    normASq += ai * ai;
-    normBSq += bi * bi;
-  }
-  const denom = Math.sqrt(normASq) * Math.sqrt(normBSq);
-  if (denom === 0) return 0;
-  return dot / denom;
-}
-
 function buildContextBlock(
-  items: { chunk: KnowledgeChunk; score: number }[],
+  items: { chunk: KnowledgeChunkRow; score: number }[],
 ): string {
   return items
-    .map(({ chunk }) => {
-      return `[Source: ${chunk.source} | Chunk: ${chunk.chunkIndex}]\n${chunk.content}`;
+    .map(({ chunk, score }) => {
+      const meta = [
+        chunk.program && `Program: ${chunk.program}`,
+        chunk.sectionTitle && `Section: ${chunk.sectionTitle}`,
+        `Source: ${chunk.source}`,
+        `score ${score.toFixed(3)}`,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      return `[${meta}]\n${chunk.content}`;
     })
-    .join('\n\n');
+    .join("\n\n");
 }
 
 async function main(): Promise<void> {
   if (!process.env.OPENAI_API_KEY) {
-    console.error('Missing OPENAI_API_KEY in .env');
+    console.error("Missing OPENAI_API_KEY in .env");
     process.exit(1);
   }
 
-  const chunksPath = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    '..',
-    'knowledge',
-    'build',
-    'knowledge_chunks.json',
-  );
+  const chunks = await loadKnowledgeChunks();
 
-  const raw = await fs.readFile(chunksPath, 'utf-8');
-  const chunks = JSON.parse(raw) as KnowledgeChunk[];
-
-  if (!Array.isArray(chunks) || chunks.length === 0) {
-    console.error('knowledge_chunks.json is empty or invalid');
-    process.exit(1);
-  }
-
-  const embedRes = await client.embeddings.create({
-    model: EMBEDDING_MODEL,
-    input: TEST_QUESTION,
+  const { variants } = buildRetrievalQueryVariants({
+    originalQuestion: TEST_QUESTION,
+    rewrittenRetrievalQuery: TEST_QUESTION,
   });
-  const questionEmbedding = embedRes.data[0]?.embedding;
-  if (!questionEmbedding) {
-    console.error('No embedding in OpenAI response');
-    process.exit(1);
-  }
 
-  const scored = chunks.map((chunk) => ({
-    chunk,
-    score: cosineSimilarity(questionEmbedding, chunk.embedding),
-  }));
-
-  scored.sort((x, y) => y.score - x.score);
-  const top = scored.slice(0, TOP_K);
+  const queryEmbeddings = await createOpenAiEmbeddingVectors(variants);
+  const programHint = detectCatalogProgramHint(TEST_QUESTION);
+  const ranked = rankCatalogChunksByEmbeddingMaxWithHint(
+    chunks,
+    queryEmbeddings,
+    programHint,
+    cosineSimilarity,
+  );
+  const { selected: top } = selectCatalogChunksForContext(ranked);
 
   const contextBlock = buildContextBlock(top);
 
@@ -107,30 +81,31 @@ ${contextBlock}
 Question:
 ${TEST_QUESTION}`;
 
+  assertChatModelForCompletions(CHAT_MODEL);
   const completion = await client.chat.completions.create({
     model: CHAT_MODEL,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userMessage },
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userMessage },
     ],
     temperature: 0.2,
   });
 
   const answer =
-    completion.choices[0]?.message?.content?.trim() ?? '(no response)';
+    completion.choices[0]?.message?.content?.trim() ?? "(no response)";
 
-  console.log('Question:');
+  console.log("Question:");
   console.log(TEST_QUESTION);
-  console.log('');
-  console.log('Retrieved Chunks:');
+  console.log("");
+  console.log("Retrieved Chunks:");
   top.forEach((item, i) => {
     const { chunk, score } = item;
     console.log(
-      `${i + 1}. ${chunk.source} | chunk ${chunk.chunkIndex} | score ${score.toFixed(2)}`,
+      `${i + 1}. ${chunk.source} | ${chunk.program ?? "?"} | chunk ${chunk.chunkIndex} | score ${score.toFixed(3)}`,
     );
   });
-  console.log('');
-  console.log('Answer:');
+  console.log("");
+  console.log("Answer:");
   console.log(answer);
 }
 

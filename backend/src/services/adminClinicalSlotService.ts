@@ -12,6 +12,7 @@ import {
   type ClinicTimetableWritePayload,
 } from "../repositories/clinicalTimetableRepository.js";
 import { formatClinicTimeHm } from "./clinicalScheduleService.js";
+import { runDueClinicalBookingHoldCleanupBatches } from "./clinicalBookingPaymentHoldService.js";
 
 const WEEKDAYS = new Set([
   "Monday",
@@ -49,7 +50,7 @@ export type AdminClinicalSlotDto = {
   cap200: number;
   cap300: number;
   cap123: number;
-  /** Non-dropped `clinical_enrollments` for this slot (admin list + roster index). */
+  /** `clinical_enrollments` with `status = 'enrolled'` for this slot (admin list + roster index). */
   activeEnrolledCount: number;
   enrolled100: number;
   enrolled200: number;
@@ -276,6 +277,7 @@ function buildWritePayload(input: {
 export async function listAdminClinicalSlots(options?: {
   academicTermId?: string | null;
 }): Promise<AdminClinicalSlotDto[]> {
+  await runDueClinicalBookingHoldCleanupBatches();
   const rawId = options?.academicTermId;
   if (rawId != null && String(rawId).trim() !== "") {
     const { year, term } = await resolveTermYear(String(rawId));

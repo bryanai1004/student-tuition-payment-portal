@@ -286,10 +286,14 @@ export async function getAccountingQuartersPayload(studentId) {
     }));
     return { studentId, quarters };
 }
-export async function getAccountingLedgerPayload(studentId, term, year) {
+export async function getAccountingLedgerPayload(studentId, term, year, options) {
     const termTrim = term.trim();
     if (termTrim === "" || !Number.isFinite(year)) {
         return null;
+    }
+    if (!options?.skipExpiredClinicalBookingReconciliation) {
+        const { reconcileExpiredClinicalBookingHoldsForStudent } = await import("./clinicalBookingPaymentHoldService.js");
+        await reconcileExpiredClinicalBookingHoldsForStudent(studentId);
     }
     if (studentId === DEMO_STUDENT_ID) {
         return {
@@ -349,7 +353,9 @@ export async function getAccountingLedgerPayload(studentId, term, year) {
 }
 /** Quarter balance using the same ledger rules as `getAccountingLedgerPayload`. */
 export async function getStudentQuarterBalance(studentId, term, year) {
-    const payload = await getAccountingLedgerPayload(studentId, term.trim(), year);
+    const payload = await getAccountingLedgerPayload(studentId, term.trim(), year, {
+        skipExpiredClinicalBookingReconciliation: true,
+    });
     return payload?.summary.balance ?? 0;
 }
 //# sourceMappingURL=studentLedgerService.js.map

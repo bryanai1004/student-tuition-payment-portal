@@ -1,6 +1,7 @@
 import { getAcademicTermById } from "../repositories/academicTermRepository.js";
 import { cleanupHistoricalClinicTimetableReferences, countClinicTimetableReferences, createClinicTimetableSlot, deleteClinicTimetableSlot, forceDeleteClinicTimetableSlot, getClinicTimetableById, listClinicTimetableSlotsForAdmin, updateClinicTimetableSlot, } from "../repositories/clinicalTimetableRepository.js";
 import { formatClinicTimeHm } from "./clinicalScheduleService.js";
+import { runDueClinicalBookingHoldCleanupBatches } from "./clinicalBookingPaymentHoldService.js";
 const WEEKDAYS = new Set([
     "Monday",
     "Tuesday",
@@ -173,6 +174,7 @@ function buildWritePayload(input) {
     };
 }
 export async function listAdminClinicalSlots(options) {
+    await runDueClinicalBookingHoldCleanupBatches();
     const rawId = options?.academicTermId;
     if (rawId != null && String(rawId).trim() !== "") {
         const { year, term } = await resolveTermYear(String(rawId));

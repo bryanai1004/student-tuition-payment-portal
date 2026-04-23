@@ -134,6 +134,42 @@ export async function listDueActiveClinicalBookingPaymentHoldIds(limit) {
       LIMIT ?`, [lim]);
     return rows.map((r) => Math.trunc(Number(r.id)));
 }
+/** Due unpaid holds for one student (query-time reconciliation scope). */
+export async function listDueActiveClinicalBookingPaymentHoldIdsForStudent(studentId, limit) {
+    if (!(await clinicalBookingPaymentHoldsTableExists()))
+        return [];
+    const sid = studentId.trim();
+    if (sid === "")
+        return [];
+    const lim = Math.min(200, Math.max(1, Math.trunc(limit)));
+    const [rows] = await pool.query(`SELECT id
+       FROM clinical_booking_payment_holds
+      WHERE status = 'active'
+        AND hold_expires_at <= UTC_TIMESTAMP()
+        AND TRIM(student_id) = TRIM(?)
+      ORDER BY hold_expires_at ASC, id ASC
+      LIMIT ?`, [sid, lim]);
+    return rows.map((r) => Math.trunc(Number(r.id)));
+}
+/** Due unpaid holds tied to enrollments on a timetable row (slot-scoped reconciliation). */
+export async function listDueActiveClinicalBookingPaymentHoldIdsForTimetable(timetableId, limit) {
+    if (!(await clinicalBookingPaymentHoldsTableExists()))
+        return [];
+    const tid = Math.trunc(timetableId);
+    if (!Number.isFinite(tid) || tid <= 0)
+        return [];
+    const lim = Math.min(200, Math.max(1, Math.trunc(limit)));
+    const [rows] = await pool.query(`SELECT h.id
+       FROM clinical_booking_payment_holds h
+      INNER JOIN clinical_enrollments ce
+         ON ce.id = h.clinical_enrollment_id
+      WHERE h.status = 'active'
+        AND h.hold_expires_at <= UTC_TIMESTAMP()
+        AND ce.timetable_id = ?
+      ORDER BY h.hold_expires_at ASC, h.id ASC
+      LIMIT ?`, [tid, lim]);
+    return rows.map((r) => Math.trunc(Number(r.id)));
+}
 export async function lockClinicalBookingPaymentHoldById(conn, holdId) {
     const [rows] = await conn.query(`SELECT id,
             clinical_enrollment_id AS clinicalEnrollmentId,

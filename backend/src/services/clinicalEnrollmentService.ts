@@ -30,6 +30,12 @@ import {
   formatClinicTimeHm,
 } from "./clinicalScheduleService.js";
 import { getStudentQuarterBalance } from "./studentLedgerService.js";
+import {
+  reconcileExpiredClinicalBookingHoldsForTimetable,
+  reconcilePaidClinicalBookingPaymentHoldsForStudent,
+  revokeExpiredClinicalBooking,
+  runDueClinicalBookingHoldCleanupBatches,
+} from "./clinicalBookingPaymentHoldService.js";
 import { getAdminClinicalEnrollmentGradeSnapshot } from "./adminMarksService.js";
 
 /**
@@ -92,6 +98,10 @@ export async function listOpenClinicalSlotsForStudent(
   const term = normalizeQueryTerm(query?.term ?? null);
   const year = normalizeQueryYear(query?.year ?? null);
 
+  await runDueClinicalBookingHoldCleanupBatches();
+  await reconcilePaidClinicalBookingPaymentHoldsForStudent(sid);
+  await revokeExpiredClinicalBooking(sid);
+
   const [slots, mine] = await Promise.all([
     listAvailableClinicalEnrollmentSlots({
       year,
@@ -115,7 +125,11 @@ export async function listOpenClinicalSlotsForStudent(
   }));
 }
 
-export async function listStudentClinicalEnrollmentRows(
+/**
+ * Enrolled clinical timetable rows after query-time revocation of unpaid expired registrations.
+ * Single entry point for student schedule / roster-style reads.
+ */
+export async function getActiveClinicalBookings(
   studentId: string,
   query?: { term?: string | null; year?: string | number | null },
 ): Promise<ClinicalEnrollmentStudentRow[]> {
@@ -125,7 +139,18 @@ export async function listStudentClinicalEnrollmentRows(
   }
   const term = normalizeQueryTerm(query?.term ?? null);
   const year = normalizeQueryYear(query?.year ?? null);
-  return listStudentClinicalEnrollments(sid, { term, year });
+  await reconcilePaidClinicalBookingPaymentHoldsForStudent(sid);
+  await revokeExpiredClinicalBooking(sid);
+  await runDueClinicalBookingHoldCleanupBatches();
+  const rows = await listStudentClinicalEnrollments(sid, { term, year });
+  return rows.filter((r) => r.status.trim().toLowerCase() === "enrolled");
+}
+
+export async function listStudentClinicalEnrollmentRows(
+  studentId: string,
+  query?: { term?: string | null; year?: string | number | null },
+): Promise<ClinicalEnrollmentStudentRow[]> {
+  return getActiveClinicalBookings(studentId, query);
 }
 
 function totalTimetableCaps(tt: ClinicTimetableDbRow): number {
@@ -172,10 +197,14 @@ export async function enrollStudentInClinicalSlot(
     return { ok: false, error: "timetableId is required", status: 400 };
   }
 
+  await revokeExpiredClinicalBooking(sid);
+
   const tt = await getClinicTimetableById(timetableId);
   if (tt == null) {
     return { ok: false, error: "Clinic slot not found.", status: 400 };
   }
+
+  await reconcileExpiredClinicalBookingHoldsForTimetable(timetableId);
 
   const term = tt.term.trim().slice(0, 20);
   const year = tt.year;
@@ -334,6 +363,8 @@ export async function listAdminClinicalSlotRoster(
   if (!Number.isFinite(timetableId) || timetableId <= 0) {
     return [];
   }
+  await runDueClinicalBookingHoldCleanupBatches();
+  await reconcileExpiredClinicalBookingHoldsForTimetable(timetableId);
   const rows = await listActiveClinicalRosterForTimetable(timetableId);
   const snapshots = await Promise.all(
     rows.map((row) =>

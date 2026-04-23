@@ -30,6 +30,10 @@ export declare function voidSystemClinicalChargesForEnrollmentInConn(conn: PoolC
 /** Voids a single system clinical booking charge row (used when a hold expires). */
 export declare function voidSystemClinicalBillingAdjustmentByIdInConn(conn: PoolConnection, billingAdjustmentId: number): Promise<boolean>;
 export declare function listDueActiveClinicalBookingPaymentHoldIds(limit: number): Promise<number[]>;
+/** Due unpaid holds for one student (query-time reconciliation scope). */
+export declare function listDueActiveClinicalBookingPaymentHoldIdsForStudent(studentId: string, limit: number): Promise<number[]>;
+/** Due unpaid holds tied to enrollments on a timetable row (slot-scoped reconciliation). */
+export declare function listDueActiveClinicalBookingPaymentHoldIdsForTimetable(timetableId: number, limit: number): Promise<number[]>;
 export declare function lockClinicalBookingPaymentHoldById(conn: PoolConnection, holdId: number): Promise<ClinicalBookingPaymentHoldRow | null>;
 export declare function updateClinicalBookingPaymentHoldStatus(conn: PoolConnection, holdId: number, status: ClinicalBookingPaymentHoldStatus, fields: {
     satisfiedAt?: Date | null;

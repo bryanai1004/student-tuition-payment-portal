@@ -335,13 +335,13 @@ export type ClinicalEnrollmentStudentRow = {
   site: string | null;
   createdAt: string;
   /**
-   * When present, this active enrollment has an open 12-hour clinical booking payment hold
-   * that expires at this instant (server UTC).
+   * When present, this active enrollment has an unpaid clinical booking charge whose
+   * payment deadline is this instant (UTC, set at registration).
    */
   paymentHoldExpiresAt: string | null;
 };
 
-/** Slot roster row for admin (active = not `dropped`; remove uses student drop when `enrolled`). */
+/** Slot roster row for admin (`clinical_enrollments.status = 'enrolled'` only). */
 export type ClinicalSlotRosterAdminRow = {
   enrollmentId: number;
   studentId: string;
@@ -650,7 +650,7 @@ export async function listStudentClinicalEnrollments(
 }
 
 /**
- * Students with a non-dropped enrollment on this timetable slot (admin roster).
+ * Students with an `enrolled` row on this timetable slot (admin roster).
  * Joins legacy `students` for display name and email.
  */
 export async function listActiveClinicalRosterForTimetable(
@@ -671,7 +671,7 @@ export async function listActiveClinicalRosterForTimetable(
      FROM clinical_enrollments ce
      LEFT JOIN students s ON TRIM(s.id) = TRIM(ce.student_id)
     WHERE ce.timetable_id = ?
-      AND LOWER(TRIM(ce.status)) <> 'dropped'
+      AND LOWER(TRIM(ce.status)) = 'enrolled'
     ORDER BY ce.created_at ASC, ce.id ASC`,
     [timetableId],
   );

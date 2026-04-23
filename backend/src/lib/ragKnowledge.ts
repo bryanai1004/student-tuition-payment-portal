@@ -2,12 +2,27 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+export type CatalogProgram = "DAHM" | "MAHM";
+
 export type KnowledgeChunkRow = {
   id: string;
   source: string;
   chunkIndex: number;
+  /** Text shown to the LLM as catalog evidence */
   content: string;
   embedding: number[];
+  program?: CatalogProgram | null;
+  sectionTitle?: string;
+  subsectionTitle?: string;
+  pageStart?: number;
+  pageEnd?: number;
+};
+
+export type KnowledgeIndexFileV2 = {
+  schemaVersion: 2;
+  embeddingModel: string;
+  generatedAt: string;
+  chunks: KnowledgeChunkRow[];
 };
 
 export function knowledgeChunksFilePath(): string {
@@ -18,7 +33,7 @@ export function knowledgeChunksFilePath(): string {
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) {
     throw new Error(
-      `Vector length mismatch: ${a.length} vs ${b.length}`,
+      `Vector length mismatch: ${a.length} vs ${b.length}. Rebuild the knowledge base so embeddings match ${a.length === 0 || b.length === 0 ? "the" : "the current"} embedding model.`,
     );
   }
   let dot = 0;
@@ -79,7 +94,52 @@ function parseChunkRow(row: unknown, index: number): KnowledgeChunkRow {
       `knowledge_chunks.json: chunk ${index} missing numeric embedding vector`,
     );
   }
-  return { id, source, chunkIndex, content, embedding };
+
+  const programRaw = o.program;
+  let program: CatalogProgram | null | undefined;
+  if (programRaw === null || programRaw === undefined) {
+    program = undefined;
+  } else if (programRaw === "DAHM" || programRaw === "MAHM") {
+    program = programRaw;
+  } else {
+    program = undefined;
+  }
+
+  const sectionTitle =
+    typeof o.sectionTitle === "string" ? o.sectionTitle : undefined;
+  const subsectionTitle =
+    typeof o.subsectionTitle === "string" ? o.subsectionTitle : undefined;
+  const pageStart =
+    typeof o.pageStart === "number" && Number.isFinite(o.pageStart)
+      ? o.pageStart
+      : undefined;
+  const pageEnd =
+    typeof o.pageEnd === "number" && Number.isFinite(o.pageEnd)
+      ? o.pageEnd
+      : undefined;
+
+  return {
+    id,
+    source,
+    chunkIndex,
+    content,
+    embedding,
+    ...(program !== undefined ? { program } : {}),
+    ...(sectionTitle !== undefined ? { sectionTitle } : {}),
+    ...(subsectionTitle !== undefined ? { subsectionTitle } : {}),
+    ...(pageStart !== undefined ? { pageStart } : {}),
+    ...(pageEnd !== undefined ? { pageEnd } : {}),
+  };
+}
+
+function isKnowledgeIndexV2(x: unknown): x is KnowledgeIndexFileV2 {
+  if (x === null || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    o.schemaVersion === 2 &&
+    Array.isArray(o.chunks) &&
+    typeof o.embeddingModel === "string"
+  );
 }
 
 export async function loadKnowledgeChunks(): Promise<KnowledgeChunkRow[]> {
@@ -104,9 +164,34 @@ export async function loadKnowledgeChunks(): Promise<KnowledgeChunkRow[]> {
     throw new Error("knowledge_chunks.json is not valid JSON");
   }
 
-  if (!Array.isArray(parsed) || parsed.length === 0) {
+  let rows: unknown[];
+  if (Array.isArray(parsed)) {
+    rows = parsed;
+  } else if (isKnowledgeIndexV2(parsed)) {
+    rows = parsed.chunks;
+    console.log("[knowledge] loaded index file", {
+      schemaVersion: 2,
+      embeddingModel: parsed.embeddingModel,
+      chunkCount: parsed.chunks.length,
+    });
+  } else {
+    throw new Error(
+      "knowledge_chunks.json must be a chunk array or an object with schemaVersion 2 and chunks[]",
+    );
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error("knowledge_chunks.json is empty or not a non-empty array");
   }
 
-  return parsed.map((row, i) => parseChunkRow(row, i));
+  const chunks = rows.map((row, i) => parseChunkRow(row, i));
+  const dim = chunks[0]?.embedding.length;
+  for (let i = 1; i < chunks.length; i++) {
+    if (chunks[i]!.embedding.length !== dim) {
+      throw new Error(
+        `knowledge_chunks.json: inconsistent embedding dimensions at chunk ${i}`,
+      );
+    }
+  }
+  return chunks;
 }

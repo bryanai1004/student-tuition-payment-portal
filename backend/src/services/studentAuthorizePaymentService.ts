@@ -8,7 +8,7 @@ import {
   insertSystemLateFee,
   LATE_FEE_DESCRIPTION,
 } from "../repositories/adminFinanceRepository.js";
-import { runClinicalBookingPaymentHoldCleanup } from "./clinicalBookingPaymentHoldService.js";
+import { revokeExpiredClinicalBooking } from "./clinicalBookingPaymentHoldService.js";
 import { getLatestClinicalBookingPaymentHoldStatusForStudentQuarter } from "../repositories/clinicalBookingPaymentHoldRepository.js";
 
 type OpaqueDataInput = {
@@ -368,7 +368,20 @@ async function resolveClinicFeeStatus(args: {
   const totalAssessed = roundToMoney(Math.max(0, args.amount));
   const remainingDue = roundToMoney(Math.max(0, args.amountDue));
   if (totalAssessed <= 0) {
-    // No clinic fee charge exists for this term; do not treat as paid by default.
+    const latestHoldStatus =
+      await getLatestClinicalBookingPaymentHoldStatusForStudentQuarter(
+        args.studentId,
+        args.term,
+        args.year,
+      );
+    if (
+      latestHoldStatus === "expired_auto_dropped" ||
+      latestHoldStatus === "cancelled_enrollment_inactive" ||
+      latestHoldStatus === "cancelled_manual_drop" ||
+      latestHoldStatus === "cancelled_superseded"
+    ) {
+      return "registration_cancelled";
+    }
     return "pending";
   }
   if (remainingDue <= 0) {
@@ -378,7 +391,7 @@ async function resolveClinicFeeStatus(args: {
     return "pending";
   }
 
-  await runClinicalBookingPaymentHoldCleanup();
+  await revokeExpiredClinicalBooking(args.studentId);
   const latestHoldStatus =
     await getLatestClinicalBookingPaymentHoldStatusForStudentQuarter(
       args.studentId,
@@ -387,11 +400,13 @@ async function resolveClinicFeeStatus(args: {
     );
   if (
     latestHoldStatus === "expired_auto_dropped" ||
-    latestHoldStatus === "cancelled_enrollment_inactive"
+    latestHoldStatus === "cancelled_enrollment_inactive" ||
+    latestHoldStatus === "cancelled_manual_drop" ||
+    latestHoldStatus === "cancelled_superseded"
   ) {
     return "registration_cancelled";
   }
-  return "expired";
+  return "registration_cancelled";
 }
 
 export async function evaluateLateFeeForCurrentTerm(

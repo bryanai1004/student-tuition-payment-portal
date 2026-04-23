@@ -9,6 +9,11 @@
  *   immediately after posting this clinical debit).
  */
 export declare function isClinicalBookingHoldFinanciallySatisfied(balanceBeforeCharge: number, chargeAmount: number, currentBalance: number): boolean;
+/**
+ * True when the hold window end is strictly before "now" (UTC clock on server).
+ * Used with `status = 'active'` + unpaid balance checks to detect expiration.
+ */
+export declare function isClinicalBookingPaymentHoldPastDeadline(holdExpiresAt: Date, nowMs?: number): boolean;
 export type StudentPortalClinicalBookingHoldDto = {
     holdExpiresAt: string;
     remainingSeconds: number;
@@ -30,6 +35,26 @@ export type ClinicalBookingPaymentHoldCleanupStats = {
     skipped: number;
     inconsistencies: number;
 };
+/**
+ * Core idempotent processor: for each hold id, revoke unpaid expired booking or mark paid.
+ */
+export declare function processDueClinicalBookingPaymentHoldIds(dueIds: number[]): Promise<ClinicalBookingPaymentHoldCleanupStats>;
+/**
+ * Expired unpaid clinical reservation: `clinical_booking_payment_holds.status = 'active'`,
+ * `hold_expires_at <= UTC_TIMESTAMP()`, enrollment still `enrolled`, and ledger shows the
+ * charge is not financially satisfied vs `balance_before_charge` / `charge_amount`.
+ * On success: void `portal_billing_adjustments` clinical row, set enrollment `dropped`,
+ * hold `expired_auto_dropped`.
+ */
+export declare function reconcileExpiredClinicalBookingHoldsForStudent(studentId: string): Promise<ClinicalBookingPaymentHoldCleanupStats>;
+export declare function reconcileExpiredClinicalBookingHoldsForTimetable(timetableId: number): Promise<ClinicalBookingPaymentHoldCleanupStats>;
+/**
+ * Process global due holds in batches until none remain or max batches (open-slot listing).
+ */
+export declare function runDueClinicalBookingHoldCleanupBatches(opts?: {
+    maxBatches?: number;
+    batchSize?: number;
+}): Promise<ClinicalBookingPaymentHoldCleanupStats>;
 /**
  * Marks satisfied holds and auto-drops overdue unpaid clinical bookings (idempotent).
  */

@@ -462,7 +462,7 @@ export async function listStudentClinicalEnrollments(studentId, options) {
     });
 }
 /**
- * Students with a non-dropped enrollment on this timetable slot (admin roster).
+ * Students with an `enrolled` row on this timetable slot (admin roster).
  * Joins legacy `students` for display name and email.
  */
 export async function listActiveClinicalRosterForTimetable(timetableId) {
@@ -480,7 +480,7 @@ export async function listActiveClinicalRosterForTimetable(timetableId) {
      FROM clinical_enrollments ce
      LEFT JOIN students s ON TRIM(s.id) = TRIM(ce.student_id)
     WHERE ce.timetable_id = ?
-      AND LOWER(TRIM(ce.status)) <> 'dropped'
+      AND LOWER(TRIM(ce.status)) = 'enrolled'
     ORDER BY ce.created_at ASC, ce.id ASC`, [timetableId]);
     return rows.map((raw) => {
         const row = raw;

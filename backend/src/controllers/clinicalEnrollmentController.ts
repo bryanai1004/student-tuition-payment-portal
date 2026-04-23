@@ -11,7 +11,6 @@ import {
 import { setAdminClinicalEnrollmentGrade } from "../services/adminMarksService.js";
 import {
   getStudentPortalClinicalBookingHold,
-  reconcilePaidClinicalBookingPaymentHoldsForStudent,
   runClinicalBookingPaymentHoldCleanup,
 } from "../services/clinicalBookingPaymentHoldService.js";
 import { ClinicalScheduleValidationError } from "../services/clinicalScheduleService.js";
@@ -257,7 +256,6 @@ export async function getStudentClinicalEnrollmentsHandler(
     }
     const term = parseOptQueryString(req, "term");
     const year = parseOptYearQuery(req);
-    await reconcilePaidClinicalBookingPaymentHoldsForStudent(sid);
     const rows = await listStudentClinicalEnrollmentRows(sid, { term, year });
     const activeClinicalBookingHold = await getStudentPortalClinicalBookingHold(sid);
     const termYears = rows.map((r) => `${r.term} ${r.year}`);

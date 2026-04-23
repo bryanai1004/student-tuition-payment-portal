@@ -52,7 +52,7 @@ export type ClinicalEnrollmentStudentRow = {
      */
     paymentHoldExpiresAt: string | null;
 };
-/** Slot roster row for admin (active = not `dropped`; remove uses student drop when `enrolled`). */
+/** Slot roster row for admin (`clinical_enrollments.status = 'enrolled'` only). */
 export type ClinicalSlotRosterAdminRow = {
     enrollmentId: number;
     studentId: string;
@@ -82,7 +82,7 @@ export declare function listStudentClinicalEnrollments(studentId: string, option
     year?: number | null;
 }): Promise<ClinicalEnrollmentStudentRow[]>;
 /**
- * Students with a non-dropped enrollment on this timetable slot (admin roster).
+ * Students with an `enrolled` row on this timetable slot (admin roster).
  * Joins legacy `students` for display name and email.
  */
 export declare function listActiveClinicalRosterForTimetable(timetableId: number): Promise<ClinicalSlotRosterAdminRow[]>;

@@ -2482,8 +2482,17 @@ select.portal-profile-input {
   text-align: center;
 }
 
-.portal-table--ledger-col-money {
+/* Ledger also uses .portal-table--courses, whose nth-child(2)/(3) rules right-align; keep date/type/code centered. */
+table.portal-table--ledger th.portal-table--ledger-col-center,
+table.portal-table--ledger td.portal-table--ledger-col-center {
   text-align: center;
+}
+
+/* Charge + Payment: one vertical edge per column (beats .portal-table td:last-child and .portal-table--ledger-col-money). */
+table.portal-table--ledger th.portal-table--ledger-col-money,
+table.portal-table--ledger td.portal-table--ledger-col-money {
+  text-align: right;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 

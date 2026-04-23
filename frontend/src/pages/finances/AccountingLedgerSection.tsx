@@ -81,11 +81,7 @@ function ClinicalBookingPaymentHoldCountdown({
 
   const remainingSec = Math.max(0, Math.floor((expiresMs - nowMs) / 1000))
   if (remainingSec <= 0) {
-    return (
-      <p className={`portal-inline-note portal-inline-note--flush ${className ?? ''}`.trim()} role="status">
-        {t('clinicalBookingPaymentHoldExpired')}
-      </p>
-    )
+    return null
   }
 
   return (

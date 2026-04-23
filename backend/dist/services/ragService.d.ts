@@ -6,6 +6,11 @@ export type RetrievedChunk = {
     chunkIndex: number;
     content: string;
     score: number;
+    program?: "DAHM" | "MAHM" | null;
+    sectionTitle?: string;
+    subsectionTitle?: string;
+    pageStart?: number;
+    pageEnd?: number;
 };
 export type RagAnswerResult = {
     question: string;

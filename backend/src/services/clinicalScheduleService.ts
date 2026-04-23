@@ -10,6 +10,7 @@ import {
   type ClinicalAssignmentDbRow,
   type InsertClinicalAssignmentPayload,
 } from "../repositories/clinicalScheduleRepository.js";
+import { runDueClinicalBookingHoldCleanupBatches } from "./clinicalBookingPaymentHoldService.js";
 
 /** Thrown when `getStudentClinicalSchedule` receives an invalid student id (maps to HTTP 400). */
 export class ClinicalScheduleValidationError extends Error {
@@ -325,6 +326,7 @@ export async function listClinicalOfferedTimetableForPortal(
     query.term != null && String(query.term).trim() !== ""
       ? String(query.term).trim()
       : null;
+  await runDueClinicalBookingHoldCleanupBatches();
   const rows = await listClinicalOfferedTimetableDetailRows({
     year: yearNum,
     term,

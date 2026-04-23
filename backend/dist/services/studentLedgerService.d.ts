@@ -34,7 +34,14 @@ export declare function getAccountingQuartersPayload(studentId: string): Promise
     studentId: string;
     quarters: LedgerQuarterOption[];
 }>;
-export declare function getAccountingLedgerPayload(studentId: string, term: string, year: number): Promise<{
+export type AccountingLedgerPayloadOptions = {
+    /**
+     * When true, skip query-time revocation of expired unpaid clinical bookings.
+     * Used by `getStudentQuarterBalance` to avoid recursion while holds are reconciled.
+     */
+    skipExpiredClinicalBookingReconciliation?: boolean;
+};
+export declare function getAccountingLedgerPayload(studentId: string, term: string, year: number, options?: AccountingLedgerPayloadOptions): Promise<{
     studentId: string;
     term: string;
     year: number;

@@ -6,6 +6,7 @@ import { createClinicalEnrollment, dropClinicalEnrollment, getClinicalEnrollment
 import { insertClinicalAssignment } from "../repositories/clinicalScheduleRepository.js";
 import { buildClinicTimetableSlotLabel, buildTimetableClinicalAssignmentPayload, ClinicalScheduleValidationError, formatClinicTimeHm, } from "./clinicalScheduleService.js";
 import { getStudentQuarterBalance } from "./studentLedgerService.js";
+import { reconcileExpiredClinicalBookingHoldsForStudent, reconcileExpiredClinicalBookingHoldsForTimetable, runDueClinicalBookingHoldCleanupBatches, } from "./clinicalBookingPaymentHoldService.js";
 import { getAdminClinicalEnrollmentGradeSnapshot } from "./adminMarksService.js";
 /**
  * Phase 2: flat fee for a new clinical timetable slot booking until per-slot pricing exists.
@@ -47,6 +48,7 @@ export async function listOpenClinicalSlotsForStudent(studentId, query) {
     }
     const term = normalizeQueryTerm(query?.term ?? null);
     const year = normalizeQueryYear(query?.year ?? null);
+    await runDueClinicalBookingHoldCleanupBatches();
     const [slots, mine] = await Promise.all([
         listAvailableClinicalEnrollmentSlots({
             year,
@@ -72,7 +74,8 @@ export async function listStudentClinicalEnrollmentRows(studentId, query) {
     }
     const term = normalizeQueryTerm(query?.term ?? null);
     const year = normalizeQueryYear(query?.year ?? null);
-    return listStudentClinicalEnrollments(sid, { term, year });
+    const rows = await listStudentClinicalEnrollments(sid, { term, year });
+    return rows.filter((r) => r.status.trim().toLowerCase() === "enrolled");
 }
 function totalTimetableCaps(tt) {
     return (Math.max(0, Math.trunc(tt.cap_100)) +
@@ -98,10 +101,12 @@ export async function enrollStudentInClinicalSlot(studentId, timetableId, seatBu
     if (!Number.isFinite(timetableId) || timetableId <= 0) {
         return { ok: false, error: "timetableId is required", status: 400 };
     }
+    await reconcileExpiredClinicalBookingHoldsForStudent(sid);
     const tt = await getClinicTimetableById(timetableId);
     if (tt == null) {
         return { ok: false, error: "Clinic slot not found.", status: 400 };
     }
+    await reconcileExpiredClinicalBookingHoldsForTimetable(timetableId);
     const term = tt.term.trim().slice(0, 20);
     const year = tt.year;
     if (term === "" || !Number.isFinite(year)) {
@@ -218,6 +223,7 @@ export async function listAdminClinicalSlotRoster(timetableId) {
     if (!Number.isFinite(timetableId) || timetableId <= 0) {
         return [];
     }
+    await reconcileExpiredClinicalBookingHoldsForTimetable(timetableId);
     const rows = await listActiveClinicalRosterForTimetable(timetableId);
     const snapshots = await Promise.all(rows.map((row) => getAdminClinicalEnrollmentGradeSnapshot({
         timetableId,

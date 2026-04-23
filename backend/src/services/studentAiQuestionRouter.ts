@@ -59,13 +59,33 @@ function hasStudentRecordTopicCue(value: string): boolean {
 
 function hasPolicyCue(value: string): boolean {
   return (
-    /\b(policy|handbook|catalog|rule|rules|requirement|requirements|deadline|deadlines|prerequisite|prerequisites|graduation|attendance|probation|refund|withdrawal policy|withdrawal|add\/drop|registration policy|tuition|fee|fees|payment)\b/i.test(
+    /\b(policy|handbook|catalog|rule|rules|requirement|requirements|deadline|deadlines|prerequisite|prerequisites|graduation|attendance|probation|refund|withdrawal policy|withdrawal|add\/drop|registration policy|tuition|fee|fees|payment|clinical|clerkship|practicum|internship|hours)\b/i.test(
       value,
     ) ||
-    /政策|规定|要求|规则|退选|退课|先修|先决|学费|费用|缴费|退款|毕业要求|目录|手册|deadline|withdrawal|prerequisite/.test(
+    /政策|规定|要求|规则|退选|退课|先修|先决|学费|费用|缴费|退款|毕业要求|目录|手册|deadline|withdrawal|prerequisite|临床|诊所|实习|见习|学时|时数|出席|考勤|出勤|旷课|加退选/.test(
       value,
     )
   );
+}
+
+/** Casual writing help without AMU policy context — keep on general chat path. */
+function isConversationalWritingAssistOnly(question: string): boolean {
+  const t = question.trim();
+  if (t.length > 800) return false;
+  const assist =
+    /\b(rewrite|rephrase|polish|proofread|translate|summarize|fix my grammar|make this sound)\b/i.test(
+      t,
+    ) || /润色|改写|翻译|总结|措辞|优化一下|改成更|帮我改|修一下这段|把下面/.test(t);
+  if (!assist) return false;
+  if (
+    /\b(catalog|tuition|withdraw|refund|graduation|enrollment|clinical|credit|policy|deadline)\b/i.test(
+      t,
+    ) ||
+    /目录|学费|退课|退款|毕业|注册|临床|学分|政策|规定|手册|截止/.test(t)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function hasMixedApplicabilityCue(value: string): boolean {
@@ -415,6 +435,9 @@ export function detectGraduationRequirementCreditsQuestion(
 }
 
 export function classifyStudentAiIntent(question: string): StudentAiIntent {
+  if (isConversationalWritingAssistOnly(question)) {
+    return "general";
+  }
   const normalized = lower(question);
   const recordMatch = detectStudentRecordQuestion(question);
   const policyCue = hasPolicyCue(normalized);

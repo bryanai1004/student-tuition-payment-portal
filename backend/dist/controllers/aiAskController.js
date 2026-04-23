@@ -179,7 +179,10 @@ export async function postAiAsk(req, res) {
             return;
         }
         if (routedIntent === "general") {
-            console.debug("[ai/ask] pipeline used", { pipeline: "general" });
+            console.debug("[ai/ask] pipeline used", {
+                pipeline: "general",
+                answerMode: "normal_chat",
+            });
             const result = await answerGeneralQuestion(q, memoryPlan.history, {
                 identityContext,
             });
@@ -229,7 +232,10 @@ export async function postAiAsk(req, res) {
             return;
         }
         if (routedIntent === "policy") {
-            console.debug("[ai/ask] pipeline used", { pipeline: "policy" });
+            console.debug("[ai/ask] pipeline used", {
+                pipeline: "policy",
+                answerMode: "catalog_rag",
+            });
             const result = await answerAmuQuestion(q, memoryPlan.history, {
                 pipeline: "policy",
                 identityContext,
@@ -254,6 +260,7 @@ export async function postAiAsk(req, res) {
         const studentContextText = recordFacts.contextText;
         console.debug("[ai/ask] pipeline used", {
             pipeline: "mixed",
+            answerMode: "catalog_rag_with_student_context",
             deterministicStudentFactsUsed: true,
             ragUsed: true,
             helperCount: recordFacts.usedHelpers.length,

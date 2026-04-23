@@ -1,4 +1,5 @@
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import { CLINICAL_BOOKING_PAYMENT_WINDOW_HOURS } from "../clinicalBookingPolicy.js";
 import { pool } from "../lib/db.js";
 
 export type ClinicalBookingPaymentHoldStatus =
@@ -79,7 +80,7 @@ export async function insertClinicalBookingPaymentHold(params: {
       `INSERT INTO clinical_booking_payment_holds
       (clinical_enrollment_id, student_id, billing_adjustment_id, term, year,
        charge_amount, balance_before_charge, hold_expires_at, status)
-     SELECT ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 12 HOUR), 'active'
+     SELECT ?, ?, ?, ?, ?, ?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL ${CLINICAL_BOOKING_PAYMENT_WINDOW_HOURS} HOUR), 'active'
        FROM DUAL
       WHERE NOT EXISTS (
         SELECT 1
@@ -233,6 +234,52 @@ export async function listDueActiveClinicalBookingPaymentHoldIds(
   return rows.map((r) => Math.trunc(Number((r as { id?: unknown }).id)));
 }
 
+/** Due unpaid holds for one student (query-time reconciliation scope). */
+export async function listDueActiveClinicalBookingPaymentHoldIdsForStudent(
+  studentId: string,
+  limit: number,
+): Promise<number[]> {
+  if (!(await clinicalBookingPaymentHoldsTableExists())) return [];
+  const sid = studentId.trim();
+  if (sid === "") return [];
+  const lim = Math.min(200, Math.max(1, Math.trunc(limit)));
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT id
+       FROM clinical_booking_payment_holds
+      WHERE status = 'active'
+        AND hold_expires_at <= UTC_TIMESTAMP()
+        AND TRIM(student_id) = TRIM(?)
+      ORDER BY hold_expires_at ASC, id ASC
+      LIMIT ?`,
+    [sid, lim],
+  );
+  return rows.map((r) => Math.trunc(Number((r as { id?: unknown }).id)));
+}
+
+/** Due unpaid holds tied to enrollments on a timetable row (slot-scoped reconciliation). */
+export async function listDueActiveClinicalBookingPaymentHoldIdsForTimetable(
+  timetableId: number,
+  limit: number,
+): Promise<number[]> {
+  if (!(await clinicalBookingPaymentHoldsTableExists())) return [];
+  const tid = Math.trunc(timetableId);
+  if (!Number.isFinite(tid) || tid <= 0) return [];
+  const lim = Math.min(200, Math.max(1, Math.trunc(limit)));
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT h.id
+       FROM clinical_booking_payment_holds h
+      INNER JOIN clinical_enrollments ce
+         ON ce.id = h.clinical_enrollment_id
+      WHERE h.status = 'active'
+        AND h.hold_expires_at <= UTC_TIMESTAMP()
+        AND ce.timetable_id = ?
+      ORDER BY h.hold_expires_at ASC, h.id ASC
+      LIMIT ?`,
+    [tid, lim],
+  );
+  return rows.map((r) => Math.trunc(Number((r as { id?: unknown }).id)));
+}
+
 export async function lockClinicalBookingPaymentHoldById(
   conn: PoolConnection,
   holdId: number,
@@ -330,6 +377,7 @@ export async function listActiveClinicalBookingPaymentHoldsForStudentQuarter(
         AND TRIM(term) = TRIM(?)
         AND year = ?
         AND status = 'active'
+        AND hold_expires_at > UTC_TIMESTAMP()
       ORDER BY id ASC
       LIMIT 50`,
     [sid, tm, Math.trunc(year)],
@@ -406,6 +454,7 @@ export async function getUrgentActiveClinicalBookingHoldForStudentPortal(
         AND TRIM(ce.student_id) = TRIM(h.student_id)
       WHERE TRIM(h.student_id) = TRIM(?)
         AND h.status = 'active'
+        AND h.hold_expires_at > UTC_TIMESTAMP()
         AND LOWER(TRIM(ce.status)) = 'enrolled'
       ORDER BY h.hold_expires_at ASC, h.id ASC
       LIMIT 1`,

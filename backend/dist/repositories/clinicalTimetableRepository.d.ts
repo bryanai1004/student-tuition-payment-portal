@@ -27,7 +27,7 @@ export type ClinicTimetableAdminRow = ClinicTimetableDbRow & {
     /** `academic_terms.id` when year + legacy term matches a portal term; otherwise null. */
     academic_term_id: string | null;
     /**
-     * Non-dropped rows on `clinical_enrollments` for this timetable id
+     * `clinical_enrollments` rows with `status = 'enrolled'` for this timetable id
      * (same filter as `listActiveClinicalRosterForTimetable`).
      */
     active_enrolled_count: number;

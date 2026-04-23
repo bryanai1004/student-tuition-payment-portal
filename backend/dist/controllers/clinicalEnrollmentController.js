@@ -1,7 +1,7 @@
 import { env } from "../config/env.js";
 import { adminDropClinicalEnrollmentForSlot, dropStudentClinicalEnrollment, enrollStudentInClinicalSlot, listAdminClinicalSlotRoster, listOpenClinicalSlotsForStudent, listStudentClinicalEnrollmentRows, } from "../services/clinicalEnrollmentService.js";
 import { setAdminClinicalEnrollmentGrade } from "../services/adminMarksService.js";
-import { getStudentPortalClinicalBookingHold, reconcilePaidClinicalBookingPaymentHoldsForStudent, runClinicalBookingPaymentHoldCleanup, } from "../services/clinicalBookingPaymentHoldService.js";
+import { getStudentPortalClinicalBookingHold, reconcileExpiredClinicalBookingHoldsForStudent, reconcilePaidClinicalBookingPaymentHoldsForStudent, runClinicalBookingPaymentHoldCleanup, } from "../services/clinicalBookingPaymentHoldService.js";
 import { ClinicalScheduleValidationError } from "../services/clinicalScheduleService.js";
 import { getClinicTimetableById } from "../repositories/clinicalTimetableRepository.js";
 function devMessage(e) {
@@ -228,6 +228,7 @@ export async function getStudentClinicalEnrollmentsHandler(req, res) {
         }
         const term = parseOptQueryString(req, "term");
         const year = parseOptYearQuery(req);
+        await reconcileExpiredClinicalBookingHoldsForStudent(sid);
         await reconcilePaidClinicalBookingPaymentHoldsForStudent(sid);
         const rows = await listStudentClinicalEnrollmentRows(sid, { term, year });
         const activeClinicalBookingHold = await getStudentPortalClinicalBookingHold(sid);

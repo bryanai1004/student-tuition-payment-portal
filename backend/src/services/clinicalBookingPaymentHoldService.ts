@@ -1,10 +1,13 @@
 import type { RowDataPacket } from "mysql2/promise";
+import { isClinicalBookingExpired } from "../clinicalBookingPolicy.js";
 import { pool } from "../lib/db.js";
 import {
   clinicalBookingPaymentHoldsTableExists,
   getUrgentActiveClinicalBookingHoldForStudentPortal,
   listActiveClinicalBookingPaymentHoldsForStudent,
   listDueActiveClinicalBookingPaymentHoldIds,
+  listDueActiveClinicalBookingPaymentHoldIdsForStudent,
+  listDueActiveClinicalBookingPaymentHoldIdsForTimetable,
   lockClinicalBookingPaymentHoldById,
   markClinicalBookingPaymentHoldSatisfiedOutsideTxn,
   updateClinicalBookingPaymentHoldStatus,
@@ -16,7 +19,20 @@ import {
   formatClinicTimeHm,
 } from "./clinicalScheduleService.js";
 import { dropClinicalEnrollmentInConn } from "../repositories/clinicalEnrollmentRepository.js";
-import { getStudentQuarterBalance } from "./studentLedgerService.js";
+
+export {
+  isClinicalBookingExpired,
+  isClinicalBookingExpired as isClinicalBookingPaymentHoldPastDeadline,
+} from "../clinicalBookingPolicy.js";
+
+async function loadStudentQuarterBalanceForClinicalHold(
+  studentId: string,
+  term: string,
+  year: number,
+): Promise<number> {
+  const { getStudentQuarterBalance } = await import("./studentLedgerService.js");
+  return getStudentQuarterBalance(studentId, term, year);
+}
 
 /**
  * Whether the student's current quarter balance indicates this clinical booking charge
@@ -59,6 +75,7 @@ export async function getStudentPortalClinicalBookingHold(
   if (!(await clinicalBookingPaymentHoldsTableExists())) return null;
   const row = await getUrgentActiveClinicalBookingHoldForStudentPortal(studentId);
   if (row == null) return null;
+  if (isClinicalBookingExpired(row.holdExpiresAt)) return null;
   const tt = await getClinicTimetableById(row.timetableId);
   const slotLabel =
     tt != null
@@ -74,7 +91,7 @@ export async function getStudentPortalClinicalBookingHold(
   const endMs = row.holdExpiresAt.getTime();
   const diffSec = Math.floor((endMs - nowMs) / 1000);
   const remainingSeconds = Math.max(0, diffSec);
-  const holdStatus: "active" | "expired" = endMs > nowMs ? "active" : "expired";
+  const holdStatus: "active" | "expired" = "active";
   return {
     holdExpiresAt: row.holdExpiresAt.toISOString(),
     remainingSeconds,
@@ -93,7 +110,7 @@ export async function reconcilePaidClinicalBookingPaymentHoldsForStudent(
   if (sid === "") return;
   const holds = await listActiveClinicalBookingPaymentHoldsForStudent(sid);
   for (const h of holds) {
-    const bal = await getStudentQuarterBalance(sid, h.term, h.year);
+    const bal = await loadStudentQuarterBalanceForClinicalHold(sid, h.term, h.year);
     if (
       isClinicalBookingHoldFinanciallySatisfied(
         h.balanceBeforeCharge,
@@ -114,22 +131,34 @@ export type ClinicalBookingPaymentHoldCleanupStats = {
   inconsistencies: number;
 };
 
-/**
- * Marks satisfied holds and auto-drops overdue unpaid clinical bookings (idempotent).
- */
-export async function runClinicalBookingPaymentHoldCleanup(): Promise<ClinicalBookingPaymentHoldCleanupStats> {
-  const stats: ClinicalBookingPaymentHoldCleanupStats = {
+function emptyCleanupStats(): ClinicalBookingPaymentHoldCleanupStats {
+  return {
     candidates: 0,
     satisfied: 0,
     autoDropped: 0,
     skipped: 0,
     inconsistencies: 0,
   };
-  if (!(await clinicalBookingPaymentHoldsTableExists())) {
-    return stats;
-  }
+}
 
-  const dueIds = await listDueActiveClinicalBookingPaymentHoldIds(200);
+function mergeCleanupStats(
+  a: ClinicalBookingPaymentHoldCleanupStats,
+  b: ClinicalBookingPaymentHoldCleanupStats,
+): void {
+  a.candidates += b.candidates;
+  a.satisfied += b.satisfied;
+  a.autoDropped += b.autoDropped;
+  a.skipped += b.skipped;
+  a.inconsistencies += b.inconsistencies;
+}
+
+/**
+ * Core idempotent processor: for each hold id, revoke unpaid expired booking or mark paid.
+ */
+export async function processDueClinicalBookingPaymentHoldIds(
+  dueIds: number[],
+): Promise<ClinicalBookingPaymentHoldCleanupStats> {
+  const stats = emptyCleanupStats();
   stats.candidates = dueIds.length;
 
   for (const holdId of dueIds) {
@@ -143,7 +172,7 @@ export async function runClinicalBookingPaymentHoldCleanup(): Promise<ClinicalBo
         stats.skipped += 1;
         continue;
       }
-      if (hold.holdExpiresAt.getTime() > Date.now()) {
+      if (!isClinicalBookingExpired(hold.holdExpiresAt)) {
         await conn.rollback();
         stats.skipped += 1;
         continue;
@@ -194,7 +223,7 @@ export async function runClinicalBookingPaymentHoldCleanup(): Promise<ClinicalBo
         continue;
       }
 
-      const currentBal = await getStudentQuarterBalance(
+      const currentBal = await loadStudentQuarterBalanceForClinicalHold(
         hold.studentId,
         hold.term,
         hold.year,
@@ -268,4 +297,89 @@ export async function runClinicalBookingPaymentHoldCleanup(): Promise<ClinicalBo
   }
 
   return stats;
+}
+
+/**
+ * Expired unpaid clinical reservation: `clinical_booking_payment_holds.status = 'active'`,
+ * `hold_expires_at <= UTC_TIMESTAMP()`, enrollment still `enrolled`, and ledger shows the
+ * charge is not financially satisfied vs `balance_before_charge` / `charge_amount`.
+ * On success: void `portal_billing_adjustments` clinical row, set enrollment `dropped`,
+ * hold `expired_auto_dropped`.
+ */
+export async function reconcileExpiredClinicalBookingHoldsForStudent(
+  studentId: string,
+): Promise<ClinicalBookingPaymentHoldCleanupStats> {
+  if (!(await clinicalBookingPaymentHoldsTableExists())) {
+    return emptyCleanupStats();
+  }
+  const sid = studentId.trim();
+  if (sid === "") return emptyCleanupStats();
+  const dueIds = await listDueActiveClinicalBookingPaymentHoldIdsForStudent(sid, 200);
+  return processDueClinicalBookingPaymentHoldIds(dueIds);
+}
+
+export async function reconcileExpiredClinicalBookingHoldsForTimetable(
+  timetableId: number,
+): Promise<ClinicalBookingPaymentHoldCleanupStats> {
+  if (!(await clinicalBookingPaymentHoldsTableExists())) {
+    return emptyCleanupStats();
+  }
+  const dueIds = await listDueActiveClinicalBookingPaymentHoldIdsForTimetable(
+    timetableId,
+    200,
+  );
+  return processDueClinicalBookingPaymentHoldIds(dueIds);
+}
+
+/**
+ * Process global due holds in batches until none remain or max batches (open-slot listing).
+ */
+export async function runDueClinicalBookingHoldCleanupBatches(
+  opts?: { maxBatches?: number; batchSize?: number },
+): Promise<ClinicalBookingPaymentHoldCleanupStats> {
+  const maxBatches = opts?.maxBatches ?? 25;
+  const batchSize = Math.min(500, Math.max(50, Math.trunc(opts?.batchSize ?? 250)));
+  const acc = emptyCleanupStats();
+  if (!(await clinicalBookingPaymentHoldsTableExists())) {
+    return acc;
+  }
+  for (let i = 0; i < maxBatches; i++) {
+    const dueIds = await listDueActiveClinicalBookingPaymentHoldIds(batchSize);
+    if (dueIds.length === 0) {
+      break;
+    }
+    const batch = await processDueClinicalBookingPaymentHoldIds(dueIds);
+    mergeCleanupStats(acc, batch);
+  }
+  return acc;
+}
+
+/**
+ * Marks satisfied holds and auto-drops overdue unpaid clinical bookings (idempotent).
+ */
+export async function runClinicalBookingPaymentHoldCleanup(): Promise<ClinicalBookingPaymentHoldCleanupStats> {
+  if (!(await clinicalBookingPaymentHoldsTableExists())) {
+    return emptyCleanupStats();
+  }
+  const dueIds = await listDueActiveClinicalBookingPaymentHoldIds(200);
+  return processDueClinicalBookingPaymentHoldIds(dueIds);
+}
+
+/**
+ * Revokes unpaid clinical registrations whose payment deadline has passed (student scope).
+ * Idempotent; delegates to {@link reconcileExpiredClinicalBookingHoldsForStudent}.
+ */
+export async function revokeExpiredClinicalBooking(
+  studentId: string,
+): Promise<ClinicalBookingPaymentHoldCleanupStats> {
+  return reconcileExpiredClinicalBookingHoldsForStudent(studentId);
+}
+
+/**
+ * Revokes overdue unpaid clinical registrations tied to a timetable slot (admin / slot views).
+ */
+export async function revokeExpiredClinicalBookingForTimetable(
+  timetableId: number,
+): Promise<ClinicalBookingPaymentHoldCleanupStats> {
+  return reconcileExpiredClinicalBookingHoldsForTimetable(timetableId);
 }

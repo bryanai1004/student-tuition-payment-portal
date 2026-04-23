@@ -15,11 +15,20 @@ import {
 } from "./conversationFactsService.js";
 import {
   CHAT_MODEL,
+  assertChatModelForCompletions,
+  createOpenAiEmbeddingVectors,
   EMBEDDING_MODEL,
   client as OPENAI_CLIENT,
 } from "../config/openai.js";
+import {
+  buildRetrievalQueryVariants,
+  detectCatalogProgramHint,
+  isWeakCatalogRetrieval,
+  rankCatalogChunksByEmbeddingMaxWithHint,
+  selectCatalogChunksForContext,
+  type CatalogRetrievalDebug,
+} from "../lib/catalogRetrieval.js";
 
-const TOP_K = 5;
 const MAX_QUESTION_CHARS = 2000;
 const MAX_HISTORY_MESSAGES = 4;
 const MAX_HISTORY_USER_TURNS = 2;
@@ -74,6 +83,11 @@ export type RetrievedChunk = {
   chunkIndex: number;
   content: string;
   score: number;
+  program?: "DAHM" | "MAHM" | null;
+  sectionTitle?: string;
+  subsectionTitle?: string;
+  pageStart?: number;
+  pageEnd?: number;
 };
 
 export type RagAnswerResult = {
@@ -169,9 +183,14 @@ async function withOpenAiRetry<T>(
   let lastError: unknown;
   for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt += 1) {
     try {
-      console.log("[AI CALL]");
-      console.log("using chat:", CHAT_MODEL);
-      console.log("using embedding:", EMBEDDING_MODEL);
+      const isEmbeddingCall = label.toLowerCase().includes("embedding");
+      console.log("[AI CALL]", { label });
+      if (isEmbeddingCall) {
+        console.log("using embedding model:", EMBEDDING_MODEL);
+      } else {
+        assertChatModelForCompletions(CHAT_MODEL);
+        console.log("using chat model:", CHAT_MODEL);
+      }
       return await operation();
     } catch (error) {
       lastError = error;
@@ -797,10 +816,24 @@ function isMostlyChinese(text: string): boolean {
 
 function buildContextBlock(items: { chunk: KnowledgeChunkRow; score: number }[]): string {
   return items
-    .map(({ chunk }) => {
-      return `[Source: ${chunk.source} | Chunk: ${chunk.chunkIndex}]\n${chunk.content}`;
+    .map(({ chunk, score }) => {
+      const metaParts = [
+        chunk.program && `Program: ${chunk.program}`,
+        chunk.sectionTitle && `Section: ${chunk.sectionTitle}`,
+        chunk.subsectionTitle && `Subsection: ${chunk.subsectionTitle}`,
+        chunk.pageStart != null &&
+          `Pages: ${chunk.pageStart}${
+            chunk.pageEnd != null && chunk.pageEnd !== chunk.pageStart
+              ? `–${chunk.pageEnd}`
+              : ""
+          }`,
+        `Source file: ${chunk.source}`,
+        `Chunk: ${chunk.chunkIndex}`,
+        `Match score: ${score.toFixed(3)}`,
+      ].filter(Boolean);
+      return `[${metaParts.join(" | ")}]\n${chunk.content}`;
     })
-    .join("\n\n");
+    .join("\n\n---\n\n");
 }
 
 function toRetrieved(chunk: KnowledgeChunkRow, score: number): RetrievedChunk {
@@ -810,6 +843,11 @@ function toRetrieved(chunk: KnowledgeChunkRow, score: number): RetrievedChunk {
     chunkIndex: chunk.chunkIndex,
     content: chunk.content,
     score,
+    ...(chunk.program != null ? { program: chunk.program } : {}),
+    ...(chunk.sectionTitle ? { sectionTitle: chunk.sectionTitle } : {}),
+    ...(chunk.subsectionTitle ? { subsectionTitle: chunk.subsectionTitle } : {}),
+    ...(chunk.pageStart != null ? { pageStart: chunk.pageStart } : {}),
+    ...(chunk.pageEnd != null ? { pageEnd: chunk.pageEnd } : {}),
   };
 }
 
@@ -933,6 +971,7 @@ function buildGroundedAcademicSystemPrompt(
   question: string,
   pipeline: GroundedAmuPipeline,
   identityContext?: IdentityContext | null,
+  options?: { weakRetrieval?: boolean },
 ): string {
   const pipelineLine =
     pipeline === "mixed"
@@ -946,10 +985,22 @@ Structure the answer with these sections when possible:
 Use only the retrieved AMU documents provided in the user message.
 Do not answer AMU-specific questions from general knowledge.`;
 
+  const advisorVoice = `You sound like a knowledgeable AMU academic advisor: warm, clear, and direct.
+When the catalog excerpts clearly support an answer, state it confidently and cite the catalog naturally (for example "Based on the MAHM 2025–26 catalog..." or "According to the DAHM catalog section on..."). Do not apologize or say you need "official documents" when those excerpts already contain the rule.
+If the question could differ between DAHM and MAHM and the excerpts or question do not pin down a single program, ask one short clarifying question or briefly address both programs only when each is supported by the excerpts.
+If the excerpts do not contain the rule, say plainly that this point is not found in the retrieved catalog text—do not guess or invent numbers, deadlines, or policies.
+When retrieval quality is uncertain, be explicit about what is and is not shown in the excerpts.`;
+
+  const weakHint =
+    options?.weakRetrieval === true
+      ? `The retrieved excerpts may be only loosely related. If they do not clearly answer the question, say the catalog passage was not found rather than inferring.`
+      : "";
+
   return `${DUAL_MODE_SYSTEM_PROMPT}
 
 ${pipelineLine}
-If the provided evidence does not support a claim, say "I cannot find this in AMU documents."
+${advisorVoice}
+${weakHint}
 If student-specific confirmation is missing, say "I don't have enough information from your records to confirm this."
 Keep the answer natural, concise, and grounded.
 ${languageInstructionForLlm(question, identityContext)}`;
@@ -1576,6 +1627,78 @@ ${q}`,
   };
 }
 
+async function retrieveChunksForCatalog(args: {
+  client: OpenAI;
+  question: string;
+  history: ChatHistoryItem[] | undefined;
+}): Promise<{
+  top: Array<{ chunk: KnowledgeChunkRow; score: number }>;
+  retrievalQuery: string;
+  debug: CatalogRetrievalDebug;
+  weakRetrieval: boolean;
+}> {
+  const chunks = await getKnowledgeChunks();
+  const retrievalQuery = await rewriteQuestionForRetrieval(
+    args.client,
+    args.question,
+    args.history,
+    "strict",
+    undefined,
+  );
+  const programHint = detectCatalogProgramHint(args.question);
+  const { variants, expansion, normalizedRewrite } = buildRetrievalQueryVariants({
+    originalQuestion: args.question,
+    rewrittenRetrievalQuery: retrievalQuery,
+  });
+
+  const embeddingVectors = await withOpenAiRetry(
+    "retrieveChunksForCatalog.embedding",
+    () => createOpenAiEmbeddingVectors(variants),
+  );
+
+  const ranked = rankCatalogChunksByEmbeddingMaxWithHint(
+    chunks,
+    embeddingVectors,
+    programHint,
+    cosineSimilarity,
+  );
+
+  const { selected, maxScore } = selectCatalogChunksForContext(ranked);
+
+  const debug: CatalogRetrievalDebug = {
+    originalUserQuery: args.question,
+    normalizedRetrievalQuery: normalizedRewrite,
+    embeddingQueryVariants: variants,
+    programHint,
+    topChunks: selected.map(({ chunk, score }) => ({
+      id: chunk.id,
+      source: chunk.source,
+      program: chunk.program ?? null,
+      sectionTitle: chunk.sectionTitle,
+      subsectionTitle: chunk.subsectionTitle,
+      pageStart: chunk.pageStart,
+      pageEnd: chunk.pageEnd,
+      score,
+    })),
+    maxScore,
+  };
+
+  const weakRetrieval = isWeakCatalogRetrieval(maxScore);
+
+  console.log("[rag/catalog retrieval]", {
+    originalUserQuery: debug.originalUserQuery,
+    normalizedRetrievalQuery: debug.normalizedRetrievalQuery,
+    expansionSnippet: expansion.slice(0, 240),
+    programHint,
+    embeddingVariantCount: variants.length,
+    maxScore: Number(maxScore.toFixed(4)),
+    weakRetrieval,
+    topChunks: debug.topChunks,
+  });
+
+  return { top: selected, retrievalQuery, debug, weakRetrieval };
+}
+
 export async function answerGraduationQuestion(
   question: string,
   rawHistory?: unknown,
@@ -1584,33 +1707,12 @@ export async function answerGraduationQuestion(
   const q = validateQuestion(question);
   const history = sanitizeChatHistory(rawHistory);
   const client = getOpenAiClient();
-  const chunks = await getKnowledgeChunks();
 
-  const retrievalQuery = await rewriteQuestionForRetrieval(
+  const { top, debug, weakRetrieval } = await retrieveChunksForCatalog({
     client,
-    q,
+    question: q,
     history,
-    "strict",
-    undefined,
-  );
-
-  const embedRes = await withOpenAiRetry("answerGraduationQuestion.embedding", () =>
-    client.embeddings.create({
-    model: EMBEDDING_MODEL,
-    input: retrievalQuery,
-    }),
-  );
-  const questionEmbedding = embedRes.data[0]?.embedding;
-  if (!questionEmbedding) {
-    throw new Error("No embedding in OpenAI response");
-  }
-
-  const scored = chunks.map((chunk) => ({
-    chunk,
-    score: cosineSimilarity(questionEmbedding, chunk.embedding),
-  }));
-  scored.sort((x, y) => y.score - x.score);
-  const top = scored.slice(0, TOP_K);
+  });
 
   const historyPrefix =
     history != null && history.length > 0
@@ -1619,6 +1721,12 @@ export async function answerGraduationQuestion(
   const evaluationBlock = options?.graduationEvaluation?.trim() ?? "No evaluation available.";
   const identityBlock = formatIdentityContextForPrompt(options?.identityContext);
   const contextBlock = formatRetrievedDocumentContextBlock(top);
+  console.log("[rag/answer mode]", {
+    path: "graduation_question",
+    answerMode: "catalog_rag_plus_evaluation",
+    maxRetrievalScore: debug.maxScore,
+    weakRetrieval,
+  });
   const completion = await withOpenAiRetry("answerGraduationQuestion.chat", () =>
     client.chat.completions.create({
     model: CHAT_MODEL,
@@ -1667,51 +1775,12 @@ export async function answerAmuQuestion(
   const history = sanitizeChatHistory(rawHistory);
   const pipeline = options?.pipeline ?? "policy";
   const client = getOpenAiClient();
-  const chunks = await getKnowledgeChunks();
 
-  const retrievalQuery = await rewriteQuestionForRetrieval(
+  const { top, debug, weakRetrieval } = await retrieveChunksForCatalog({
     client,
-    q,
+    question: q,
     history,
-    "strict",
-    undefined,
-  );
-
-  const embedRes = await withOpenAiRetry("answerAmuQuestion.embedding", () =>
-    client.embeddings.create({
-    model: EMBEDDING_MODEL,
-    input: retrievalQuery,
-    }),
-  );
-  const questionEmbedding = embedRes.data[0]?.embedding;
-  if (!questionEmbedding) {
-    throw new Error("No embedding in OpenAI response");
-  }
-
-  const scored = chunks.map((chunk) => ({
-    chunk,
-    score: cosineSimilarity(questionEmbedding, chunk.embedding),
-  }));
-
-  scored.sort((x, y) => y.score - x.score);
-  const top = scored.slice(0, TOP_K);
-
-  if (top.length === 0) {
-    const response = await client.responses.create({
-      model: CHAT_MODEL,
-      input: `User question: ${q}
-
-No relevant documents were found.
-Answer helpfully using general knowledge.`,
-    });
-    const answer = response.output_text?.trim() ?? "(no response)";
-    logGptResponseSource();
-    return {
-      question: q,
-      answer,
-      sources: [],
-    };
-  }
+  });
 
   const studentContextBlock = formatStudentContextBlock(options?.studentContext);
   const contextBlock = formatRetrievedDocumentContextBlock(top);
@@ -1745,6 +1814,17 @@ ${q}`;
     hasStudentContext: pipeline === "mixed",
     retrievedSourceCount: top.length,
     topRetrievedSource: top[0]?.chunk.source ?? null,
+    maxRetrievalScore: debug.maxScore,
+    weakRetrieval,
+    programHint: debug.programHint,
+  });
+
+  console.log("[rag/answer mode]", {
+    path: "amu_policy_or_mixed",
+    answerMode: "catalog_rag",
+    pipeline,
+    maxRetrievalScore: debug.maxScore,
+    weakRetrieval,
   });
 
   const completion = await withOpenAiRetry("answerAmuQuestion.chat", () =>
@@ -1757,6 +1837,7 @@ ${q}`;
           q,
           pipeline,
           options?.identityContext,
+          { weakRetrieval },
         ),
       },
       { role: "user", content: userPreamble },

@@ -10,6 +10,7 @@ import {
   listLegacyAccountingQuarters,
   loadLegacyAccountingRows,
 } from "../repositories/studentLegacyAccountRepository.js";
+import { isClinicalBookingExpired } from "../clinicalBookingPolicy.js";
 import { listActiveClinicalBookingPaymentHoldsForStudentQuarter } from "../repositories/clinicalBookingPaymentHoldRepository.js";
 import type {
   AccountContext,
@@ -189,6 +190,7 @@ function applyClinicalBookingPaymentHoldsToLedgerRows(
     if (!adjIds.has(b)) continue;
     const h = byBill.get(b);
     if (!h) continue;
+    if (isClinicalBookingExpired(h.holdExpiresAt, nowMs)) continue;
     const exp = h.holdExpiresAt.getTime();
     const remainingSeconds = Math.max(0, Math.floor((exp - nowMs) / 1000));
     row.clinicalBookingPaymentHold = {
@@ -391,10 +393,19 @@ export async function getAccountingQuartersPayload(studentId: string): Promise<{
   return { studentId, quarters };
 }
 
+export type AccountingLedgerPayloadOptions = {
+  /**
+   * When true, skip query-time revocation of expired unpaid clinical bookings.
+   * Used by `getStudentQuarterBalance` to avoid recursion while holds are reconciled.
+   */
+  skipExpiredClinicalBookingReconciliation?: boolean;
+};
+
 export async function getAccountingLedgerPayload(
   studentId: string,
   term: string,
   year: number,
+  options?: AccountingLedgerPayloadOptions,
 ): Promise<{
   studentId: string;
   term: string;
@@ -405,6 +416,13 @@ export async function getAccountingLedgerPayload(
   const termTrim = term.trim();
   if (termTrim === "" || !Number.isFinite(year)) {
     return null;
+  }
+
+  if (!options?.skipExpiredClinicalBookingReconciliation) {
+    const { reconcileExpiredClinicalBookingHoldsForStudent } = await import(
+      "./clinicalBookingPaymentHoldService.js"
+    );
+    await reconcileExpiredClinicalBookingHoldsForStudent(studentId);
   }
 
   if (studentId === DEMO_STUDENT_ID) {
@@ -502,6 +520,8 @@ export async function getStudentQuarterBalance(
   term: string,
   year: number,
 ): Promise<number> {
-  const payload = await getAccountingLedgerPayload(studentId, term.trim(), year);
+  const payload = await getAccountingLedgerPayload(studentId, term.trim(), year, {
+    skipExpiredClinicalBookingReconciliation: true,
+  });
   return payload?.summary.balance ?? 0;
 }

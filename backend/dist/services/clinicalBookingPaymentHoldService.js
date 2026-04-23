@@ -1,9 +1,12 @@
 import { pool } from "../lib/db.js";
-import { clinicalBookingPaymentHoldsTableExists, getUrgentActiveClinicalBookingHoldForStudentPortal, listActiveClinicalBookingPaymentHoldsForStudent, listDueActiveClinicalBookingPaymentHoldIds, lockClinicalBookingPaymentHoldById, markClinicalBookingPaymentHoldSatisfiedOutsideTxn, updateClinicalBookingPaymentHoldStatus, voidSystemClinicalBillingAdjustmentByIdInConn, } from "../repositories/clinicalBookingPaymentHoldRepository.js";
+import { clinicalBookingPaymentHoldsTableExists, getUrgentActiveClinicalBookingHoldForStudentPortal, listActiveClinicalBookingPaymentHoldsForStudent, listDueActiveClinicalBookingPaymentHoldIds, listDueActiveClinicalBookingPaymentHoldIdsForStudent, listDueActiveClinicalBookingPaymentHoldIdsForTimetable, lockClinicalBookingPaymentHoldById, markClinicalBookingPaymentHoldSatisfiedOutsideTxn, updateClinicalBookingPaymentHoldStatus, voidSystemClinicalBillingAdjustmentByIdInConn, } from "../repositories/clinicalBookingPaymentHoldRepository.js";
 import { getClinicTimetableById } from "../repositories/clinicalTimetableRepository.js";
 import { buildClinicTimetableSlotLabel, formatClinicTimeHm, } from "./clinicalScheduleService.js";
 import { dropClinicalEnrollmentInConn } from "../repositories/clinicalEnrollmentRepository.js";
-import { getStudentQuarterBalance } from "./studentLedgerService.js";
+async function loadStudentQuarterBalanceForClinicalHold(studentId, term, year) {
+    const { getStudentQuarterBalance } = await import("./studentLedgerService.js");
+    return getStudentQuarterBalance(studentId, term, year);
+}
 /**
  * Whether the student's current quarter balance indicates this clinical booking charge
  * is covered, using the snapshot taken at charge time (`balanceBeforeCharge`).
@@ -19,6 +22,13 @@ export function isClinicalBookingHoldFinanciallySatisfied(balanceBeforeCharge, c
         ? balanceBeforeCharge
         : balanceBeforeCharge + chargeAmount;
     return currentBalance <= thr + 0.009;
+}
+/**
+ * True when the hold window end is strictly before "now" (UTC clock on server).
+ * Used with `status = 'active'` + unpaid balance checks to detect expiration.
+ */
+export function isClinicalBookingPaymentHoldPastDeadline(holdExpiresAt, nowMs = Date.now()) {
+    return holdExpiresAt.getTime() <= nowMs;
 }
 /**
  * Summarizes the student's most urgent open clinical booking payment hold for the student portal.
@@ -62,27 +72,33 @@ export async function reconcilePaidClinicalBookingPaymentHoldsForStudent(student
         return;
     const holds = await listActiveClinicalBookingPaymentHoldsForStudent(sid);
     for (const h of holds) {
-        const bal = await getStudentQuarterBalance(sid, h.term, h.year);
+        const bal = await loadStudentQuarterBalanceForClinicalHold(sid, h.term, h.year);
         if (isClinicalBookingHoldFinanciallySatisfied(h.balanceBeforeCharge, h.chargeAmount, bal)) {
             await markClinicalBookingPaymentHoldSatisfiedOutsideTxn(h.id);
         }
     }
 }
-/**
- * Marks satisfied holds and auto-drops overdue unpaid clinical bookings (idempotent).
- */
-export async function runClinicalBookingPaymentHoldCleanup() {
-    const stats = {
+function emptyCleanupStats() {
+    return {
         candidates: 0,
         satisfied: 0,
         autoDropped: 0,
         skipped: 0,
         inconsistencies: 0,
     };
-    if (!(await clinicalBookingPaymentHoldsTableExists())) {
-        return stats;
-    }
-    const dueIds = await listDueActiveClinicalBookingPaymentHoldIds(200);
+}
+function mergeCleanupStats(a, b) {
+    a.candidates += b.candidates;
+    a.satisfied += b.satisfied;
+    a.autoDropped += b.autoDropped;
+    a.skipped += b.skipped;
+    a.inconsistencies += b.inconsistencies;
+}
+/**
+ * Core idempotent processor: for each hold id, revoke unpaid expired booking or mark paid.
+ */
+export async function processDueClinicalBookingPaymentHoldIds(dueIds) {
+    const stats = emptyCleanupStats();
     stats.candidates = dueIds.length;
     for (const holdId of dueIds) {
         const conn = await pool.getConnection();
@@ -127,7 +143,7 @@ export async function runClinicalBookingPaymentHoldCleanup() {
                 stats.skipped += 1;
                 continue;
             }
-            const currentBal = await getStudentQuarterBalance(hold.studentId, hold.term, hold.year);
+            const currentBal = await loadStudentQuarterBalanceForClinicalHold(hold.studentId, hold.term, hold.year);
             if (isClinicalBookingHoldFinanciallySatisfied(hold.balanceBeforeCharge, hold.chargeAmount, currentBal)) {
                 await updateClinicalBookingPaymentHoldStatus(conn, holdId, "satisfied_paid", { satisfiedAt: new Date() });
                 await conn.commit();
@@ -167,5 +183,59 @@ export async function runClinicalBookingPaymentHoldCleanup() {
         }
     }
     return stats;
+}
+/**
+ * Expired unpaid clinical reservation: `clinical_booking_payment_holds.status = 'active'`,
+ * `hold_expires_at <= UTC_TIMESTAMP()`, enrollment still `enrolled`, and ledger shows the
+ * charge is not financially satisfied vs `balance_before_charge` / `charge_amount`.
+ * On success: void `portal_billing_adjustments` clinical row, set enrollment `dropped`,
+ * hold `expired_auto_dropped`.
+ */
+export async function reconcileExpiredClinicalBookingHoldsForStudent(studentId) {
+    if (!(await clinicalBookingPaymentHoldsTableExists())) {
+        return emptyCleanupStats();
+    }
+    const sid = studentId.trim();
+    if (sid === "")
+        return emptyCleanupStats();
+    const dueIds = await listDueActiveClinicalBookingPaymentHoldIdsForStudent(sid, 200);
+    return processDueClinicalBookingPaymentHoldIds(dueIds);
+}
+export async function reconcileExpiredClinicalBookingHoldsForTimetable(timetableId) {
+    if (!(await clinicalBookingPaymentHoldsTableExists())) {
+        return emptyCleanupStats();
+    }
+    const dueIds = await listDueActiveClinicalBookingPaymentHoldIdsForTimetable(timetableId, 200);
+    return processDueClinicalBookingPaymentHoldIds(dueIds);
+}
+/**
+ * Process global due holds in batches until none remain or max batches (open-slot listing).
+ */
+export async function runDueClinicalBookingHoldCleanupBatches(opts) {
+    const maxBatches = opts?.maxBatches ?? 25;
+    const batchSize = Math.min(500, Math.max(50, Math.trunc(opts?.batchSize ?? 250)));
+    const acc = emptyCleanupStats();
+    if (!(await clinicalBookingPaymentHoldsTableExists())) {
+        return acc;
+    }
+    for (let i = 0; i < maxBatches; i++) {
+        const dueIds = await listDueActiveClinicalBookingPaymentHoldIds(batchSize);
+        if (dueIds.length === 0) {
+            break;
+        }
+        const batch = await processDueClinicalBookingPaymentHoldIds(dueIds);
+        mergeCleanupStats(acc, batch);
+    }
+    return acc;
+}
+/**
+ * Marks satisfied holds and auto-drops overdue unpaid clinical bookings (idempotent).
+ */
+export async function runClinicalBookingPaymentHoldCleanup() {
+    if (!(await clinicalBookingPaymentHoldsTableExists())) {
+        return emptyCleanupStats();
+    }
+    const dueIds = await listDueActiveClinicalBookingPaymentHoldIds(200);
+    return processDueClinicalBookingPaymentHoldIds(dueIds);
 }
 //# sourceMappingURL=clinicalBookingPaymentHoldService.js.map

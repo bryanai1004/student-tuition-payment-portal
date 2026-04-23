@@ -4,7 +4,7 @@ import { getAccountingLedgerPayload } from "./studentLedgerService.js";
 import { chargeAuthorizeOpaqueData } from "./authorizeNetGatewayService.js";
 import { recordAuthorizeNetPayment } from "../repositories/studentAuthorizePaymentRepository.js";
 import { hasSystemLateFeeForQuarter, insertSystemLateFee, LATE_FEE_DESCRIPTION, } from "../repositories/adminFinanceRepository.js";
-import { runClinicalBookingPaymentHoldCleanup } from "./clinicalBookingPaymentHoldService.js";
+import { reconcileExpiredClinicalBookingHoldsForStudent } from "./clinicalBookingPaymentHoldService.js";
 import { getLatestClinicalBookingPaymentHoldStatusForStudentQuarter } from "../repositories/clinicalBookingPaymentHoldRepository.js";
 function roundMoney(n) {
     return Math.round(n * 100) / 100;
@@ -264,7 +264,7 @@ async function resolveClinicFeeStatus(args) {
     if (!deadlineHasPassed(args.paymentDeadline)) {
         return "pending";
     }
-    await runClinicalBookingPaymentHoldCleanup();
+    await reconcileExpiredClinicalBookingHoldsForStudent(args.studentId);
     const latestHoldStatus = await getLatestClinicalBookingPaymentHoldStatusForStudentQuarter(args.studentId, args.term, args.year);
     if (latestHoldStatus === "expired_auto_dropped" ||
         latestHoldStatus === "cancelled_enrollment_inactive") {
