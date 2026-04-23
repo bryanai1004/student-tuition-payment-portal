@@ -322,17 +322,37 @@ export async function insertPortalBillingAdjustment(pool, params) {
     const src = params.adjustmentSource ?? "manual";
     const ce = params.clinicalEnrollmentId;
     const hasCe = ce != null && Number.isFinite(Number(ce)) && Math.trunc(Number(ce)) > 0;
+    const rawReversal = params.reversalOfAdjustmentId;
+    const hasReversal = rawReversal != null &&
+        Number.isFinite(Number(rawReversal)) &&
+        Math.trunc(Number(rawReversal)) > 0;
+    if (hasReversal && !(await portalBillingAdjustmentsReversalColumnExists(pool))) {
+        throw new Error("MISSING_REVERSAL_COLUMN");
+    }
+    const reversalId = hasReversal ? Math.trunc(Number(rawReversal)) : null;
     const values = hasCe
-        ? [
-            params.studentExternalId.trim(),
-            params.term.trim(),
-            Math.trunc(params.year),
-            params.description.trim(),
-            params.amount,
-            params.category,
-            src,
-            Math.trunc(Number(ce)),
-        ]
+        ? hasReversal
+            ? [
+                params.studentExternalId.trim(),
+                params.term.trim(),
+                Math.trunc(params.year),
+                params.description.trim(),
+                params.amount,
+                params.category,
+                src,
+                Math.trunc(Number(ce)),
+                reversalId,
+            ]
+            : [
+                params.studentExternalId.trim(),
+                params.term.trim(),
+                Math.trunc(params.year),
+                params.description.trim(),
+                params.amount,
+                params.category,
+                src,
+                Math.trunc(Number(ce)),
+            ]
         : [
             params.studentExternalId.trim(),
             params.term.trim(),
@@ -341,16 +361,42 @@ export async function insertPortalBillingAdjustment(pool, params) {
             params.amount,
             params.category,
             src,
+            ...(hasReversal ? [reversalId] : []),
         ];
     const sql = hasCe
-        ? `INSERT INTO portal_billing_adjustments
-        (student_external_id, term, year, description, amount, category, adjustment_source, clinical_enrollment_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        : `INSERT INTO portal_billing_adjustments
-        (student_external_id, term, year, description, amount, category, adjustment_source)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        ? hasReversal
+            ? `INSERT INTO portal_billing_adjustments
+          (student_external_id, term, year, description, amount, category, adjustment_source, clinical_enrollment_id, reversal_of_adjustment_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            : `INSERT INTO portal_billing_adjustments
+          (student_external_id, term, year, description, amount, category, adjustment_source, clinical_enrollment_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        : hasReversal
+            ? `INSERT INTO portal_billing_adjustments
+          (student_external_id, term, year, description, amount, category, adjustment_source, reversal_of_adjustment_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            : `INSERT INTO portal_billing_adjustments
+          (student_external_id, term, year, description, amount, category, adjustment_source)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`;
     const [res] = await pool.execute(sql, values);
     return Math.trunc(Number(res.insertId));
+}
+let cachedPortalBillingReversalColumnExists = null;
+async function portalBillingAdjustmentsReversalColumnExists(pool) {
+    if (cachedPortalBillingReversalColumnExists !== null) {
+        return cachedPortalBillingReversalColumnExists;
+    }
+    try {
+        const [rows] = await pool.query(`SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'portal_billing_adjustments'
+         AND COLUMN_NAME = 'reversal_of_adjustment_id'`);
+        cachedPortalBillingReversalColumnExists = Number(rows[0]?.c) > 0;
+    }
+    catch {
+        cachedPortalBillingReversalColumnExists = false;
+    }
+    return cachedPortalBillingReversalColumnExists;
 }
 export async function insertSystemLateFee(pool, params) {
     const studentId = params.studentExternalId.trim();
@@ -389,6 +435,78 @@ export async function insertSystemLateFee(pool, params) {
         }
         throw error;
     }
+}
+export async function listSystemLateFeeRowsForQuarter(pool, term, year) {
+    const t = term.trim();
+    const y = Math.trunc(year);
+    const hasReversalColumn = await portalBillingAdjustmentsReversalColumnExists(pool);
+    if (!hasReversalColumn) {
+        const [rows] = await pool.query(`SELECT id,
+              student_external_id AS studentExternalId,
+              term,
+              year,
+              amount
+       FROM portal_billing_adjustments
+       WHERE adjustment_source = 'system_late_fee'
+         AND term = ?
+         AND year = ?`, [t, y]);
+        return rows.map((r) => {
+            const amount = Number(r.amount);
+            return {
+                id: Number(r.id),
+                studentExternalId: str(r.studentExternalId),
+                term: str(r.term),
+                year: Number(r.year),
+                amount,
+                reversedAmount: 0,
+                activeAmount: amount,
+            };
+        });
+    }
+    const [rows] = await pool.query(`SELECT fee.id,
+            fee.student_external_id AS studentExternalId,
+            fee.term,
+            fee.year,
+            fee.amount,
+            COALESCE(SUM(
+              CASE
+                WHEN rev.amount < 0 THEN ABS(rev.amount)
+                ELSE 0
+              END
+            ), 0) AS reversedAmount
+     FROM portal_billing_adjustments fee
+     LEFT JOIN portal_billing_adjustments rev
+       ON rev.reversal_of_adjustment_id = fee.id
+      AND rev.adjustment_source = 'system_late_fee_reversal'
+     WHERE fee.adjustment_source = 'system_late_fee'
+       AND fee.term = ?
+       AND fee.year = ?
+     GROUP BY fee.id, fee.student_external_id, fee.term, fee.year, fee.amount`, [t, y]);
+    return rows.map((r) => {
+        const amount = Number(r.amount);
+        const reversedAmount = Number(r.reversedAmount);
+        return {
+            id: Number(r.id),
+            studentExternalId: str(r.studentExternalId),
+            term: str(r.term),
+            year: Number(r.year),
+            amount,
+            reversedAmount,
+            activeAmount: Math.max(0, amount - reversedAmount),
+        };
+    });
+}
+export async function insertSystemLateFeeReversal(pool, params) {
+    return insertPortalBillingAdjustment(pool, {
+        studentExternalId: params.studentExternalId,
+        term: params.term,
+        year: params.year,
+        description: `Late fee reversal: ${params.reason}`.slice(0, 255),
+        amount: -Math.abs(params.amount),
+        category: "fees",
+        adjustmentSource: "system_late_fee_reversal",
+        reversalOfAdjustmentId: params.sourceAdjustmentId,
+    });
 }
 export async function insertPortalPayment(pool, params) {
     await pool.execute(`INSERT INTO portal_payments

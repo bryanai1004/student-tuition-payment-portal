@@ -270,6 +270,7 @@ function systemRowMeta() {
 function adjustmentMetaForLedger(adj) {
     const isLateFee = adj.adjustmentSource === "system_late_fee";
     const isSystemClinical = adj.adjustmentSource === "system_clinical";
+    const isLateFeeReversal = adj.adjustmentSource === "system_late_fee_reversal";
     const sid = adj.id != null && Number.isFinite(adj.id) ? adj.id : null;
     if (isLateFee) {
         return {
@@ -280,6 +281,14 @@ function adjustmentMetaForLedger(adj) {
         };
     }
     if (isSystemClinical) {
+        return {
+            sourceType: "system",
+            sourceId: sid,
+            isEditable: false,
+            isDeletable: false,
+        };
+    }
+    if (isLateFeeReversal) {
         return {
             sourceType: "system",
             sourceId: sid,

@@ -46,6 +46,8 @@ function asAdjustmentSource(raw) {
         return "system_late_fee";
     if (s === "system_clinical")
         return "system_clinical";
+    if (s === "system_late_fee_reversal")
+        return "system_late_fee_reversal";
     return "manual";
 }
 /** In-process cache: whether `portal_billing_adjustments.adjustment_source` exists (older prod DBs may lack it). */

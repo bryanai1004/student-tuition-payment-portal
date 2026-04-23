@@ -16,6 +16,14 @@ export declare function getFinanceQuarterSettings(req: Request, res: Response): 
  */
 export declare function putFinanceQuarterSettings(req: Request, res: Response): Promise<void>;
 /**
+ * GET /api/admin/finance/late-fee-reconciliation-preview?term=&year=&paymentDueDate=
+ */
+export declare function getLateFeeReconciliationPreview(req: Request, res: Response): Promise<void>;
+/**
+ * POST /api/admin/finance/reconcile-late-fees
+ */
+export declare function postReconcileLateFees(req: Request, res: Response): Promise<void>;
+/**
  * POST /api/admin/finance/run-late-fee
  */
 export declare function postRunLateFeeCheck(req: Request, res: Response): Promise<void>;

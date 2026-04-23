@@ -28,6 +28,34 @@ export declare function getQuarterSettingsPayload(term: string, year: number): P
     ddlPersistenceAvailable: boolean;
     ddlSaveNote: string | null;
 }>;
+export type LateFeeReconciliationPreview = {
+    term: string;
+    year: number;
+    paymentDueDate: string | null;
+    studentsScanned: number;
+    wouldAddSystemLateFeeCount: number;
+    wouldReverseInvalidSystemLateFeeCount: number;
+    wouldRequireManualReviewCount: number;
+    sampleReversalStudentId: string | null;
+};
+export declare function previewLateFeeReconciliationForQuarter(term: string, year: number, paymentDueDateOverride?: string | null): Promise<LateFeeReconciliationPreview>;
+export type LateFeeReconciliationResult = {
+    ok: true;
+    term: string;
+    year: number;
+    paymentDueDate: string | null;
+    studentsScanned: number;
+    insertedCount: number;
+    reversedCount: number;
+    protectedSettledCount: number;
+    skippedCount: number;
+    sampleReversal: {
+        studentId: string;
+        originalLateFeeAdjustmentId: number;
+        reversalAdjustmentId: number;
+    } | null;
+};
+export declare function reconcileLateFeesForQuarter(term: string, year: number): Promise<LateFeeReconciliationResult>;
 export declare function putQuarterSettings(input: {
     term: string;
     year: number;
@@ -37,6 +65,7 @@ export declare function putQuarterSettings(input: {
     updatedBy?: string | null;
 }): Promise<{
     ok: true;
+    reconciliation: LateFeeReconciliationResult;
 } | {
     ok: false;
     message: string;

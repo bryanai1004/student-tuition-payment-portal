@@ -32,8 +32,10 @@ import {
   getAdminFinanceStudents,
   getFinanceQuarterSettings,
   getGlobalFinanceQuarters,
+  getLateFeeReconciliationPreview,
   postAdminFinanceChargeHandler,
   postAdminFinancePaymentHandler,
+  postReconcileLateFees,
   postRunLateFeeCheck,
   putAdminFinanceChargeByIdHandler,
   putAdminFinancePaymentByIdHandler,
@@ -247,7 +249,12 @@ adminRouter.delete("/enrollments", deleteAdminPortalEnrollmentHandler);
 adminRouter.post("/marks/set-grade", setStudentGrade);
 adminRouter.get("/finance/quarters", getGlobalFinanceQuarters);
 adminRouter.get("/finance/quarter-settings", getFinanceQuarterSettings);
+adminRouter.get(
+  "/finance/late-fee-reconciliation-preview",
+  getLateFeeReconciliationPreview,
+);
 adminRouter.put("/finance/quarter-settings", putFinanceQuarterSettings);
+adminRouter.post("/finance/reconcile-late-fees", postReconcileLateFees);
 adminRouter.post("/finance/run-late-fee", postRunLateFeeCheck);
 adminRouter.get("/finance/students", getAdminFinanceStudents);
 adminRouter.post("/finance/charge", postAdminFinanceChargeHandler);

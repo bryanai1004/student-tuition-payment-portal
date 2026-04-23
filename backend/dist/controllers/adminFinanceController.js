@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { deleteAdminFinanceCharge, deleteAdminFinancePayment, getAdminFinanceLedger, getAdminFinanceQuarters, getQuarterSettingsPayload, listAdminFinanceStudentsPaginated, parseBalanceFilterParam, listGlobalQuartersPayload, postAdminFinanceCharge, postAdminFinancePayment, putAdminFinanceCharge, putAdminFinancePayment, putQuarterSettings, runLateFeeCheckForQuarter, validatePostChargeBody, validatePostPaymentBody, validatePutChargeBody, validatePutPaymentBody, verifyManualChargeForStudentTerm, verifyPaymentForStudentTerm, } from "../services/adminFinanceService.js";
+import { deleteAdminFinanceCharge, deleteAdminFinancePayment, getAdminFinanceLedger, getAdminFinanceQuarters, getQuarterSettingsPayload, listAdminFinanceStudentsPaginated, parseBalanceFilterParam, listGlobalQuartersPayload, postAdminFinanceCharge, postAdminFinancePayment, previewLateFeeReconciliationForQuarter, putAdminFinanceCharge, putAdminFinancePayment, putQuarterSettings, reconcileLateFeesForQuarter, runLateFeeCheckForQuarter, validatePostChargeBody, validatePostPaymentBody, validatePutChargeBody, validatePutPaymentBody, verifyManualChargeForStudentTerm, verifyPaymentForStudentTerm, } from "../services/adminFinanceService.js";
 function devMessage(e) {
     return e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
 }
@@ -194,12 +194,90 @@ export async function putFinanceQuarterSettings(req, res) {
             res.status(200).json(saveResult);
             return;
         }
-        res.json({ ok: true });
+        res.json(saveResult);
     }
     catch (e) {
         console.error("[admin/finance/quarter-settings put]", e);
         const body = {
             error: "Failed to save quarter settings",
+        };
+        if (env.nodeEnv === "development")
+            body.message = devMessage(e);
+        res.status(500).json(body);
+    }
+}
+/**
+ * GET /api/admin/finance/late-fee-reconciliation-preview?term=&year=&paymentDueDate=
+ */
+export async function getLateFeeReconciliationPreview(req, res) {
+    try {
+        const termRaw = req.query.term;
+        const yearRaw = req.query.year;
+        const term = typeof termRaw === "string" && termRaw.trim() !== ""
+            ? termRaw.trim()
+            : "";
+        const yearNum = typeof yearRaw === "string" && yearRaw.trim() !== ""
+            ? Number(yearRaw)
+            : Number.NaN;
+        const year = Number.isFinite(yearNum) ? Math.trunc(yearNum) : Number.NaN;
+        if (term === "" || !Number.isFinite(year)) {
+            res.status(400).json({
+                error: "Query parameters `term` and `year` are required",
+            });
+            return;
+        }
+        const dueRaw = req.query.paymentDueDate;
+        const paymentDueDateOverride = dueRaw === undefined || dueRaw === null
+            ? undefined
+            : typeof dueRaw === "string"
+                ? dueRaw.trim() === ""
+                    ? null
+                    : dueRaw.trim().slice(0, 10)
+                : undefined;
+        const preview = await previewLateFeeReconciliationForQuarter(term, year, paymentDueDateOverride);
+        res.json(preview);
+    }
+    catch (e) {
+        console.error("[admin/finance/late-fee-reconciliation-preview]", e);
+        const body = {
+            error: "Failed to compute late fee reconciliation preview",
+        };
+        if (env.nodeEnv === "development")
+            body.message = devMessage(e);
+        res.status(500).json(body);
+    }
+}
+/**
+ * POST /api/admin/finance/reconcile-late-fees
+ */
+export async function postReconcileLateFees(req, res) {
+    try {
+        const raw = req.body;
+        if (raw == null || typeof raw !== "object") {
+            res.status(400).json({ error: "Request body must be a JSON object." });
+            return;
+        }
+        const o = raw;
+        const term = typeof o.term === "string" ? o.term.trim() : "";
+        const yearRaw = o.year;
+        const year = typeof yearRaw === "number"
+            ? yearRaw
+            : typeof yearRaw === "string"
+                ? Number(yearRaw)
+                : Number.NaN;
+        if (term === "" || !Number.isFinite(year)) {
+            res.status(400).json({
+                error: "term and year are required; year must be a finite number.",
+            });
+            return;
+        }
+        const result = await reconcileLateFeesForQuarter(term, Math.trunc(year));
+        res.json(result);
+    }
+    catch (e) {
+        console.error("[admin/finance/reconcile-late-fees]", e);
+        const body = {
+            error: "Failed to reconcile late fees",
         };
         if (env.nodeEnv === "development")
             body.message = devMessage(e);

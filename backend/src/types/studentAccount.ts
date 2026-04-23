@@ -155,7 +155,8 @@ export type CourseRecord = {
 export type BillingAdjustmentSource =
   | "manual"
   | "system_late_fee"
-  | "system_clinical";
+  | "system_clinical"
+  | "system_late_fee_reversal";
 
 export type BillingAdjustmentRecord = {
   id?: number;

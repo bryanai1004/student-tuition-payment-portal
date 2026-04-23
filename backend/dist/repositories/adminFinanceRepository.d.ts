@@ -68,9 +68,11 @@ export declare function insertPortalBillingAdjustment(pool: PortalBillingSqlExec
     description: string;
     amount: number;
     category: PortalBillingCategory;
-    adjustmentSource?: "manual" | "system_late_fee" | "system_clinical";
+    adjustmentSource?: "manual" | "system_late_fee" | "system_clinical" | "system_late_fee_reversal";
     /** When set, links a `system_clinical` slot booking charge to `clinical_enrollments.id`. */
     clinicalEnrollmentId?: number | null;
+    /** When set, links this row as a compensating reversal of another adjustment row. */
+    reversalOfAdjustmentId?: number | null;
 }): Promise<number>;
 export declare function insertSystemLateFee(pool: PortalBillingSqlExecutor, params: {
     studentExternalId: string;
@@ -78,6 +80,24 @@ export declare function insertSystemLateFee(pool: PortalBillingSqlExecutor, para
     year: number;
     amount: number;
 }): Promise<void>;
+export type SystemLateFeeRow = {
+    id: number;
+    studentExternalId: string;
+    term: string;
+    year: number;
+    amount: number;
+    reversedAmount: number;
+    activeAmount: number;
+};
+export declare function listSystemLateFeeRowsForQuarter(pool: Pool, term: string, year: number): Promise<SystemLateFeeRow[]>;
+export declare function insertSystemLateFeeReversal(pool: PortalBillingSqlExecutor, params: {
+    studentExternalId: string;
+    term: string;
+    year: number;
+    sourceAdjustmentId: number;
+    amount: number;
+    reason: string;
+}): Promise<number>;
 export declare function insertPortalPayment(pool: Pool, params: {
     studentExternalId: string;
     term: string;

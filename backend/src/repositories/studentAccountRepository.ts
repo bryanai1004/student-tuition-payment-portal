@@ -60,6 +60,7 @@ function asAdjustmentSource(raw: unknown): BillingAdjustmentSource {
   const s = String(raw ?? "").trim().toLowerCase();
   if (s === "system_late_fee") return "system_late_fee";
   if (s === "system_clinical") return "system_clinical";
+  if (s === "system_late_fee_reversal") return "system_late_fee_reversal";
   return "manual";
 }
 

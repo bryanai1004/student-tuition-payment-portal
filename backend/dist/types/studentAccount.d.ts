@@ -133,7 +133,7 @@ export type CourseRecord = {
     units?: number;
     hours?: number;
 };
-export type BillingAdjustmentSource = "manual" | "system_late_fee" | "system_clinical";
+export type BillingAdjustmentSource = "manual" | "system_late_fee" | "system_clinical" | "system_late_fee_reversal";
 export type BillingAdjustmentRecord = {
     id?: number;
     description: string;

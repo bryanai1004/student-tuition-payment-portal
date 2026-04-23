@@ -3,7 +3,7 @@ import { getAdminStudent, getAdminStudentPhotoUrlHandler, getAdminStudents, getN
 import { deleteAdminCourseSection, getAdminCourseSectionCourseMeta, getAdminCourseSectionEnrollments, getAdminExportFeedbackCsv, getAdminCourseSections, getAdminExportRegisteredStudentsCsv, patchAdminCourseSection, postAdminCourseSection, } from "../controllers/adminCourseSectionController.js";
 import { deleteAdminPortalEnrollmentHandler } from "../controllers/adminEnrollmentController.js";
 import { setStudentGrade } from "../controllers/adminMarksController.js";
-import { deleteAdminFinanceChargeByIdHandler, deleteAdminFinancePaymentByIdHandler, getAdminFinanceLedgerHandler, getAdminFinanceQuartersHandler, getAdminFinanceStudents, getFinanceQuarterSettings, getGlobalFinanceQuarters, postAdminFinanceChargeHandler, postAdminFinancePaymentHandler, postRunLateFeeCheck, putAdminFinanceChargeByIdHandler, putAdminFinancePaymentByIdHandler, putFinanceQuarterSettings, } from "../controllers/adminFinanceController.js";
+import { deleteAdminFinanceChargeByIdHandler, deleteAdminFinancePaymentByIdHandler, getAdminFinanceLedgerHandler, getAdminFinanceQuartersHandler, getAdminFinanceStudents, getFinanceQuarterSettings, getGlobalFinanceQuarters, getLateFeeReconciliationPreview, postAdminFinanceChargeHandler, postAdminFinancePaymentHandler, postReconcileLateFees, postRunLateFeeCheck, putAdminFinanceChargeByIdHandler, putAdminFinancePaymentByIdHandler, putFinanceQuarterSettings, } from "../controllers/adminFinanceController.js";
 import { getAdminCoursesOpenForRegistration } from "../controllers/adminOpenRegistrationCoursesController.js";
 import { deleteCourseBinItemHandler, getCourseBin, postCourseBin, } from "../controllers/courseBinController.js";
 import { getCourseSections, getCourses } from "../controllers/courseController.js";
@@ -85,7 +85,9 @@ adminRouter.delete("/enrollments", deleteAdminPortalEnrollmentHandler);
 adminRouter.post("/marks/set-grade", setStudentGrade);
 adminRouter.get("/finance/quarters", getGlobalFinanceQuarters);
 adminRouter.get("/finance/quarter-settings", getFinanceQuarterSettings);
+adminRouter.get("/finance/late-fee-reconciliation-preview", getLateFeeReconciliationPreview);
 adminRouter.put("/finance/quarter-settings", putFinanceQuarterSettings);
+adminRouter.post("/finance/reconcile-late-fees", postReconcileLateFees);
 adminRouter.post("/finance/run-late-fee", postRunLateFeeCheck);
 adminRouter.get("/finance/students", getAdminFinanceStudents);
 adminRouter.post("/finance/charge", postAdminFinanceChargeHandler);
