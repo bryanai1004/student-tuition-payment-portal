@@ -116,6 +116,7 @@ export function AIAssistantInput({
       />
 
       <p className="portal-ai-assistant-attribution">{t('poweredByAhmc')}</p>
+      <p className="portal-ai-assistant-disclaimer">{t('aiAssist.disclaimer')}</p>
 
       <div className="portal-ai-assistant-compose">
         <div className="portal-ai-assistant-compose__leading" role="group" aria-label={t('addAttachmentsGroupAria')}>

@@ -684,6 +684,15 @@
   align-self: flex-start;
 }
 
+.portal-ai-assistant-disclaimer {
+  margin: 0 0 6px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #888;
+  overflow-wrap: anywhere;
+}
+
 .portal-ai-assistant-compose {
   display: flex;
   gap: 10px;
