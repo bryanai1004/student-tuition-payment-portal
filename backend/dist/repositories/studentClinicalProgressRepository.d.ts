@@ -1,6 +1,6 @@
 /**
  * Clinical progress rows for student/admin clinical progress tabs.
- * Source of truth is `clinical_assignments`; exam history merges requests + legacy signals.
+ * Source of truth is merged legacy `clinic` + newer `clinical_assignments`.
  */
 import type { Pool } from "mysql2/promise";
 export type StudentClinicalProgressRecord = {
@@ -14,7 +14,7 @@ export type StudentClinicalProgressRecord = {
 export type StudentClinicalExamHistoryItem = {
     code: string;
     examName: string;
-    status: "Not Taken" | "Pending Grade" | "Completed";
+    status: string;
     grade: string | null;
     term: string | null;
     year: number | null;

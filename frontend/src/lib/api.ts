@@ -2359,7 +2359,7 @@ export type StudentClinicalProgressRecord = {
 export type StudentClinicalExamHistoryItem = {
   code: string
   examName: string
-  status: 'Not Taken' | 'Pending Grade' | 'Completed'
+  status: string
   grade: string | null
   term: string | null
   year: number | null
@@ -2390,15 +2390,12 @@ function isStudentClinicalProgressRecord(x: unknown): x is StudentClinicalProgre
 function isStudentClinicalExamHistoryItem(x: unknown): x is StudentClinicalExamHistoryItem {
   if (x == null || typeof x !== 'object') return false
   const o = x as Record<string, unknown>
-  const status = o.status
-  const okStatus =
-    status === 'Not Taken' || status === 'Pending Grade' || status === 'Completed'
-  if (!okStatus) return false
   const year = o.year
   const yearOk = year === null || (typeof year === 'number' && Number.isFinite(year))
   return (
     typeof o.code === 'string' &&
     typeof o.examName === 'string' &&
+    typeof o.status === 'string' &&
     (o.grade === null || typeof o.grade === 'string') &&
     (o.term === null || typeof o.term === 'string') &&
     yearOk

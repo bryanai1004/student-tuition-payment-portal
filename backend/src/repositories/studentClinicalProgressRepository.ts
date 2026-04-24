@@ -1,12 +1,9 @@
 /**
  * Clinical progress rows for student/admin clinical progress tabs.
- * Source of truth is `clinical_assignments`; exam history merges requests + legacy signals.
+ * Source of truth is merged legacy `clinic` + newer `clinical_assignments`.
  */
 
 import type { Pool, RowDataPacket } from "mysql2/promise";
-
-import { CLINICAL_EXAMS } from "../constants/clinicalExams.js";
-import { MARKS_ORDER_BY_NEWEST } from "./studentAcademicsRepository.js";
 
 export type StudentClinicalProgressRecord = {
   code: string;
@@ -20,7 +17,7 @@ export type StudentClinicalProgressRecord = {
 export type StudentClinicalExamHistoryItem = {
   code: string;
   examName: string;
-  status: "Not Taken" | "Pending Grade" | "Completed";
+  status: string;
   grade: string | null;
   term: string | null;
   year: number | null;
@@ -43,8 +40,8 @@ function optionalYearNum(v: unknown): number | null {
 
 type MarksExamRow = {
   code: string;
-  grade: string;
-  term: string;
+  status: string;
+  term: string | null;
   year: number | null;
 };
 
@@ -70,110 +67,48 @@ function formatTermYear(termRaw: unknown, yearRaw: unknown): {
   return { term: term === "" ? null : term, year };
 }
 
-/**
- * Fixed list of five clinical exams merged with `marks` rows (code prefix match).
- * `marksRows` should be ordered newest-first so the first prefix match is the latest attempt.
- */
-function buildClinicalExamHistoryFromMarks(
-  marksRows: MarksExamRow[],
-): StudentClinicalExamHistoryItem[] {
-  return CLINICAL_EXAMS.map(({ code: examCode, name: examName }) => {
-    const examPrefix = examCode.trim().toUpperCase();
-    const record = marksRows.find((m) =>
-      m.code.trim().toUpperCase().startsWith(examPrefix),
-    );
-    if (!record) {
-      return {
-        code: examCode,
-        examName,
-        status: "Not Taken" as const,
-        grade: null,
-        term: null,
-        year: null,
-      };
-    }
-    const grade = str(record.grade);
-    if (grade === "") {
-      return {
-        code: examCode,
-        examName,
-        status: "Pending Grade" as const,
-        grade: null,
-        term: str(record.term) || null,
-        year: record.year,
-      };
-    }
-    return {
-      code: examCode,
-      examName,
-      status: "Completed" as const,
-      grade,
-      term: str(record.term) || null,
-      year: record.year,
-    };
-  });
+function termLabel(termRaw: unknown, yearRaw: unknown): { term: string; year: number } {
+  const term = str(termRaw);
+  const year = optionalYearNum(yearRaw);
+  if (term !== "" && year != null) {
+    const normalized = `${term.charAt(0).toUpperCase()}${term.slice(1).toLowerCase()}`;
+    return { term: normalized, year };
+  }
+  return { term: "", year: 0 };
 }
 
-function buildClinicalExamHistory(
-  marksRows: MarksExamRow[],
-  examRequests: ClinicalExamRequestRow[],
-  legacyExamSignals: Map<string, string>,
-): StudentClinicalExamHistoryItem[] {
-  const requestByExamCode = new Map<string, ClinicalExamRequestRow[]>();
-  for (const row of examRequests) {
-    const code = row.examCode.trim().toUpperCase();
-    if (code === "") continue;
-    const list = requestByExamCode.get(code) ?? [];
-    list.push(row);
-    requestByExamCode.set(code, list);
+function normalizeExamSignal(v: unknown): MarksExamRow {
+  const raw = str(v);
+  if (raw === "") {
+    return { code: "", status: "Not Taken", term: null, year: null };
   }
-  for (const [, rows] of requestByExamCode) {
-    rows.sort((a, b) => {
-      const at = a.createdAt == null ? 0 : new Date(a.createdAt).getTime();
-      const bt = b.createdAt == null ? 0 : new Date(b.createdAt).getTime();
-      return bt - at;
-    });
+  const upper = raw.toUpperCase();
+  if (upper === "P") {
+    return { code: "P", status: "Passed", term: null, year: null };
   }
+  if (upper === "F") {
+    return { code: "F", status: "Failed", term: null, year: null };
+  }
+  return { code: raw, status: raw, term: null, year: null };
+}
 
-  const marks = buildClinicalExamHistoryFromMarks(marksRows);
-  return CLINICAL_EXAMS.map(({ code: examCode, name: defaultExamName }) => {
-    const normalized = examCode.trim().toUpperCase();
-    const req = requestByExamCode.get(normalized)?.[0];
-    if (req) {
-      const requestStatus = lower(req.status);
-      return {
-        code: examCode,
-        examName: req.examName.trim() || defaultExamName,
-        status: "Pending Grade",
-        grade: requestStatus === "cancelled" ? "Cancelled" : "Requested",
-        term: req.term,
-        year: req.year,
-      };
-    }
+function shouldCountCompletedStatus(statusRaw: unknown): boolean {
+  const s = lower(statusRaw);
+  return s === "completed" || s === "done";
+}
 
-    const legacySignal = lower(legacyExamSignals.get(normalized));
-    if (legacySignal === "requested" || legacySignal === "cancelled") {
-      return {
-        code: examCode,
-        examName: defaultExamName,
-        status: "Pending Grade",
-        grade: legacySignal === "cancelled" ? "Cancelled" : "Requested",
-        term: null,
-        year: null,
-      };
-    }
-
-    const fromMarks = marks.find((m) => m.code.trim().toUpperCase() === normalized);
-    if (fromMarks) return fromMarks;
-    return {
-      code: examCode,
-      examName: defaultExamName,
-      status: "Not Taken",
-      grade: null,
-      term: null,
-      year: null,
-    };
-  });
+function dedupeKey(
+  codeRaw: unknown,
+  termRaw: unknown,
+  yearRaw: unknown,
+  timetableRaw?: unknown,
+): string {
+  const code = str(codeRaw).toUpperCase();
+  const term = str(termRaw).toUpperCase();
+  const year = optionalYearNum(yearRaw);
+  const timetableId = Number(timetableRaw);
+  const timetablePart = Number.isFinite(timetableId) && timetableId > 0 ? String(Math.trunc(timetableId)) : "";
+  return [code, term, year == null ? "" : String(year), timetablePart].join("|");
 }
 
 /**
@@ -190,16 +125,16 @@ export async function loadStudentClinicalProgressFromClinic(
 }> {
   const requested = studentRouteParam.trim();
   const [studentRows] = await pool.query<RowDataPacket[]>(
-    `SELECT TRIM(id) AS student_id,
-            seqNum AS student_seq_num,
+    `SELECT seqNum AS student_seq_num,
+            TRIM(id) AS student_id,
+            TRIM(name) AS student_name,
             exam,
             level1exam,
             level2exam,
-            level3exam,
-            level1practice
+            level3exam
        FROM students
-      WHERE TRIM(id) = TRIM(?)
-         OR CAST(seqNum AS CHAR) = TRIM(?)
+      WHERE CAST(seqNum AS CHAR) = TRIM(?)
+         OR TRIM(id) = TRIM(?)
       ORDER BY CASE WHEN TRIM(id) = TRIM(?) THEN 0 ELSE 1 END
       LIMIT 1`,
     [requested, requested, requested],
@@ -211,13 +146,36 @@ export async function loadStudentClinicalProgressFromClinic(
 
   const resolvedStudentId = str(student.student_id);
   const resolvedSeqNum = Number(student.student_seq_num);
+  const examRaw = str(student.exam);
+  const level1ExamRaw = str(student.level1exam);
+  const level2ExamRaw = str(student.level2exam);
+  const level3ExamRaw = str(student.level3exam);
 
-  const [assignmentRowsResult, enrollmentCountResult, examRequestRowsResult, marksRowsResult] =
+  const [legacyClinicRowsResult, assignmentRowsResult, examRequestRowsResult] =
     await Promise.all([
       pool.query<RowDataPacket[]>(
+        `SELECT seqNumber,
+                code,
+                course_title,
+                term,
+                year,
+                hours,
+                grade,
+                grade2,
+                days,
+                time_from,
+                time_to,
+                instructor
+           FROM clinic
+          WHERE TRIM(id) = TRIM(?)
+          ORDER BY year DESC, term DESC, code ASC`,
+        [resolvedStudentId],
+      ),
+      pool.query<RowDataPacket[]>(
         `SELECT ca.id,
-                ca.session_name,
+                ca.course_code,
                 ca.session_date,
+                ca.session_name,
                 ca.term,
                 ca.year,
                 ca.status,
@@ -241,12 +199,6 @@ export async function loadStudentClinicalProgressFromClinic(
         [resolvedStudentId],
       ),
       pool.query<RowDataPacket[]>(
-        `SELECT COUNT(*) AS enrollment_count
-           FROM clinical_enrollments
-          WHERE TRIM(student_id) = TRIM(?)`,
-        [resolvedStudentId],
-      ),
-      pool.query<RowDataPacket[]>(
         `SELECT exam_code,
                 exam_name,
                 status,
@@ -258,42 +210,52 @@ export async function loadStudentClinicalProgressFromClinic(
           ORDER BY created_at DESC`,
         [resolvedStudentId],
       ),
-      pool.query<RowDataPacket[]>(
-        `SELECT TRIM(code) AS code,
-                grade,
-                TRIM(term) AS term,
-                \`year\`
-           FROM marks
-          WHERE TRIM(id) = TRIM(?)
-            AND UPPER(TRIM(code)) LIKE 'CL%'
-          ORDER BY ${MARKS_ORDER_BY_NEWEST}`,
-        [resolvedStudentId],
-      ),
     ]);
 
+  const legacyClinicRows = legacyClinicRowsResult[0] as RowDataPacket[];
   const assignmentRows = assignmentRowsResult[0] as RowDataPacket[];
-  const records: StudentClinicalProgressRecord[] = assignmentRows.map((r) => {
+  const records: StudentClinicalProgressRecord[] = [];
+  const seen = new Set<string>();
+  let dedupedAssignmentCompletedCount = 0;
+
+  for (const r of legacyClinicRows) {
     const row = r as Record<string, unknown>;
-    const termYear = formatTermYear(row.term, row.year);
-    return {
-      code: String(Number(row.id)),
+    const label = termLabel(row.term, row.year);
+    const key = dedupeKey(row.code, label.term, label.year);
+    seen.add(key);
+    records.push({
+      code: str(row.code),
+      courseTitle: str(row.course_title),
+      term: label.term,
+      year: label.year,
+      grade: str(row.grade) || str(row.grade2) || "Completed",
+      hours: numHours(row.hours),
+    });
+  }
+
+  for (const r of assignmentRows) {
+    const row = r as Record<string, unknown>;
+    const label = termLabel(row.term, row.year);
+    const code = str(row.course_code);
+    const byCodeTermYear = dedupeKey(code, label.term, label.year);
+    const byCodeTermYearTimetable = dedupeKey(code, label.term, label.year, row.timetable_id);
+    if (seen.has(byCodeTermYear) || seen.has(byCodeTermYearTimetable)) {
+      continue;
+    }
+    seen.add(byCodeTermYear);
+    seen.add(byCodeTermYearTimetable);
+    records.push({
+      code: code || str(row.timetable_id) || str(row.id),
       courseTitle: str(row.session_name),
-      term: termYear.term ?? "",
-      year: termYear.year ?? 0,
+      term: label.term,
+      year: label.year,
       grade: str(row.status),
       hours: numHours(row.derived_hours),
-    };
-  });
-
-  const marksExamRows: MarksExamRow[] = (marksRowsResult[0] as RowDataPacket[]).map((r) => {
-    const row = r as Record<string, unknown>;
-    return {
-      code: str(row.code),
-      grade: str(row.grade),
-      term: str(row.term),
-      year: optionalYearNum(row.year),
-    };
-  });
+    });
+    if (shouldCountCompletedStatus(row.status)) {
+      dedupedAssignmentCompletedCount += 1;
+    }
+  }
 
   const examRequestRows: ClinicalExamRequestRow[] = (
     examRequestRowsResult[0] as RowDataPacket[]
@@ -310,46 +272,87 @@ export async function loadStudentClinicalProgressFromClinic(
     };
   });
 
-  const legacyExamSignals = new Map<string, string>();
-  const legacySignalRows: Array<{ examCode: string; value: unknown }> = [
-    { examCode: "CL100", value: student.exam },
-    { examCode: "CL110", value: student.level1practice },
-    { examCode: "CL120", value: student.level1exam },
-    { examCode: "CL200", value: student.level2exam },
-    { examCode: "CL300", value: student.level3exam },
-  ];
-  for (const row of legacySignalRows) {
-    const value = str(row.value);
-    if (value !== "") legacyExamSignals.set(row.examCode, value);
+  const latestRequestByExamCode = new Map<string, ClinicalExamRequestRow>();
+  for (const row of examRequestRows) {
+    const code = str(row.examCode).toUpperCase();
+    if (code === "") continue;
+    if (!latestRequestByExamCode.has(code)) {
+      latestRequestByExamCode.set(code, row);
+    }
   }
 
-  const exams = buildClinicalExamHistory(
-    marksExamRows,
-    examRequestRows,
-    legacyExamSignals,
-  );
+  const examsDefinition: Array<{
+    code: string;
+    examName: string;
+    signal: MarksExamRow;
+  }> = [
+    {
+      code: "CL100",
+      examName: "Clinic Entrance Exam",
+      signal: normalizeExamSignal(student.exam),
+    },
+    {
+      code: "CL120",
+      examName: "Clinic Practical Exam",
+      signal: normalizeExamSignal(student.level1exam),
+    },
+    {
+      code: "CL200",
+      examName: "Clinic Level II Exit Exam",
+      signal: normalizeExamSignal(student.level2exam),
+    },
+    {
+      code: "CL300",
+      examName: "Clinic Level III Exit Exam",
+      signal: normalizeExamSignal(student.level3exam),
+    },
+  ];
 
-  const completedCount = records.filter((r) => {
-    const s = lower(r.grade);
-    return s === "completed" || s === "done";
-  }).length;
-  const totalHoursRaw = records.reduce((sum, row) => sum + numHours(row.hours), 0);
-  const totalHours =
-    totalHoursRaw > 0 ? totalHoursRaw : records.length > 0 ? records.length : 0;
+  const exams: StudentClinicalExamHistoryItem[] = examsDefinition.map((exam) => {
+    const req = latestRequestByExamCode.get(exam.code);
+    const requestStatus = lower(req?.status);
+    const isRequestSupplemental =
+      requestStatus === "requested" || requestStatus === "cancelled";
+    const legacy = exam.signal;
+    const hasCompletedLegacy = legacy.code.toUpperCase() === "P" || legacy.code.toUpperCase() === "F";
+    if (isRequestSupplemental && !hasCompletedLegacy && legacy.status === "Not Taken") {
+      return {
+        code: exam.code,
+        examName: exam.examName,
+        status: requestStatus === "cancelled" ? "Cancelled" : "Requested",
+        grade: "-",
+        term: req?.term ?? null,
+        year: req?.year ?? null,
+      };
+    }
+    const grade = legacy.status === "Not Taken" ? "-" : legacy.code;
+    return {
+      code: exam.code,
+      examName: exam.examName,
+      status: legacy.status,
+      grade,
+      term: legacy.term,
+      year: legacy.year,
+    };
+  });
 
-  const enrollmentCount = Number(
-    ((enrollmentCountResult[0] as RowDataPacket[])[0] as Record<string, unknown> | undefined)
-      ?.enrollment_count ?? 0,
-  );
+  const legacyCompletedCount = legacyClinicRows.length;
+  const assignmentCompletedCount = dedupedAssignmentCompletedCount;
+  const completedCount = legacyCompletedCount + assignmentCompletedCount;
+  const totalHours = records.reduce((sum, row) => sum + numHours(row.hours), 0);
+
   console.debug("[clinical-progress] resolved source", {
     requestedParam: requested,
     resolvedStudentsSeqNum: Number.isFinite(resolvedSeqNum) ? resolvedSeqNum : null,
-    resolvedStudentsId: resolvedStudentId,
-    assignmentCount: records.length,
-    enrollmentCount: Number.isFinite(enrollmentCount)
-      ? Math.trunc(enrollmentCount)
-      : 0,
-    examRequestCount: examRequestRows.length,
+    resolvedStudentCode: resolvedStudentId,
+    legacyClinicRowCount: legacyClinicRows.length,
+    clinicalAssignmentRowCount: assignmentRows.length,
+    studentsExamFields: {
+      exam: examRaw,
+      level1exam: level1ExamRaw,
+      level2exam: level2ExamRaw,
+      level3exam: level3ExamRaw,
+    },
   });
 
   return {
