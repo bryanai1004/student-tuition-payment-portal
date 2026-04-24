@@ -867,6 +867,7 @@ function parseAdminStudentListPageResponse(
   }
 }
 
+/** Roster only: `page`, `pageSize`, `search`, `program`, `track`, entry intake, `loa*`, optional `clinicalSummary`. */
 export async function fetchAdminStudents(options?: {
   signal?: AbortSignal
   /** 1-based page index. Default 1. */
@@ -946,9 +947,20 @@ export async function fetchAdminStudents(options?: {
 
 export async function fetchAdminStudentDetail(
   studentId: string,
-  options?: { signal?: AbortSignal },
+  options?: {
+    signal?: AbortSignal
+    /** Opt-in: runs `buildClinicalProgress` on the server (admin clinical roster page only). */
+    includeClinicalProgress?: boolean
+  },
 ): Promise<AdminStudentDetail> {
-  const path = `/api/admin/students/${encodeURIComponent(studentId)}`
+  const qs = new URLSearchParams()
+  if (options?.includeClinicalProgress === true) {
+    qs.set('includeClinicalProgress', '1')
+  }
+  const q = qs.toString()
+  const path = `/api/admin/students/${encodeURIComponent(studentId)}${
+    q !== '' ? `?${q}` : ''
+  }`
   const data = await fetchApiJson(path, { signal: options?.signal })
   return parseAdminStudentDetailPayload(data)
 }

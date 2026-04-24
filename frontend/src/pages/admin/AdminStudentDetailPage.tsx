@@ -341,6 +341,10 @@ export function AdminStudentDetailPage() {
 
   useEffect(() => {
     if (!studentId.trim()) return
+    if (activeTab !== 'registration') {
+      setRegistrationHistoryLoading(false)
+      return
+    }
     const ac = new AbortController()
     setRegistrationTerms([])
     setRegistrationAllHistoryRows([])
@@ -411,7 +415,7 @@ export function AdminStudentDetailPage() {
       }
     })()
     return () => ac.abort()
-  }, [studentId, academicRecordsReloadKey])
+  }, [studentId, academicRecordsReloadKey, activeTab])
 
   const registrationFallbackTerm = useMemo(
     () => parseLatestRegistrationTermLabel(detail?.latestRegistrationTerm),
@@ -571,7 +575,12 @@ export function AdminStudentDetailPage() {
   }, [activeTab, studentId, reloadKey])
 
   useEffect(() => {
-    if (!detail || !studentId.trim()) return
+    if (activeTab !== 'profile' || !detail || !studentId.trim()) {
+      if (activeTab !== 'profile') {
+        setPhotoLoading(false)
+      }
+      return
+    }
     const ac = new AbortController()
     setPhotoLoading(true)
     setPhotoError(null)
@@ -593,7 +602,7 @@ export function AdminStudentDetailPage() {
       }
     })()
     return () => ac.abort()
-  }, [detail, studentId])
+  }, [activeTab, detail, studentId])
 
   const refreshDocumentsAfterMutation = useCallback(async () => {
     const termId = effectiveDocumentsTermId

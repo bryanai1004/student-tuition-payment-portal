@@ -142,6 +142,7 @@ export function AdminClinicalStudentDetailPage() {
       try {
         const d = await fetchAdminStudentDetail(studentId, {
           signal: ac.signal,
+          includeClinicalProgress: true,
         })
         if (ac.signal.aborted) return
         setDetail(d)
