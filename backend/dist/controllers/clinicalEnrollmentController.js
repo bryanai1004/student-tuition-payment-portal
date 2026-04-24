@@ -129,10 +129,9 @@ export async function deleteAdminClinicalSlotEnrollmentHandler(req, res) {
     }
 }
 /**
- * POST /api/admin/clinical/slots/:timetableId/students
- * Body: { studentId: string, seatBucket?: '100'|'200'|'300'|'123'|'all'|null }
+ * Shared admin add-student payload parser/handler.
  */
-export async function postAdminClinicalSlotStudentHandler(req, res) {
+async function postAdminClinicalSlotStudentLikeHandler(req, res) {
     try {
         const tid = pathTimetableId(req);
         if (!Number.isInteger(tid) || tid <= 0) {
@@ -168,6 +167,20 @@ export async function postAdminClinicalSlotStudentHandler(req, res) {
             body.message = devMessage(e);
         res.status(500).json(body);
     }
+}
+/**
+ * POST /api/admin/clinical/slots/:timetableId/students
+ * Body: { studentId: string, seatBucket?: '100'|'200'|'300'|'123'|'all'|'ALL'|null }
+ */
+export async function postAdminClinicalSlotStudentHandler(req, res) {
+    await postAdminClinicalSlotStudentLikeHandler(req, res);
+}
+/**
+ * POST /api/admin/clinical/slots/:timetableId/add-student
+ * Body: { studentId: string, seatBucket?: '100'|'200'|'300'|'123'|'all'|'ALL'|null }
+ */
+export async function postAdminClinicalSlotAddStudentHandler(req, res) {
+    await postAdminClinicalSlotStudentLikeHandler(req, res);
 }
 /**
  * POST /api/admin/clinical/slots/:timetableId/enrollments/:enrollmentId/grade

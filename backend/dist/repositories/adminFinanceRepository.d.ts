@@ -7,33 +7,36 @@ export type FinanceRosterRow = {
     studentId: string;
     name: string;
 };
-/** Balance sign filter for admin finance roster (applied in SQL with legacy quarter balance). */
+/** Balance sign filter for admin finance roster (applied in the service after merged balances). */
 export type AdminFinanceRosterBalanceFilter = "all" | "positive" | "negative" | "zero";
-export type AdminFinanceRosterPageRow = {
+export type AdminFinanceRosterStudentRow = {
     studentId: string;
     name: string;
-    balance: number;
 };
+/** @deprecated Use {@link AdminFinanceRosterStudentRow} */
+export type AdminFinanceRosterPageRow = AdminFinanceRosterStudentRow;
 /**
- * Count of finance roster rows after search + balance filter (same rules as list page).
+ * Count of finance roster rows after search only (balance filters run in the service).
  */
-export declare function countAdminFinanceRosterPage(pool: Pool, params: {
-    term: string;
-    year: number;
+export declare function countAdminFinanceRosterSearchOnly(pool: Pool, params: {
     searchTrimmed: string;
-    balanceFilter: AdminFinanceRosterBalanceFilter;
 }): Promise<number>;
 /**
- * One page of finance roster with legacy `accounting` net balance for the quarter.
+ * One page of finance roster (student id + name) after search; stable name / id ordering.
  */
-export declare function listAdminFinanceRosterPage(pool: Pool, params: {
-    term: string;
-    year: number;
+export declare function listAdminFinanceRosterPageSearchOnly(pool: Pool, params: {
     searchTrimmed: string;
-    balanceFilter: AdminFinanceRosterBalanceFilter;
     limit: number;
     offset: number;
-}): Promise<AdminFinanceRosterPageRow[]>;
+}): Promise<AdminFinanceRosterStudentRow[]>;
+/** Full roster after search (ordered), used when applying balance filters before pagination. */
+export declare function listAdminFinanceRosterAllSearchOnlyOrdered(pool: Pool, params: {
+    searchTrimmed: string;
+}): Promise<AdminFinanceRosterStudentRow[]>;
+/** `SUM(amount)` of `portal_billing_adjustments` per student for a quarter (signed; matches ledger adjustment lines). */
+export declare function sumPortalBillingAdjustmentsNetByStudentForQuarter(pool: Pool, term: string, year: number): Promise<Map<string, number>>;
+/** Total `portal_payments.amount` per student for a quarter (amounts stored as positive credits). */
+export declare function sumPortalPaymentsByStudentForQuarter(pool: Pool, term: string, year: number): Promise<Map<string, number>>;
 /**
  * Legacy `students` roster plus `portal_students` rows that are not yet in `students`
  * (same external id key used across portal billing tables).

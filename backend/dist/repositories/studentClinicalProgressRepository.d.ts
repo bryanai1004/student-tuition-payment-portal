@@ -22,7 +22,7 @@ export type StudentClinicalExamHistoryItem = {
 /**
  * Clinical progress for student/admin tabs using `clinical_assignments` as the primary source.
  */
-export declare function loadStudentClinicalProgressFromClinic(pool: Pool, studentRouteParam: string): Promise<{
+export declare function loadStudentClinicalProgressFromClinic(pool: Pool, requestedStudentId: string): Promise<{
     completedCount: number;
     totalHours: number;
     records: StudentClinicalProgressRecord[];

@@ -18,7 +18,7 @@ export type AdminClinicalSlotDto = {
     cap200: number;
     cap300: number;
     cap123: number;
-    /** `clinical_enrollments` with `status = 'enrolled'` for this slot (admin list + roster index). */
+    /** Count of `clinical_enrollments` with `status = 'enrolled'` for this slot (matches roster list). */
     activeEnrolledCount: number;
     enrolled100: number;
     enrolled200: number;

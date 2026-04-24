@@ -334,10 +334,40 @@ function parseAdminStudentsExportBody(raw) {
         },
     };
 }
+function parseClinicalSummaryQueryParam(raw) {
+    const truthy = (v) => v === "1" || v === "true" || v === "yes";
+    if (truthy(raw))
+        return true;
+    if (Array.isArray(raw))
+        return raw.some((v) => truthy(v));
+    return false;
+}
+function parseIncludeClinicalProgressQueryParam(raw) {
+    const truthy = (v) => v === "1" || v === "true" || v === "yes";
+    if (truthy(raw))
+        return true;
+    if (Array.isArray(raw))
+        return raw.some((v) => truthy(v));
+    return false;
+}
+const OPTIONAL_ADMIN_STUDENTS_LIST_QUERY_FLAGS = new Set([
+    "clinicalSummary",
+    "includeAcademicRecords",
+    "includeRegistrationHistory",
+    "includeClinicalProgress",
+    "includeDocuments",
+    "includeFinance",
+    "includePhoto",
+]);
 export async function getAdminStudents(req, res) {
+    console.time("[admin students list] total");
     try {
-        const rawClinical = req.query.clinicalSummary;
-        const includeClinicalSummary = rawClinical === "1" || rawClinical === "true" || rawClinical === "yes";
+        const flaggedIncludes = Object.keys(req.query).filter((key) => OPTIONAL_ADMIN_STUDENTS_LIST_QUERY_FLAGS.has(key));
+        if (flaggedIncludes.length > 0) {
+            console.warn("[admin students list] optional include requested", req.query);
+        }
+        /** Opt-in only; default is no clinical batch work on the roster. */
+        const includeClinicalSummary = parseClinicalSummaryQueryParam(req.query.clinicalSummary);
         const page = parsePositiveIntParam(req.query.page, ADMIN_STUDENT_LIST_DEFAULT_PAGE);
         const pageSize = parsePositiveIntParam(req.query.pageSize, ADMIN_STUDENT_LIST_DEFAULT_PAGE_SIZE, ADMIN_STUDENT_LIST_MAX_PAGE_SIZE);
         const searchRaw = req.query.search;
@@ -375,6 +405,9 @@ export async function getAdminStudents(req, res) {
     catch (e) {
         console.error(e);
         res.status(500).json({ error: "Failed to load students" });
+    }
+    finally {
+        console.timeEnd("[admin students list] total");
     }
 }
 export async function postExportAdminStudentsCsv(req, res) {
@@ -430,7 +463,10 @@ export async function getAdminStudent(req, res) {
         return;
     }
     try {
-        const detail = await getAdminStudentDetail(studentId);
+        const includeClinicalProgress = parseIncludeClinicalProgressQueryParam(req.query.includeClinicalProgress);
+        const detail = await getAdminStudentDetail(studentId, {
+            includeClinicalProgress,
+        });
         if (!detail) {
             res.status(404).json({ error: "Student not found." });
             return;

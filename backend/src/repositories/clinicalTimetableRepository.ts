@@ -118,7 +118,7 @@ export type ClinicTimetableAdminRow = ClinicTimetableDbRow & {
   academic_term_id: string | null;
   /**
    * `clinical_enrollments` rows with `status = 'enrolled'` for this timetable id
-   * (same filter as `listActiveClinicalRosterForTimetable`).
+   * (aligned with `listActiveClinicalRosterForTimetable` / admin roster).
    */
   active_enrolled_count: number;
   enrolled_bucket_100: number;
@@ -131,9 +131,10 @@ function mapTimetableAdminRow(r: RowDataPacket): ClinicTimetableAdminRow {
   const base = mapTimetableRow(r);
   const row = r as Record<string, unknown>;
   const aid = row.academic_term_id;
-  const cntRaw = Number(row.active_enrolled_count);
-  const active_enrolled_count =
-    Number.isFinite(cntRaw) && cntRaw > 0 ? Math.trunc(cntRaw) : 0;
+  const active_enrolled_count = Math.max(
+    0,
+    Math.trunc(Number(row.active_enrolled_count)),
+  );
   const b100 = Math.max(0, Math.trunc(Number(row.enrolled_bucket_100)));
   const b200 = Math.max(0, Math.trunc(Number(row.enrolled_bucket_200)));
   const b300 = Math.max(0, Math.trunc(Number(row.enrolled_bucket_300)));
@@ -174,49 +175,45 @@ export async function listClinicTimetableSlotsForAdmin(options?: {
             ct.time_from, ct.time_to, ct.slot, ct.instructor_id, ct.instructor,
             ct.\`100Max\` AS cap_100, ct.\`200Max\` AS cap_200,
             ct.\`300Max\` AS cap_300, ct.\`123Max\` AS cap_123,
-            at.id AS academic_term_id,
-            COALESCE(ce_cnt.cnt, 0) AS active_enrolled_count,
-            COALESCE(ce_cnt.b100, 0) AS enrolled_bucket_100,
-            COALESCE(ce_cnt.b200, 0) AS enrolled_bucket_200,
-            COALESCE(ce_cnt.b300, 0) AS enrolled_bucket_300,
-            COALESCE(ce_cnt.ball, 0) AS enrolled_bucket_all
+            MAX(at.id) AS academic_term_id,
+            COALESCE(SUM(
+              CASE WHEN LOWER(TRIM(IFNULL(ce.status, ''))) = 'enrolled' THEN 1 ELSE 0 END
+            ), 0) AS active_enrolled_count,
+            COALESCE(SUM(
+              CASE
+                WHEN LOWER(TRIM(IFNULL(ce.status, ''))) = 'enrolled'
+                 AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '100'
+                THEN 1 ELSE 0 END
+            ), 0) AS enrolled_bucket_100,
+            COALESCE(SUM(
+              CASE
+                WHEN LOWER(TRIM(IFNULL(ce.status, ''))) = 'enrolled'
+                 AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '200'
+                THEN 1 ELSE 0 END
+            ), 0) AS enrolled_bucket_200,
+            COALESCE(SUM(
+              CASE
+                WHEN LOWER(TRIM(IFNULL(ce.status, ''))) = 'enrolled'
+                 AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '300'
+                THEN 1 ELSE 0 END
+            ), 0) AS enrolled_bucket_300,
+            COALESCE(SUM(
+              CASE
+                WHEN LOWER(TRIM(IFNULL(ce.status, ''))) = 'enrolled'
+                 AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) IN ('all', '123')
+                THEN 1 ELSE 0 END
+            ), 0) AS enrolled_bucket_all
        FROM clinic_timetable ct
        LEFT JOIN academic_terms at
          ON at.year = ct.year AND at.term_name = TRIM(ct.term)
-       LEFT JOIN (
-         SELECT ce.timetable_id,
-                COUNT(*) AS cnt,
-                SUM(
-                  CASE
-                    WHEN LOWER(TRIM(ce.status)) = 'enrolled'
-                     AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '100'
-                    THEN 1 ELSE 0 END
-                ) AS b100,
-                SUM(
-                  CASE
-                    WHEN LOWER(TRIM(ce.status)) = 'enrolled'
-                     AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '200'
-                    THEN 1 ELSE 0 END
-                ) AS b200,
-                SUM(
-                  CASE
-                    WHEN LOWER(TRIM(ce.status)) = 'enrolled'
-                     AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '300'
-                    THEN 1 ELSE 0 END
-                ) AS b300,
-                SUM(
-                  CASE
-                    WHEN LOWER(TRIM(ce.status)) = 'enrolled'
-                     AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = 'all'
-                    THEN 1 ELSE 0 END
-                ) AS ball
-           FROM clinical_enrollments ce
-          WHERE LOWER(TRIM(ce.status)) = 'enrolled'
-          GROUP BY ce.timetable_id
-       ) ce_cnt ON ce_cnt.timetable_id = ct.seqNum
+       LEFT JOIN clinical_enrollments ce
+         ON ce.timetable_id = ct.seqNum
       WHERE 1=1
       ${yearClause}
       ${termClause}
+      GROUP BY ct.seqNum, ct.year, ct.term, ct.day, ct.time_from, ct.time_to, ct.slot,
+               ct.instructor_id, ct.instructor,
+               ct.\`100Max\`, ct.\`200Max\`, ct.\`300Max\`, ct.\`123Max\`
       ORDER BY ct.year DESC, TRIM(ct.term) ASC, ct.day ASC, ct.time_from ASC, ct.seqNum ASC`,
     params,
   );

@@ -681,6 +681,15 @@ function buildPortalLedgerRowsFromContext(ctx: AccountContext): LedgerRowDto[] {
   return rows;
 }
 
+/**
+ * Net quarter balance for portal-only students (no legacy `accounting` rows for the quarter),
+ * using the same row construction and summary as the admin ledger (excluding clinical hold metadata).
+ */
+export function computePortalOnlyQuarterNetBalance(ctx: AccountContext): number {
+  const rows = buildPortalLedgerRowsFromContext(ctx);
+  return summarizeLedgerRows(rows).balance;
+}
+
 export async function getAccountingQuartersPayload(studentId: string): Promise<{
   studentId: string;
   quarters: LedgerQuarterOption[];

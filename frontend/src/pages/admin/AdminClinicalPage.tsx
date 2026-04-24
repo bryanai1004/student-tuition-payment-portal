@@ -7,6 +7,7 @@ import {
   fetchAdminClinicalExamRequests,
   fetchAdminInstructors,
   fetchAdminClinicalSlots,
+  fetchClinicalOfferedTimetable,
   fetchAdminClinicalSlotRoster,
   postAdminClinicalExamRequestAssign,
   postAdminClinicalSlotAddStudent,
@@ -17,11 +18,12 @@ import {
   type AdminClinicalSlot,
   type AdminClinicalSlotRosterRow,
   type ClinicalExamRequestDto,
+  type ClinicalOfferedTimetableSlot,
 } from '../../lib/api'
 import { formatMoney } from '../../lib/formatMoney'
 import { useAdminAuth } from '../../context/AdminAuthContext'
 import { TimetableWeekGrid } from '../../components/timetable/TimetableWeekGrid'
-import { adminClinicalSlotsToLayoutRows } from '../../lib/clinicalTimetableAdapter'
+import { clinicalOfferedSlotsToLayoutRows } from '../../lib/clinicalTimetableAdapter'
 import { formatTimeHmsForDisplay } from '../../lib/formatScheduleTime'
 import {
   buildPlacedBlocksByDayForLayout,
@@ -203,9 +205,14 @@ export function AdminClinicalPage() {
 
   const [terms, setTerms] = useState<AcademicTerm[] | null>(null)
   const [slotsTermId, setSlotsTermId] = useState('')
-  const [slots, setSlots] = useState<AdminClinicalSlot[] | null>(null)
-  const [slotsLoading, setSlotsLoading] = useState(false)
-  const [slotsError, setSlotsError] = useState<string | null>(null)
+  const [rosterSlots, setRosterSlots] = useState<AdminClinicalSlot[] | null>(null)
+  const [rosterSlotsLoading, setRosterSlotsLoading] = useState(false)
+  const [rosterSlotsError, setRosterSlotsError] = useState<string | null>(null)
+  const [offeredSlots, setOfferedSlots] = useState<ClinicalOfferedTimetableSlot[] | null>(
+    null,
+  )
+  const [offeredSlotsLoading, setOfferedSlotsLoading] = useState(false)
+  const [offeredSlotsError, setOfferedSlotsError] = useState<string | null>(null)
   const [slotsReloadKey, setSlotsReloadKey] = useState(0)
   const [slotModalMode, setSlotModalMode] = useState<SlotModalMode>(null)
   const [editingSlotId, setEditingSlotId] = useState<number | null>(null)
@@ -277,15 +284,16 @@ export function AdminClinicalPage() {
   }, [])
 
   useEffect(() => {
+    if (tab !== 'roster') return
     const ac = new AbortController()
     if (slotsTermId.trim() === '') {
-      setSlots(null)
-      setSlotsError(null)
-      setSlotsLoading(false)
+      setRosterSlots(null)
+      setRosterSlotsError(null)
+      setRosterSlotsLoading(false)
       return () => ac.abort()
     }
-    setSlotsLoading(true)
-    setSlotsError(null)
+    setRosterSlotsLoading(true)
+    setRosterSlotsError(null)
     ;(async () => {
       try {
         const list = await fetchAdminClinicalSlots({
@@ -293,20 +301,67 @@ export function AdminClinicalPage() {
           signal: ac.signal,
         })
         if (ac.signal.aborted) return
-        setSlots(list)
-        setSlotsError(null)
+        setRosterSlots(list)
+        setRosterSlotsError(null)
       } catch (e) {
         if (ac.signal.aborted) return
-        setSlots(null)
-        setSlotsError(
+        setRosterSlots(null)
+        setRosterSlotsError(
           e instanceof Error ? e.message : 'Could not load clinical slots.',
         )
       } finally {
-        if (!ac.signal.aborted) setSlotsLoading(false)
+        if (!ac.signal.aborted) setRosterSlotsLoading(false)
       }
     })()
     return () => ac.abort()
-  }, [slotsTermId, slotsReloadKey])
+  }, [tab, slotsTermId, slotsReloadKey])
+
+  useEffect(() => {
+    if (tab !== 'offered-timetable') return
+    const ac = new AbortController()
+    if (slotsTermId.trim() === '') {
+      setOfferedSlots(null)
+      setOfferedSlotsError(null)
+      setOfferedSlotsLoading(false)
+      return () => ac.abort()
+    }
+    const termMeta = (terms ?? []).find((t) => t.id === slotsTermId.trim())
+    if (!termMeta) {
+      if (terms != null) {
+        setOfferedSlots(null)
+        setOfferedSlotsError(
+          terms.length === 0
+            ? null
+            : 'Could not resolve the selected academic term.',
+        )
+        setOfferedSlotsLoading(false)
+      }
+      return () => ac.abort()
+    }
+    setOfferedSlotsLoading(true)
+    setOfferedSlotsError(null)
+    ;(async () => {
+      try {
+        const list = await fetchClinicalOfferedTimetable({
+          term: termMeta.term_name,
+          year: termMeta.year,
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        setOfferedSlots(list)
+        setOfferedSlotsError(null)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setOfferedSlots(null)
+        setOfferedSlotsError(
+          e instanceof Error ? e.message : 'Could not load offered timetable.',
+        )
+      } finally {
+        if (!ac.signal.aborted) setOfferedSlotsLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [tab, slotsTermId, slotsReloadKey, terms])
 
   useEffect(() => {
     if (rosterSlot == null) {
@@ -400,12 +455,12 @@ export function AdminClinicalPage() {
     if (editingSlotId == null) return
     if (instructors.length === 0) return
     if (slotForm.selectedInstructorId.trim() !== '') return
-    const editingSlot = (slots ?? []).find((s) => s.id === editingSlotId)
+    const editingSlot = (rosterSlots ?? []).find((s) => s.id === editingSlotId)
     if (!editingSlot) return
     const matchedId = selectedInstructorIdForSlot(editingSlot, instructors)
     if (matchedId === '') return
     setSlotForm((f) => ({ ...f, selectedInstructorId: matchedId }))
-  }, [slotModalMode, editingSlotId, instructors, slots, slotForm.selectedInstructorId])
+  }, [slotModalMode, editingSlotId, instructors, rosterSlots, slotForm.selectedInstructorId])
 
   const rosterTermLabel = academicTermDisplayLabel(terms, slotsTermId)
   const termsLoading = terms == null
@@ -423,13 +478,13 @@ export function AdminClinicalPage() {
     const bb = timeToMinutes(b) ?? Number.MAX_SAFE_INTEGER
     return aa - bb
   })
-  const timetableRows = useMemo(
-    () => adminClinicalSlotsToLayoutRows(slots ?? []),
-    [slots],
+  const offeredTimetableRows = useMemo(
+    () => clinicalOfferedSlotsToLayoutRows(offeredSlots ?? []),
+    [offeredSlots],
   )
-  const placedWeekdays = useMemo(
-    () => buildPlacedBlocksByDayForLayout(timetableRows, ADMIN_CLINICAL_GRID),
-    [timetableRows],
+  const offeredPlacedWeekdays = useMemo(
+    () => buildPlacedBlocksByDayForLayout(offeredTimetableRows, ADMIN_CLINICAL_GRID),
+    [offeredTimetableRows],
   )
   const hourRows = useMemo(() => {
     const sh = ADMIN_CLINICAL_GRID.startHour ?? 8
@@ -544,7 +599,7 @@ export function AdminClinicalPage() {
             </p>
           ) : null}
 
-          {slotsTermId.trim() !== '' && slotsLoading && slots === null ? (
+          {slotsTermId.trim() !== '' && rosterSlotsLoading && rosterSlots === null ? (
             <section
               className="portal-card portal-profile-state"
               aria-busy="true"
@@ -557,13 +612,13 @@ export function AdminClinicalPage() {
             </section>
           ) : null}
 
-          {slotsTermId.trim() !== '' && slotsError ? (
+          {slotsTermId.trim() !== '' && rosterSlotsError ? (
             <section
               className="portal-card portal-profile-state portal-profile-state--error"
               role="alert"
             >
               <p className="portal-profile-state__title">Could not load slots</p>
-              <p className="portal-profile-state__detail">{slotsError}</p>
+              <p className="portal-profile-state__detail">{rosterSlotsError}</p>
               <div className="portal-actions portal-profile-state__actions">
                 <button
                   type="button"
@@ -576,7 +631,10 @@ export function AdminClinicalPage() {
             </section>
           ) : null}
 
-          {slotsTermId.trim() !== '' && !slotsLoading && !slotsError && slots != null ? (
+          {slotsTermId.trim() !== '' &&
+          !rosterSlotsLoading &&
+          !rosterSlotsError &&
+          rosterSlots != null ? (
             <div className="portal-table-wrap admin-table-wrap">
               <table className="portal-table portal-data-table admin-students-table--center">
                 <thead>
@@ -596,14 +654,14 @@ export function AdminClinicalPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {slots.length === 0 ? (
+                  {rosterSlots.length === 0 ? (
                     <tr>
                       <td colSpan={12} className="portal-card-note">
                         No clinical slots for this term yet.
                       </td>
                     </tr>
                   ) : (
-                    slots.map((s) => {
+                    rosterSlots.map((s) => {
                       const busy = deletingSlotId === s.id
                       return (
                         <tr key={s.id}>
@@ -1138,20 +1196,33 @@ export function AdminClinicalPage() {
             </p>
           ) : null}
 
-          {slotsTermId.trim() !== '' && slotsLoading && slots === null ? (
+          {slotsTermId.trim() !== '' && terms == null ? (
             <p className="portal-text-muted" role="status">
-              Loading slots…
+              Loading academic terms…
             </p>
           ) : null}
 
-          {slotsTermId.trim() !== '' && slotsError ? (
+          {slotsTermId.trim() !== '' &&
+          terms != null &&
+          offeredSlotsLoading &&
+          offeredSlots === null ? (
+            <p className="portal-text-muted" role="status">
+              Loading offered timetable…
+            </p>
+          ) : null}
+
+          {slotsTermId.trim() !== '' && offeredSlotsError ? (
             <p className="portal-text-muted" role="alert">
-              {slotsError}
+              {offeredSlotsError}
             </p>
           ) : null}
 
-          {slotsTermId.trim() !== '' && !slotsLoading && !slotsError && slots != null ? (
-            timetableRows.length === 0 ? (
+          {slotsTermId.trim() !== '' &&
+          terms != null &&
+          !offeredSlotsLoading &&
+          !offeredSlotsError &&
+          offeredSlots != null ? (
+            offeredTimetableRows.length === 0 ? (
               <p className="portal-text-muted" role="status">
                 No clinical slots for this term yet.
               </p>
@@ -1161,7 +1232,7 @@ export function AdminClinicalPage() {
                   <TimetableWeekGrid
                     rootClassName="portal-clinical-offered-timetable__grid"
                     weekdays={ADMIN_CLINICAL_WEEKDAYS}
-                    placedWeekdays={placedWeekdays}
+                    placedWeekdays={offeredPlacedWeekdays}
                     hourRows={hourRows}
                     bodyHeightPx={timetableHeightPx}
                     weekdayLabel={weekdayLabel}

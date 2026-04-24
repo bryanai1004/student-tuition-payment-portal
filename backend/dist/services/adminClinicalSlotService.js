@@ -1,7 +1,6 @@
 import { getAcademicTermById } from "../repositories/academicTermRepository.js";
 import { cleanupHistoricalClinicTimetableReferences, countClinicTimetableReferences, createClinicTimetableSlot, deleteClinicTimetableSlot, forceDeleteClinicTimetableSlot, getClinicTimetableById, listClinicTimetableSlotsForAdmin, updateClinicTimetableSlot, } from "../repositories/clinicalTimetableRepository.js";
 import { formatClinicTimeHm } from "./clinicalScheduleService.js";
-import { runDueClinicalBookingHoldCleanupBatches } from "./clinicalBookingPaymentHoldService.js";
 const WEEKDAYS = new Set([
     "Monday",
     "Tuesday",
@@ -174,32 +173,38 @@ function buildWritePayload(input) {
     };
 }
 export async function listAdminClinicalSlots(options) {
-    await runDueClinicalBookingHoldCleanupBatches();
+    console.time("[admin clinical slots] total");
     const rawId = options?.academicTermId;
     if (rawId != null && String(rawId).trim() !== "") {
         const { year, term } = await resolveTermYear(String(rawId));
+        console.time("[admin clinical slots] query");
         const rows = await listClinicTimetableSlotsForAdmin({ year, term });
+        console.timeEnd("[admin clinical slots] query");
         const totalActiveEnrolled = rows.reduce((sum, row) => sum + row.active_enrolled_count, 0);
         console.info("[clinical-trace] admin active enrolled count query", {
             studentId: null,
             termYear: `${term} ${year}`,
-            sourceTable: "clinic_timetable LEFT JOIN (clinical_enrollments aggregate by timetable_id)",
+            sourceTable: "clinic_timetable LEFT JOIN clinical_enrollments (GROUP BY slot)",
             sourceQuery: "clinicalTimetableRepository.listClinicTimetableSlotsForAdmin",
             returnedRowCount: rows.length,
             activeEnrolledTotal: totalActiveEnrolled,
         });
+        console.timeEnd("[admin clinical slots] total");
         return rows.map(rowToDto);
     }
+    console.time("[admin clinical slots] query");
     const rows = await listClinicTimetableSlotsForAdmin({});
+    console.timeEnd("[admin clinical slots] query");
     const totalActiveEnrolled = rows.reduce((sum, row) => sum + row.active_enrolled_count, 0);
     console.info("[clinical-trace] admin active enrolled count query", {
         studentId: null,
         termYear: "all",
-        sourceTable: "clinic_timetable LEFT JOIN (clinical_enrollments aggregate by timetable_id)",
+        sourceTable: "clinic_timetable LEFT JOIN clinical_enrollments (GROUP BY slot)",
         sourceQuery: "clinicalTimetableRepository.listClinicTimetableSlotsForAdmin",
         returnedRowCount: rows.length,
         activeEnrolledTotal: totalActiveEnrolled,
     });
+    console.timeEnd("[admin clinical slots] total");
     return rows.map(rowToDto);
 }
 export async function createAdminClinicalSlot(input) {

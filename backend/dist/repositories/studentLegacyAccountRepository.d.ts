@@ -133,9 +133,10 @@ export type LegacyAdminStudentListRow = RowDataPacket & {
     email: unknown;
     status: unknown;
     program: unknown;
-    background: unknown;
-    requirements_id: unknown;
-    tertiary: unknown;
+    /** Omitted in lightweight roster `SELECT`; mapper treats as empty. */
+    background?: unknown;
+    requirements_id?: unknown;
+    tertiary?: unknown;
     signed_date: unknown;
     enroll_start_date: unknown;
     latest_term: unknown;

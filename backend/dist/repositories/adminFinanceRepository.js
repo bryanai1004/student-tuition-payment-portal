@@ -38,18 +38,6 @@ function buildFinanceRosterSearchClause(searchTrimmed) {
         params: [like, like],
     };
 }
-function balanceFilterSqlClause(filter) {
-    switch (filter) {
-        case "positive":
-            return " AND COALESCE(qb.balance, 0) > 0 ";
-        case "negative":
-            return " AND COALESCE(qb.balance, 0) < 0 ";
-        case "zero":
-            return " AND COALESCE(qb.balance, 0) = 0 ";
-        default:
-            return "";
-    }
-}
 const ADMIN_FINANCE_ROSTER_BASE_SQL = `WITH roster AS (
     SELECT TRIM(s.id) AS student_id,
            CASE
@@ -66,31 +54,18 @@ const ADMIN_FINANCE_ROSTER_BASE_SQL = `WITH roster AS (
     FROM portal_students ps
     LEFT JOIN students s ON TRIM(s.id) = ps.student_external_id
     WHERE s.id IS NULL
-  ),
-  quarter_bal AS (
-    SELECT TRIM(id) AS student_id,
-           COALESCE(SUM(debit - credit), 0) AS balance
-    FROM accounting
-    WHERE LOWER(TRIM(term)) = LOWER(TRIM(?))
-      AND CAST(year AS SIGNED) = ?
-    GROUP BY TRIM(id)
   )`;
 /**
- * Count of finance roster rows after search + balance filter (same rules as list page).
+ * Count of finance roster rows after search only (balance filters run in the service).
  */
-export async function countAdminFinanceRosterPage(pool, params) {
-    const t = params.term.trim();
-    const y = Math.trunc(params.year);
+export async function countAdminFinanceRosterSearchOnly(pool, params) {
     const { clause: searchClause, params: searchParams } = buildFinanceRosterSearchClause(params.searchTrimmed);
-    const balClause = balanceFilterSqlClause(params.balanceFilter);
     const sql = `${ADMIN_FINANCE_ROSTER_BASE_SQL}
     SELECT COUNT(*) AS cnt
     FROM roster r
-    LEFT JOIN quarter_bal qb ON qb.student_id = r.student_id
     WHERE 1 = 1
-    ${searchClause}
-    ${balClause}`;
-    const [rows] = await pool.query(sql, [t, y, ...searchParams]);
+    ${searchClause}`;
+    const [rows] = await pool.query(sql, [...searchParams]);
     const row = rows[0];
     if (row == null)
         return 0;
@@ -98,29 +73,21 @@ export async function countAdminFinanceRosterPage(pool, params) {
     return Number.isFinite(n) ? n : 0;
 }
 /**
- * One page of finance roster with legacy `accounting` net balance for the quarter.
+ * One page of finance roster (student id + name) after search; stable name / id ordering.
  */
-export async function listAdminFinanceRosterPage(pool, params) {
-    const t = params.term.trim();
-    const y = Math.trunc(params.year);
+export async function listAdminFinanceRosterPageSearchOnly(pool, params) {
     const limit = Math.max(0, Math.trunc(params.limit));
     const offset = Math.max(0, Math.trunc(params.offset));
     const { clause: searchClause, params: searchParams } = buildFinanceRosterSearchClause(params.searchTrimmed);
-    const balClause = balanceFilterSqlClause(params.balanceFilter);
     const sql = `${ADMIN_FINANCE_ROSTER_BASE_SQL}
     SELECT r.student_id AS studentId,
-           r.display_name AS name,
-           COALESCE(qb.balance, 0) AS balance
+           r.display_name AS name
     FROM roster r
-    LEFT JOIN quarter_bal qb ON qb.student_id = r.student_id
     WHERE 1 = 1
     ${searchClause}
-    ${balClause}
     ORDER BY r.display_name ASC, r.student_id ASC
     LIMIT ? OFFSET ?`;
     const [rows] = await pool.query(sql, [
-        t,
-        y,
         ...searchParams,
         limit,
         offset,
@@ -128,8 +95,61 @@ export async function listAdminFinanceRosterPage(pool, params) {
     return rows.map((r) => ({
         studentId: str(r.studentId),
         name: str(r.name),
-        balance: Number(r.balance),
     }));
+}
+/** Full roster after search (ordered), used when applying balance filters before pagination. */
+export async function listAdminFinanceRosterAllSearchOnlyOrdered(pool, params) {
+    const { clause: searchClause, params: searchParams } = buildFinanceRosterSearchClause(params.searchTrimmed);
+    const sql = `${ADMIN_FINANCE_ROSTER_BASE_SQL}
+    SELECT r.student_id AS studentId,
+           r.display_name AS name
+    FROM roster r
+    WHERE 1 = 1
+    ${searchClause}
+    ORDER BY r.display_name ASC, r.student_id ASC`;
+    const [rows] = await pool.query(sql, [...searchParams]);
+    return rows.map((r) => ({
+        studentId: str(r.studentId),
+        name: str(r.name),
+    }));
+}
+/** `SUM(amount)` of `portal_billing_adjustments` per student for a quarter (signed; matches ledger adjustment lines). */
+export async function sumPortalBillingAdjustmentsNetByStudentForQuarter(pool, term, year) {
+    const t = term.trim();
+    const y = Math.trunc(year);
+    const [rows] = await pool.query(`SELECT TRIM(student_external_id) AS studentId,
+            COALESCE(SUM(amount), 0) AS net
+     FROM portal_billing_adjustments
+     WHERE term = ? AND year = ?
+     GROUP BY TRIM(student_external_id)`, [t, y]);
+    const m = new Map();
+    for (const r of rows) {
+        const id = str(r.studentId);
+        if (id === "")
+            continue;
+        const n = Number(r.net);
+        m.set(id, Number.isFinite(n) ? n : 0);
+    }
+    return m;
+}
+/** Total `portal_payments.amount` per student for a quarter (amounts stored as positive credits). */
+export async function sumPortalPaymentsByStudentForQuarter(pool, term, year) {
+    const t = term.trim();
+    const y = Math.trunc(year);
+    const [rows] = await pool.query(`SELECT TRIM(student_external_id) AS studentId,
+            COALESCE(SUM(amount), 0) AS paid
+     FROM portal_payments
+     WHERE term = ? AND year = ?
+     GROUP BY TRIM(student_external_id)`, [t, y]);
+    const m = new Map();
+    for (const r of rows) {
+        const id = str(r.studentId);
+        if (id === "")
+            continue;
+        const n = Number(r.paid);
+        m.set(id, Number.isFinite(n) ? n : 0);
+    }
+    return m;
 }
 /**
  * Legacy `students` roster plus `portal_students` rows that are not yet in `students`

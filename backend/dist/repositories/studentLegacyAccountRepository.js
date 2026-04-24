@@ -447,7 +447,6 @@ export async function countLegacyAdminStudentListRows(pool, query) {
     const { clause, params } = buildAdminStudentListFilters(query);
     const [rows] = await pool.query(`SELECT COUNT(*) AS cnt
      FROM students s
-     ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}
      ${clause}`, params);
     const row = rows[0];
     if (row == null)
@@ -455,15 +454,13 @@ export async function countLegacyAdminStudentListRows(pool, query) {
     const n = Number(row.cnt);
     return Number.isFinite(n) ? n : 0;
 }
+/** Roster list: only columns needed for the admin table + enrollment metadata derived from `id`. */
 const ADMIN_STUDENT_LIST_SELECT_SQL = `SELECT
        TRIM(s.id) AS id,
        s.name,
        s.email,
        NULLIF(TRIM(s.status), '') AS status,
        TRIM(s.program) AS program,
-       s.background,
-       s.requirements_id,
-       s.tertiary,
        s.signed_date,
        s.EnrollStartDate AS enroll_start_date,
        lr.term AS latest_term,
@@ -500,7 +497,6 @@ export async function listLegacyAdminStudentEnrollmentFacetRows(pool, query) {
        ${ADMIN_STUDENT_ENTRY_YEAR_SQL} AS entry_year,
        ${ADMIN_STUDENT_INTAKE_CODE_SQL} AS intake_code
      FROM students s
-     ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}
      ${clause}
      ORDER BY entry_year DESC, intake_code ASC`, params);
     return rows;
@@ -513,7 +509,6 @@ export async function listLegacyAdminStudentLoaTermFacetRows(pool, query) {
      FROM loa l
      INNER JOIN students s
        ON TRIM(l.student_id) = TRIM(s.id)
-     ${ADMIN_STUDENT_LIST_LATEST_REG_JOIN}
      ${clause}
      HAVING absent_quarter IS NOT NULL
        AND absent_quarter <> ''

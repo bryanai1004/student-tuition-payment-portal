@@ -9,9 +9,14 @@ export declare function getAdminClinicalSlotRosterHandler(req: Request, res: Res
 export declare function deleteAdminClinicalSlotEnrollmentHandler(req: Request, res: Response): Promise<void>;
 /**
  * POST /api/admin/clinical/slots/:timetableId/students
- * Body: { studentId: string, seatBucket?: '100'|'200'|'300'|'123'|'all'|null }
+ * Body: { studentId: string, seatBucket?: '100'|'200'|'300'|'123'|'all'|'ALL'|null }
  */
 export declare function postAdminClinicalSlotStudentHandler(req: Request, res: Response): Promise<void>;
+/**
+ * POST /api/admin/clinical/slots/:timetableId/add-student
+ * Body: { studentId: string, seatBucket?: '100'|'200'|'300'|'123'|'all'|'ALL'|null }
+ */
+export declare function postAdminClinicalSlotAddStudentHandler(req: Request, res: Response): Promise<void>;
 /**
  * POST /api/admin/clinical/slots/:timetableId/enrollments/:enrollmentId/grade
  * Body: { studentId: string, grade: string, grade2?: number | null }

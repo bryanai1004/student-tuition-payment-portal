@@ -1,6 +1,7 @@
 import { pool } from "../lib/db.js";
 import {
   academicTermsPaymentDueDateColumnExists,
+  countAdminFinanceRosterSearchOnly,
   deleteManualBillingAdjustment,
   deletePortalPayment,
   getBillingAdjustmentById,
@@ -11,23 +12,31 @@ import {
   insertPortalPayment,
   insertSystemLateFee,
   insertSystemLateFeeReversal,
-  listAdminFinanceRosterPage,
-  countAdminFinanceRosterPage,
+  listAdminFinanceRosterAllSearchOnlyOrdered,
+  listAdminFinanceRosterPageSearchOnly,
   listGlobalFinanceQuarters,
   listSystemLateFeeRowsForQuarter,
   listStudentIdsWithPortalQuarterActivity,
+  sumPortalBillingAdjustmentsNetByStudentForQuarter,
+  sumPortalPaymentsByStudentForQuarter,
   type AdminFinanceRosterBalanceFilter,
   type PortalBillingCategory,
   setFinanceQuarterDdlOnAcademicTerms,
   updateManualBillingAdjustment,
   updatePortalPayment,
 } from "../repositories/adminFinanceRepository.js";
-import { loadLegacyAccountingRows } from "../repositories/studentLegacyAccountRepository.js";
+import { batchLoadPortalTermBillingContextsForQuarter } from "../repositories/studentAccountRepository.js";
 import {
+  loadLegacyAccountingRows,
+  sumLegacyAccountingBalanceByStudentForQuarter,
+} from "../repositories/studentLegacyAccountRepository.js";
+import {
+  computePortalOnlyQuarterNetBalance,
   getAccountingLedgerPayload,
   getAccountingQuartersPayload,
 } from "./studentLedgerService.js";
 import { isPastSchoolLocalDueDate } from "../lib/schoolLocalDate.js";
+import type { AccountContext } from "../types/studentAccount.js";
 import {
   isClinicBucketCharge,
   isExamFeeMemo,
@@ -39,7 +48,7 @@ import {
 export type AdminFinanceStudentListItem = {
   studentId: string;
   name: string;
-  /** Net balance for the selected quarter from legacy `accounting` only (same as prior roster). */
+  /** Net balance for the selected quarter (legacy `accounting` + portal adjustments, or full portal ledger when no legacy rows). */
   balance: number;
 };
 
@@ -634,9 +643,82 @@ export function parseBalanceFilterParam(
   return "all";
 }
 
+function matchesFinanceBalanceFilter(
+  balance: number,
+  filter: AdminFinanceRosterBalanceFilter,
+): boolean {
+  const b = roundMoney(balance);
+  if (filter === "all") return true;
+  if (filter === "positive") return b > 0;
+  if (filter === "negative") return b < 0;
+  return b === 0;
+}
+
 /**
- * Paginated finance roster: search and balance filters run in SQL; balances are aggregated
- * in `quarter_bal` (no per-student queries).
+ * Merged quarter balance per student id: legacy `accounting` net + portal adjustments when
+ * legacy rows exist; otherwise the same net as the portal ledger builder (tuition synthesis,
+ * adjustments, and `portal_payments`).
+ */
+async function computeMergedFinanceQuarterBalancesForStudents(
+  studentIds: string[],
+  term: string,
+  year: number,
+): Promise<Map<string, number>> {
+  const t = term.trim();
+  const y = Math.trunc(year);
+  const out = new Map<string, number>();
+  const uniqueIds = [
+    ...new Set(studentIds.map((s) => s.trim()).filter((s) => s !== "")),
+  ];
+  if (uniqueIds.length === 0) {
+    return out;
+  }
+
+  const [legacyMap, adjMap, payMap] = await Promise.all([
+    sumLegacyAccountingBalanceByStudentForQuarter(pool, t, y),
+    sumPortalBillingAdjustmentsNetByStudentForQuarter(pool, t, y),
+    sumPortalPaymentsByStudentForQuarter(pool, t, y),
+  ]);
+
+  const portalOnlyIds = uniqueIds.filter((id) => !legacyMap.has(id));
+  const portalCtxByStudent = new Map<string, AccountContext>();
+  const PORTAL_CTX_CHUNK = 200;
+  for (let i = 0; i < portalOnlyIds.length; i += PORTAL_CTX_CHUNK) {
+    const chunk = portalOnlyIds.slice(i, i + PORTAL_CTX_CHUNK);
+    const part = await batchLoadPortalTermBillingContextsForQuarter(
+      pool,
+      chunk,
+      t,
+      y,
+    );
+    for (const [k, v] of part) {
+      portalCtxByStudent.set(k, v);
+    }
+  }
+
+  for (const id of uniqueIds) {
+    if (legacyMap.has(id)) {
+      const legacyNet = roundMoney(legacyMap.get(id) ?? 0);
+      const adjNet = roundMoney(adjMap.get(id) ?? 0);
+      out.set(id, roundMoney(legacyNet + adjNet));
+      continue;
+    }
+    const ctx = portalCtxByStudent.get(id);
+    if (ctx != null) {
+      out.set(id, roundMoney(computePortalOnlyQuarterNetBalance(ctx)));
+    } else {
+      const adjNet = roundMoney(adjMap.get(id) ?? 0);
+      const payNet = roundMoney(payMap.get(id) ?? 0);
+      out.set(id, roundMoney(adjNet - payNet));
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Paginated finance roster: one roster SQL (search + paging), one batched balance pass
+ * (legacy aggregates, portal adjustment/payment sums, and batched portal billing contexts).
  */
 export async function listAdminFinanceStudentsPaginated(
   term: string,
@@ -648,37 +730,77 @@ export async function listAdminFinanceStudentsPaginated(
     balanceFilter: AdminFinanceRosterBalanceFilter;
   },
 ): Promise<AdminFinanceStudentsListResponse> {
+  console.time("[admin finance students] total");
   const t = term.trim();
   const y = Math.trunc(year);
   const page = Math.max(1, Math.trunc(query.page));
   const pageSize = Math.min(100, Math.max(1, Math.trunc(query.pageSize)));
   const offset = (page - 1) * pageSize;
   const searchTrimmed = query.search.trim();
+  const balanceFilter = query.balanceFilter;
 
-  const [total, rawRows] = await Promise.all([
-    countAdminFinanceRosterPage(pool, {
-      term: t,
-      year: y,
+  try {
+    if (balanceFilter === "all") {
+      console.time("[admin finance students] students query");
+      const [total, rawRows] = await Promise.all([
+        countAdminFinanceRosterSearchOnly(pool, { searchTrimmed }),
+        listAdminFinanceRosterPageSearchOnly(pool, {
+          searchTrimmed,
+          limit: pageSize,
+          offset,
+        }),
+      ]);
+      console.timeEnd("[admin finance students] students query");
+
+      console.time("[admin finance students] balance aggregate");
+      const ids = rawRows.map((r) => r.studentId);
+      const balMap = await computeMergedFinanceQuarterBalancesForStudents(
+        ids,
+        t,
+        y,
+      );
+      console.timeEnd("[admin finance students] balance aggregate");
+
+      const items: AdminFinanceStudentListItem[] = rawRows.map((r) => ({
+        studentId: r.studentId,
+        name: r.name,
+        balance: roundMoney(balMap.get(r.studentId) ?? 0),
+      }));
+      return { items, total, page, pageSize };
+    }
+
+    console.time("[admin finance students] students query");
+    const allRows = await listAdminFinanceRosterAllSearchOnlyOrdered(pool, {
       searchTrimmed,
-      balanceFilter: query.balanceFilter,
-    }),
-    listAdminFinanceRosterPage(pool, {
-      term: t,
-      year: y,
-      searchTrimmed,
-      balanceFilter: query.balanceFilter,
-      limit: pageSize,
-      offset,
-    }),
-  ]);
+    });
+    console.timeEnd("[admin finance students] students query");
 
-  const items: AdminFinanceStudentListItem[] = rawRows.map((r) => ({
-    studentId: r.studentId,
-    name: r.name,
-    balance: roundMoney(r.balance),
-  }));
+    console.time("[admin finance students] balance aggregate");
+    const allIds = allRows.map((r) => r.studentId);
+    const balMap = await computeMergedFinanceQuarterBalancesForStudents(
+      allIds,
+      t,
+      y,
+    );
+    console.timeEnd("[admin finance students] balance aggregate");
 
-  return { items, total, page, pageSize };
+    const filtered = allRows.filter((r) =>
+      matchesFinanceBalanceFilter(
+        balMap.get(r.studentId) ?? 0,
+        balanceFilter,
+      ),
+    );
+    const total = filtered.length;
+    const slice = filtered.slice(offset, offset + pageSize);
+    const items: AdminFinanceStudentListItem[] = slice.map((r) => ({
+      studentId: r.studentId,
+      name: r.name,
+      balance: roundMoney(balMap.get(r.studentId) ?? 0),
+    }));
+    return { items, total, page, pageSize };
+  } finally {
+    console.timeEnd("[admin finance students] total");
+  }
 }
 
 export async function getAdminFinanceQuarters(studentId: string) {

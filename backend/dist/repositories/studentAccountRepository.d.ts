@@ -27,4 +27,9 @@ export declare function loadAccountContext(pool: Pool, studentId: string, term: 
  * Used to synthesize a ledger when legacy `accounting` has no rows for that quarter.
  */
 export declare function loadPortalTermBillingContext(pool: Pool, studentId: string, term: string, year: number): Promise<AccountContext>;
+/**
+ * Loads {@link AccountContext} for many students in a quarter with a bounded number of queries
+ * (enrollments, prefs, payments, adjustments, courses). Used for admin finance roster balances.
+ */
+export declare function batchLoadPortalTermBillingContextsForQuarter(pool: Pool, studentIds: string[], term: string, year: number): Promise<Map<string, AccountContext>>;
 //# sourceMappingURL=studentAccountRepository.d.ts.map

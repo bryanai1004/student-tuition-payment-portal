@@ -42,7 +42,9 @@ export type BuildAdminStudentsCsvResult = {
     rowCount: number;
 };
 export declare function buildAdminStudentsCsv(input: BuildAdminStudentsCsvInput): Promise<BuildAdminStudentsCsvResult>;
-export declare function getAdminStudentDetail(studentIdRaw: string): Promise<AdminStudentDetail | null>;
+export declare function getAdminStudentDetail(studentIdRaw: string, options?: {
+    includeClinicalProgress?: boolean;
+}): Promise<AdminStudentDetail | null>;
 export declare function listAdminStudentRegistrationTerms(studentIdRaw: string): Promise<AdminStudentRegistrationTerm[]>;
 export declare function listAdminStudentRegistrationHistoryForTerm(studentIdRaw: string, termRaw: string, yearRaw: number): Promise<AdminStudentRegistrationHistoryItem[]>;
 export type AdminStudentCreateLoaResult = {

@@ -122,7 +122,7 @@ export function AdminFinancePage() {
           signal: ac.signal,
           query: {
             page,
-            pageSize: DEFAULT_PAGE_SIZE,
+            pageSize,
             search: debouncedQ,
             balance: balanceFilter,
           },
@@ -153,6 +153,7 @@ export function AdminFinancePage() {
     reloadKey,
     selectedQuarter,
     page,
+    pageSize,
     debouncedQ,
     balanceFilter,
   ])

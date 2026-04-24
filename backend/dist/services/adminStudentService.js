@@ -194,7 +194,7 @@ export async function listAdminStudentsPage(options) {
     const loaQuarter = options.loaQuarter;
     const loaYear = options.loaYear;
     const offset = (page - 1) * pageSize;
-    const total = await countLegacyAdminStudentListRows(pool, {
+    const listQuery = {
         search,
         program,
         track,
@@ -203,35 +203,33 @@ export async function listAdminStudentsPage(options) {
         loa,
         loaQuarter,
         loaYear,
-    });
-    const rows = await listLegacyAdminStudentListRowsPage(pool, {
-        search,
-        program,
-        track,
-        entryYear,
-        intakeCode,
-        loa,
-        loaQuarter,
-        loaYear,
-        limit: pageSize,
-        offset,
-    });
-    const enrollmentFilterOptions = await buildAdminStudentEnrollmentFilterOptions({
-        search,
-        program,
-        track,
-        entryYear,
-        intakeCode,
-        loa,
-        loaQuarter,
-        loaYear,
-    });
+    };
+    console.time("[admin students list] base query");
+    let total;
+    let rows;
+    let enrollmentFilterOptions;
+    try {
+        [total, rows, enrollmentFilterOptions] = await Promise.all([
+            countLegacyAdminStudentListRows(pool, listQuery),
+            listLegacyAdminStudentListRowsPage(pool, {
+                ...listQuery,
+                limit: pageSize,
+                offset,
+            }),
+            buildAdminStudentEnrollmentFilterOptions(listQuery),
+        ]);
+    }
+    finally {
+        console.timeEnd("[admin students list] base query");
+    }
     const base = rows.map((row) => mapRowToListItem(row));
     let items;
-    if (!options.includeClinicalSummary) {
+    /** Roster clinical columns only when `clinicalSummary=1` is explicitly requested. */
+    if (options.includeClinicalSummary !== true) {
         items = base;
     }
     else {
+        console.time("[admin students] clinical summary");
         try {
             const byId = await batchBuildClinicalProgressForStudentIds(pool, base.map((b) => b.studentId));
             items = base.map((item) => {
@@ -248,6 +246,9 @@ export async function listAdminStudentsPage(options) {
         catch (e) {
             console.error("[admin] batch clinical progress failed (list)", e);
             items = base;
+        }
+        finally {
+            console.timeEnd("[admin students] clinical summary");
         }
     }
     return { items, total, page, pageSize, enrollmentFilterOptions };
@@ -410,7 +411,7 @@ function mapProfileRowToAdminDetail(row, latestRegistrationTerm, loaSummary) {
         loaSummary,
     };
 }
-export async function getAdminStudentDetail(studentIdRaw) {
+export async function getAdminStudentDetail(studentIdRaw, options) {
     const studentId = studentIdRaw.trim();
     if (studentId === "")
         return null;
@@ -425,6 +426,9 @@ export async function getAdminStudentDetail(studentIdRaw) {
         ? formatLatestRegistrationTerm(latest.term, latest.year)
         : null;
     const base = mapProfileRowToAdminDetail(row, latestRegistrationTerm, loaSummary);
+    if (options?.includeClinicalProgress !== true) {
+        return base;
+    }
     try {
         const clinicalProgress = await buildClinicalProgress(pool, studentId);
         return { ...base, clinicalProgress };

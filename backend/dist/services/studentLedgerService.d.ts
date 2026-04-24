@@ -1,4 +1,4 @@
-import type { BillingAdjustmentSource } from "../types/studentAccount.js";
+import type { AccountContext, BillingAdjustmentSource } from "../types/studentAccount.js";
 export type LedgerQuarterOption = {
     term: string;
     year: number;
@@ -35,6 +35,11 @@ export type LedgerSummaryDto = {
     totalPayments: number;
     balance: number;
 };
+/**
+ * Net quarter balance for portal-only students (no legacy `accounting` rows for the quarter),
+ * using the same row construction and summary as the admin ledger (excluding clinical hold metadata).
+ */
+export declare function computePortalOnlyQuarterNetBalance(ctx: AccountContext): number;
 export declare function getAccountingQuartersPayload(studentId: string): Promise<{
     studentId: string;
     quarters: LedgerQuarterOption[];

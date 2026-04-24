@@ -3,7 +3,7 @@ import { type AdminFinanceRosterBalanceFilter, type PortalBillingCategory } from
 export type AdminFinanceStudentListItem = {
     studentId: string;
     name: string;
-    /** Net balance for the selected quarter from legacy `accounting` only (same as prior roster). */
+    /** Net balance for the selected quarter (legacy `accounting` + portal adjustments, or full portal ledger when no legacy rows). */
     balance: number;
 };
 export type AdminFinanceStudentsListResponse = {
@@ -72,8 +72,8 @@ export declare function putQuarterSettings(input: {
 }>;
 export declare function parseBalanceFilterParam(raw: string | undefined): AdminFinanceRosterBalanceFilter;
 /**
- * Paginated finance roster: search and balance filters run in SQL; balances are aggregated
- * in `quarter_bal` (no per-student queries).
+ * Paginated finance roster: one roster SQL (search + paging), one batched balance pass
+ * (legacy aggregates, portal adjustment/payment sums, and batched portal billing contexts).
  */
 export declare function listAdminFinanceStudentsPaginated(term: string, year: number, query: {
     page: number;

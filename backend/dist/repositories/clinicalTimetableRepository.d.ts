@@ -28,7 +28,7 @@ export type ClinicTimetableAdminRow = ClinicTimetableDbRow & {
     academic_term_id: string | null;
     /**
      * `clinical_enrollments` rows with `status = 'enrolled'` for this timetable id
-     * (same filter as `listActiveClinicalRosterForTimetable`).
+     * (aligned with `listActiveClinicalRosterForTimetable` / admin roster).
      */
     active_enrolled_count: number;
     enrolled_bucket_100: number;
