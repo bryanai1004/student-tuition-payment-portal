@@ -546,23 +546,15 @@ export function AdminClinicalPage() {
 
       {tab === 'roster' || tab === 'offered-timetable' ? (
       <div className="admin-page__toolbar">
-        <div className="admin-page__toolbar-actions" style={{ width: '100%' }}>
+        <div className="admin-page__toolbar-actions admin-clinical-toolbar__actions">
           <label
             htmlFor="admin-clinical-term-filter"
-            className="portal-card-note"
-            style={{
-              marginRight: 'auto',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              flexWrap: 'wrap',
-            }}
+            className="portal-card-note admin-clinical-toolbar__term-field"
           >
             Academic term
             <select
               id="admin-clinical-term-filter"
               className="admin-input"
-              style={{ minWidth: '14rem' }}
               value={slotsTermId}
               onChange={(e) => setSlotsTermId(e.target.value)}
             >
@@ -636,7 +628,7 @@ export function AdminClinicalPage() {
           !rosterSlotsError &&
           rosterSlots != null ? (
             <div className="portal-table-wrap admin-table-wrap">
-              <table className="portal-table portal-data-table admin-students-table--center">
+              <table className="portal-table portal-data-table admin-students-table--center admin-clinical-slots-table">
                 <thead>
                   <tr>
                     <th scope="col">Academic term</th>
@@ -1302,7 +1294,7 @@ export function AdminClinicalPage() {
           ) : null}
           {examRows != null && examRows.length > 0 ? (
             <div className="portal-table-wrap admin-table-wrap">
-              <table className="portal-table portal-data-table admin-students-table--center">
+              <table className="portal-table portal-data-table admin-students-table--center admin-clinical-exam-table">
                 <thead>
                   <tr>
                     <th scope="col">Student ID</th>
@@ -1741,10 +1733,7 @@ export function AdminClinicalPage() {
               </p>
             ) : null}
             {rosterRows != null && rosterRows.length > 0 ? (
-              <div
-                className="portal-table-wrap admin-table-wrap"
-                style={{ marginTop: '0.75rem', maxHeight: '50vh', overflow: 'auto' }}
-              >
+              <div className="portal-table-wrap admin-table-wrap admin-clinical-slot-roster-table-wrap">
                 <table className="portal-table portal-data-table admin-students-table--center">
                   <thead>
                     <tr>

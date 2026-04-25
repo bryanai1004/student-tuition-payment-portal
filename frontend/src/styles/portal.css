@@ -8142,6 +8142,8 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   --portal-space-section: 1.75rem;
   /* Match student internal-module sidebar width */
   --admin-sidebar-width: 210px;
+  /* Admin content island (desktop cap); independent of student --portal-internal-main-content-max-width */
+  --admin-content-max-width: 1440px;
   /* Single gold bar only — same as student portal without myAMU banner */
   --portal-branding-bar-height: 4.5rem;
   --admin-header-height: var(--portal-branding-bar-height);
@@ -8206,14 +8208,21 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 
 .admin-portal__main-content {
   width: 100%;
-  max-width: var(--portal-internal-main-content-max-width);
+  max-width: min(var(--admin-content-max-width), 100%);
   margin-left: auto;
   margin-right: auto;
-  padding-left: 24px;
-  padding-right: 24px;
+  padding-left: clamp(1.5rem, 2.5vw, 2rem);
+  padding-right: clamp(1.5rem, 2.5vw, 2rem);
   box-sizing: border-box;
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.admin-page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .admin-page__title {
@@ -8600,7 +8609,7 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   max-width: 100%;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1023px) {
   .admin-page__toolbar.admin-course-sections-toolbar {
     row-gap: 0.75rem;
   }
@@ -9674,6 +9683,16 @@ select.admin-student-edit-control {
 
 .admin-finance-expand {
   padding: 1rem 1.25rem 1.25rem;
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.admin-finance-expand .portal-table-wrap {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .admin-finance-expand__toolbar {
@@ -9728,16 +9747,23 @@ select.admin-student-edit-control {
   }
 }
 
-@media (max-width: 768px) {
+/* Admin: compact shell + top nav grid (tablet and mobile, <1024px) */
+@media (max-width: 1023px) {
   .admin-portal {
     flex-direction: column;
-    --portal-branding-bar-height: 4.75rem;
+    --portal-branding-bar-height: 4.5rem;
+    overflow-x: clip;
   }
 
   .admin-portal__frame {
     margin-left: 0;
-    /* Main sits below the fixed header + sidebar stack; no extra top pad */
     padding-top: 0;
+    min-width: 0;
+  }
+
+  .admin-portal__main-content {
+    padding-left: 20px;
+    padding-right: 20px;
   }
 
   .admin-portal .admin-sidebar {
@@ -9750,19 +9776,21 @@ select.admin-student-edit-control {
     margin-top: var(--admin-header-height);
     border-right: none;
     border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-    padding: 1rem 0.625rem 0.75rem;
+    padding: 0.6rem 0.65rem 0.65rem;
+  }
+
+  .admin-portal .admin-sidebar .portal-sidebar-nav {
+    overflow: visible;
   }
 
   .admin-portal .admin-sidebar .portal-sidebar-nav-list {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 0.5rem 0.625rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+    gap: 0.35rem 0.45rem;
   }
 
   .admin-portal .admin-sidebar .portal-sidebar-nav-list li {
-    flex: 1 1 auto;
-    min-width: 7rem;
+    min-width: 0;
   }
 
   .admin-portal .admin-sidebar .portal-nav-link {
@@ -9770,12 +9798,18 @@ select.admin-student-edit-control {
     text-align: center;
     font-size: 0.8125rem;
     font-weight: 400;
-    padding: 0.5rem 0.65rem;
+    padding: 0.4rem 0.45rem;
+    white-space: normal;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .admin-portal .admin-sidebar .portal-nav-link--active,
   .admin-portal .admin-sidebar .sidebar-item.portal-nav-link--active {
-    font-weight: 500;
+    font-weight: 600;
+    box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.12);
   }
 
   .admin-portal .portal-branding-bar-start {
@@ -9791,8 +9825,84 @@ select.admin-student-edit-control {
   }
 
   .admin-portal__branding-title {
-    font-size: clamp(0.6875rem, 2.8vw, 0.8125rem);
-    letter-spacing: 0.03em;
+    font-size: clamp(0.7rem, 2.2vw, 0.875rem);
+    letter-spacing: 0.025em;
+  }
+
+  .admin-portal .portal-branding-bar-inner {
+    padding-left: max(env(safe-area-inset-left), 1rem);
+    padding-right: max(env(safe-area-inset-right), 1rem);
+  }
+
+  /* Finance: stack filters above table on tablet + mobile */
+  .admin-finance-page-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .admin-finance-page-controls__field {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-finance-page-controls__search {
+    margin-left: 0;
+    flex: none;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    justify-content: flex-start;
+  }
+
+  .admin-finance-page-controls__search.admin-page__toolbar-actions--wrap {
+    justify-content: flex-start;
+  }
+
+  .admin-finance-page-controls__field--balance-filter {
+    width: 100%;
+  }
+
+  .admin-finance-page-controls__field .admin-input,
+  .admin-finance-page-controls__search .admin-input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .admin-finance-page-controls__search .admin-input--search {
+    max-width: none;
+  }
+
+  .admin-page__toolbar .admin-field--inline {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-page__toolbar .admin-field--inline .admin-field__label {
+    white-space: normal;
+  }
+
+  .admin-page__toolbar .admin-field--inline .admin-input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 479px) {
+  .admin-portal .admin-sidebar .portal-sidebar-nav-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Admin: page-level responsive (<768px) */
+@media (max-width: 767px) {
+  .admin-portal__main-content {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .admin-page__toolbar {
@@ -9802,12 +9912,189 @@ select.admin-student-edit-control {
 
   .admin-page__toolbar-actions {
     margin-left: 0;
-    justify-content: stretch;
+    width: 100%;
+    justify-content: flex-start;
   }
 
-  .admin-input--search {
+  .admin-page .admin-input--search {
     width: 100%;
+    min-width: 0;
+    max-width: none;
   }
+
+  .admin-page__title {
+    font-size: clamp(1.375rem, 4.6vw, 1.5rem);
+    margin-bottom: 0.6rem;
+  }
+
+  .admin-page__title--inline {
+    width: 100%;
+    margin-bottom: 0.45rem;
+  }
+
+  .admin-detail-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    justify-content: flex-start;
+    gap: 0.3rem;
+    scrollbar-width: thin;
+  }
+
+  .admin-detail-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .admin-page .portal-tab-group.admin-courses-tablist {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    gap: 0.4rem;
+    padding-bottom: 0.15rem;
+    scrollbar-width: thin;
+  }
+
+  .admin-page .portal-tab-group.admin-courses-tablist .portal-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .admin-students-page__tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    gap: 0.4rem;
+    padding-bottom: 0.15rem;
+    scrollbar-width: thin;
+  }
+
+  .admin-students-page__tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .admin-page .portal-timetable-lang-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    gap: 0.4rem;
+    scrollbar-width: thin;
+  }
+
+  .admin-page .portal-timetable-lang-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .admin-page .portal-table-wrap {
+    max-width: 100%;
+  }
+
+  .admin-page .portal-table th,
+  .admin-page .portal-table td {
+    padding: 0.5rem 0.55rem;
+    font-size: 0.8125rem;
+  }
+
+  .admin-page .portal-table td {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .admin-page .portal-table-wrap .portal-btn--compact {
+    padding: 0.28rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .admin-page .portal-table-wrap--clinical-progress {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+}
+
+@media (max-width: 479px) {
+  .admin-portal__main-content {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* Clinical admin: roster / offered toolbar (replaces inline layout) */
+.admin-clinical-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.65rem 0.75rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-clinical-toolbar__term-field {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.admin-clinical-toolbar__term-field .admin-input {
+  min-width: 14rem;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  .admin-clinical-toolbar__actions {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .admin-clinical-toolbar__term-field {
+    margin-right: 0;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-clinical-toolbar__term-field .admin-input {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .admin-clinical-toolbar__actions > .portal-btn {
+    width: 100%;
+    max-width: 16rem;
+    align-self: flex-start;
+  }
+}
+
+.admin-clinical-slots-table {
+  min-width: 52rem;
+}
+
+.admin-clinical-exam-table {
+  min-width: 46rem;
+}
+
+.admin-clinical-slot-roster-table-wrap {
+  margin-top: 0.75rem;
+  max-height: 50vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* =============================================================================

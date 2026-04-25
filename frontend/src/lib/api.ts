@@ -2096,7 +2096,7 @@ function financeLedgerContextQuery(
 export type PutAdminFinanceChargeBody = {
   description: string
   amount: number
-  category: 'fees' | 'other' | 'tuition' | 'clinical'
+  category: 'fees' | 'other' | 'tuition' | 'clinical' | 'exam'
 }
 
 /** PUT /api/admin/finance/charge/:id */
