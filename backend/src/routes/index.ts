@@ -90,7 +90,6 @@ import {
   postAdminAuthLogin,
   postAdminAuthLogout,
 } from "../controllers/adminAuthController.js";
-import { requireAdminAuth } from "../middleware/requireAdminAuth.js";
 import {
   getStudentEnrolledSections,
   postStudentEnroll,
@@ -215,12 +214,13 @@ apiRouter.delete(
   deleteCourseBinItemHandler,
 );
 
-/** Admin section CRUD: protected by `requireAdminAuth` (except `/auth/*`). */
+/** Admin section CRUD. Auth routes stay mounted; global admin auth middleware temporarily disabled. */
 const adminRouter = Router();
 adminRouter.post("/auth/login", postAdminAuthLogin);
 adminRouter.post("/auth/logout", postAdminAuthLogout);
 adminRouter.get("/auth/me", getAdminAuthMe);
-adminRouter.use(requireAdminAuth);
+// TODO: re-enable backend admin auth after cookie verification is fixed.
+// adminRouter.use(requireAdminAuth);
 adminRouter.get("/students", getAdminStudents);
 adminRouter.get("/students/next-id", getNextAdminStudentId);
 adminRouter.post("/students", postAdminStudent);

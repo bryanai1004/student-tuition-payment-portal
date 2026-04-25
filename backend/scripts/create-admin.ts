@@ -1,5 +1,6 @@
 /**
- * Upserts legacy admin portal accounts into `admin_users` with bcrypt password hashes.
+ * Upserts the DB-backed admin (`deanjiang@amu`) into `admin_users`.
+ * Other admin emails use legacy hardcoded auth (see `legacyAdminAccounts.ts`).
  * Run after migration `015_admin_users.sql`. Usage (from backend/): `npm run admin:create`
  */
 import bcrypt from "bcrypt";
@@ -9,13 +10,6 @@ type SeedRow = { email: string; password: string; role: string };
 
 const SEED_ROWS: readonly SeedRow[] = [
   { email: "deanjiang@amu", password: "deanjiang123", role: "super_admin" },
-  { email: "wanpanelami@gmail.com", password: "amuadmin123", role: "admin" },
-  { email: "bingchen.li@wanpanel.ai", password: "amuadmin123", role: "admin" },
-  { email: "clinic@amu.edu", password: "amuadmin123", role: "admin" },
-  { email: "clinicdean@amu.edu", password: "amuadmin123", role: "admin" },
-  { email: "teacher@amu.edu", password: "teacher123", role: "teacher" },
-  { email: "clinical@amu.edu", password: "clinical123", role: "clinical_teacher" },
-  { email: "clinicaladmin@amu", password: "clinicaladmin", role: "clinical_admin" },
 ] as const;
 
 async function main(): Promise<void> {

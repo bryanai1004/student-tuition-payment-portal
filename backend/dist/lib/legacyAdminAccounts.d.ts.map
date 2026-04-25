@@ -1,0 +1,1 @@
+{"version":3,"file":"legacyAdminAccounts.d.ts","sourceRoot":"","sources":["../../src/lib/legacyAdminAccounts.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,qBAAqB,CAAC;AAqBxD;;GAEG;AACH,wBAAgB,uBAAuB,CACrC,eAAe,EAAE,MAAM,EACvB,eAAe,EAAE,MAAM,GACtB;IAAE,KAAK,EAAE,MAAM,CAAC;IAAC,IAAI,EAAE,YAAY,CAAA;CAAE,GAAG,IAAI,CAO9C"}

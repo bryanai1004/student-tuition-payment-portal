@@ -1,9 +1,9 @@
 import bcrypt from "bcrypt";
 import { env } from "../config/env.js";
 import { ADMIN_ACCESS_COOKIE_NAME, issueAdminAccessToken, readTokenTtlSecondsPublic, verifyAdminAccessToken, verifyAdminAccessTokenString, } from "../lib/adminAuthToken.js";
+import { authenticateLegacyAdmin } from "../lib/legacyAdminAccounts.js";
 import { pool } from "../lib/db.js";
 import { findAdminUserByEmail } from "../repositories/adminUserRepository.js";
-const BCRYPT_DUMMY = "$2b$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa";
 const ADMIN_ROLE_SET = new Set([
     "super_admin",
     "admin",
@@ -64,18 +64,31 @@ export async function postAdminAuthLogin(req, res) {
     }
     try {
         const row = await findAdminUserByEmail(pool, idNorm);
-        const hashForCompare = row?.password_hash ?? BCRYPT_DUMMY;
-        const match = await bcrypt.compare(pwTrim, hashForCompare);
-        if (row == null || !match || !isAdminJwtRole(row.role)) {
-            res.status(401).json({ ok: false, error: "Invalid email or password." });
+        if (row != null) {
+            const match = await bcrypt.compare(pwTrim, row.password_hash);
+            if (!match || !isAdminJwtRole(row.role)) {
+                res.status(401).json({ ok: false, error: "Invalid email or password." });
+                return;
+            }
+            const token = issueAdminAccessToken(row.email, row.role);
+            setAdminCookie(res, token);
+            res.status(200).json({
+                ok: true,
+                user: { email: row.email, role: row.role },
+            });
             return;
         }
-        const token = issueAdminAccessToken(row.email, row.role);
-        setAdminCookie(res, token);
-        res.status(200).json({
-            ok: true,
-            user: { email: row.email, role: row.role },
-        });
+        const legacy = authenticateLegacyAdmin(idNorm, pwTrim);
+        if (legacy != null) {
+            const token = issueAdminAccessToken(legacy.email, legacy.role);
+            setAdminCookie(res, token);
+            res.status(200).json({
+                ok: true,
+                user: { email: legacy.email, role: legacy.role },
+            });
+            return;
+        }
+        res.status(401).json({ ok: false, error: "Invalid email or password." });
     }
     catch (e) {
         console.error("[admin/auth/login] failed:", e);
