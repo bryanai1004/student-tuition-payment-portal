@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { buildApiUrl } from '../lib/api'
+import { buildApiUrl, clearAdminAuthClientStorage } from '../lib/api'
 import { type AdminRole, isAdminRole } from '../lib/adminAccess'
 
 type AdminLoginResult =
@@ -46,6 +46,17 @@ function parseMeResponse(data: unknown): MeResponse {
   return { ok: true, user: { email, role: roleRaw } }
 }
 
+async function postAdminLogout(): Promise<void> {
+  try {
+    await fetch(buildApiUrl('/api/admin/auth/logout'), {
+      method: 'POST',
+      credentials: 'include',
+    })
+  } catch {
+    /* ignore */
+  }
+}
+
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<StoredAdminSession | null>(null)
   const [isHydrated, setIsHydrated] = useState(false)
@@ -60,9 +71,18 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         })
         const data: unknown = await res.json().catch(() => null)
         if (cancelled) return
-        const parsed = parseMeResponse(data)
-        if (parsed.ok === true) {
-          setSession({ email: parsed.user.email, role: parsed.user.role })
+        if (!res.ok || res.status === 401) {
+          setSession(null)
+          clearAdminAuthClientStorage()
+        } else {
+          const parsed = parseMeResponse(data)
+          if (parsed.ok === true) {
+            setSession({ email: parsed.user.email, role: parsed.user.role })
+            clearAdminAuthClientStorage()
+          } else {
+            setSession(null)
+            clearAdminAuthClientStorage()
+          }
         }
       } catch {
         /* ignore */
@@ -86,6 +106,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       if (password === '') {
         return { ok: false, error: 'Password is required' }
       }
+      clearAdminAuthClientStorage()
+      setSession(null)
+      await postAdminLogout()
       try {
         const res = await fetch(buildApiUrl('/api/admin/auth/login'), {
           method: 'POST',
@@ -109,6 +132,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
             }
           }
         }
+        setSession(null)
+        clearAdminAuthClientStorage()
+        await postAdminLogout()
         const errBody = data as { error?: unknown } | null
         const msg =
           typeof errBody?.error === 'string' && errBody.error.trim() !== ''
@@ -116,6 +142,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
             : 'Invalid email or password.'
         return { ok: false, error: msg }
       } catch {
+        setSession(null)
+        clearAdminAuthClientStorage()
+        await postAdminLogout()
         return { ok: false, error: 'Login failed. Please try again.' }
       }
     },
@@ -123,14 +152,8 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
-    try {
-      await fetch(buildApiUrl('/api/admin/auth/logout'), {
-        method: 'POST',
-        credentials: 'include',
-      })
-    } catch {
-      /* ignore */
-    }
+    await postAdminLogout()
+    clearAdminAuthClientStorage()
     setSession(null)
   }, [])
 

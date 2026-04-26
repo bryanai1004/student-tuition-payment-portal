@@ -77,6 +77,7 @@ export async function postAdminAuthLogin(req: Request, res: Response): Promise<v
   const pwTrim = password.trim();
 
   if (idNorm.length === 0 || pwTrim.length === 0) {
+    clearAdminCookie(res);
     res.status(400).json({ ok: false, error: "Identifier and password are required." });
     return;
   }
@@ -86,6 +87,7 @@ export async function postAdminAuthLogin(req: Request, res: Response): Promise<v
     if (row != null) {
       const match = await bcrypt.compare(pwTrim, row.password_hash);
       if (!match || !isAdminJwtRole(row.role)) {
+        clearAdminCookie(res);
         res.status(401).json({ ok: false, error: "Invalid email or password." });
         return;
       }
@@ -109,6 +111,7 @@ export async function postAdminAuthLogin(req: Request, res: Response): Promise<v
       return;
     }
 
+    clearAdminCookie(res);
     res.status(401).json({ ok: false, error: "Invalid email or password." });
   } catch (e) {
     console.error("[admin/auth/login] failed:", e);

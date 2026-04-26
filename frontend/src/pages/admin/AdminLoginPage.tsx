@@ -13,7 +13,7 @@ export function AdminLoginPage() {
 
   useEffect(() => {
     if (isHydrated && isAuthenticated) {
-      navigate('/admin', { replace: true })
+      navigate('/admin/students', { replace: true })
     }
   }, [isAuthenticated, isHydrated, navigate])
 
@@ -24,7 +24,7 @@ export function AdminLoginPage() {
       setFormError(result.error)
       return
     }
-    navigate('/admin', { replace: true })
+    navigate('/admin/students', { replace: true })
   }
 
   return (

@@ -52,6 +52,30 @@ function readStudentAccessTokenFromStorage(): string | null {
   return null
 }
 
+/** Legacy / mistaken client keys for admin UI; auth is httpOnly cookie + React state. */
+const ADMIN_AUTH_LEGACY_STORAGE_KEYS = [
+  'admin',
+  'adminUser',
+  'adminSession',
+  'amu_admin',
+] as const
+
+export function clearAdminAuthClientStorage(): void {
+  if (typeof window === 'undefined') return
+  try {
+    for (const key of ADMIN_AUTH_LEGACY_STORAGE_KEYS) {
+      try {
+        localStorage.removeItem(key)
+        sessionStorage.removeItem(key)
+      } catch {
+        // ignore per-key
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Full URL for an API path. `path` must start with `/` (e.g. `/api/students/x/account`).
  */

@@ -7,8 +7,8 @@ export function AdminHeader() {
   const navigate = useNavigate()
   const { logout } = useAdminAuth()
 
-  function handleLogout() {
-    logout()
+  async function handleLogout() {
+    await logout()
     navigate('/admin/login', { replace: true })
   }
 
