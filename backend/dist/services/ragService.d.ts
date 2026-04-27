@@ -33,12 +33,14 @@ export type GroundedAmuPipeline = "policy" | "mixed";
 export type AnswerAmuQuestionOptions = {
     studentContext?: string | null;
     pipeline?: GroundedAmuPipeline;
+    catalogEvidence?: RetrievedChunk[];
+    weakRetrieval?: boolean;
     identityContext?: IdentityContext | null;
 };
 export type UnifiedEvidenceInput = {
     question: string;
     studentEvidence?: string | null;
-    catalogEvidence?: boolean;
+    catalogEvidence?: RetrievedChunk[];
     courseEvidence?: string | null;
     identityContext?: IdentityContext | null;
     history?: unknown;
@@ -64,6 +66,10 @@ export declare function answerLocalSearchQuestion(question: string): Promise<Rag
 export declare function answerGeneralQuestion(question: string, rawHistory?: unknown, options?: AnswerGeneralQuestionOptions): Promise<RagAnswerResult>;
 export declare function answerStudentRecordQuestionFromFacts(question: string, studentFacts: string, identityContext?: IdentityContext | null): Promise<RagAnswerResult>;
 export declare function answerEvidenceDrivenQuestion(input: UnifiedEvidenceInput): Promise<RagAnswerResult>;
+export declare function retrieveCatalogEvidenceForQuestion(question: string, rawHistory?: unknown): Promise<{
+    chunks: RetrievedChunk[];
+    weakRetrieval: boolean;
+}>;
 export declare function answerGraduationQuestion(question: string, rawHistory?: unknown, options?: AnswerGraduationQuestionOptions): Promise<RagAnswerResult>;
 /**
  * Grounded AMU answer path for policy-only and mixed student+policy questions.

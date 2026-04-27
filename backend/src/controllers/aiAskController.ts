@@ -8,6 +8,8 @@ import {
   answerSchoolFactQuestion,
   plainTextFormatter,
   planShortConversationMemory,
+  retrieveCatalogEvidenceForQuestion,
+  type RetrievedChunk,
 } from "../services/ragService.js";
 import {
   classifyStudentAiIntent,
@@ -193,6 +195,8 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
     const shortCourseLike = isShortCourseLikeQuery(q);
     let studentEvidence: string | null = null;
     let courseEvidence: string | null = null;
+    let catalogEvidence: RetrievedChunk[] | undefined;
+    let weakCatalogRetrieval = false;
 
     console.debug("[ai/ask] detected intent", {
       initialIntent,
@@ -368,18 +372,33 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
       }
     }
 
+    if (wantsCatalogEvidence) {
+      const retrieved = await retrieveCatalogEvidenceForQuestion(q, memoryPlan.history);
+      catalogEvidence = retrieved.chunks;
+      weakCatalogRetrieval = retrieved.weakRetrieval;
+      if (weakCatalogRetrieval && (catalogEvidence?.length ?? 0) > 0) {
+        console.warn("[ai/ask] catalog retrieval confidence is weak", {
+          question: q,
+          sourceCount: catalogEvidence?.length ?? 0,
+          topSource: catalogEvidence[0]?.source ?? null,
+          topScore: catalogEvidence[0]?.score ?? null,
+        });
+      }
+    }
+
     console.debug("[ai/ask] pipeline used", {
       pipeline: "unified_evidence",
       finalPipeline: "evidence_driven",
       hasStudentEvidence: studentEvidence != null,
-      hasCatalogEvidence: wantsCatalogEvidence,
+      hasCatalogEvidence: (catalogEvidence?.length ?? 0) > 0,
       hasCourseEvidence: courseEvidence != null,
+      weakCatalogRetrieval,
     });
 
     const result = await answerEvidenceDrivenQuestion({
       question: q,
       studentEvidence,
-      catalogEvidence: wantsCatalogEvidence,
+      catalogEvidence,
       courseEvidence,
       identityContext,
       history: memoryPlan.history,

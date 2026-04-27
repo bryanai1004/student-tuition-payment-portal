@@ -8680,8 +8680,8 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 /* Course Sections page only: English / Chinese timetable tables (overrides .portal-table last-col right align) */
 .admin-course-sections-page .admin-course-sections-table {
   table-layout: fixed;
-  width: 1740px;
-  min-width: 1740px;
+  width: 100%;
+  min-width: 900px;
   max-width: none;
 }
 
@@ -8689,8 +8689,9 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 .admin-course-sections-page .admin-course-sections-table td {
   text-align: center;
   vertical-align: middle;
-  /* Slightly tighter than default .portal-table (0.8125rem 1rem) so 14 columns + Actions fit */
-  padding: 0.75rem 0.68rem;
+  padding: 10px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .admin-course-sections-page .admin-course-sections-table thead th {
@@ -8698,12 +8699,11 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.05em;
 }
 
 .admin-course-sections-page .admin-course-sections-table .admin-course-sections-table__header-label {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
+  display: block;
   width: 100%;
   min-width: 0;
   white-space: nowrap;
@@ -8733,21 +8733,20 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(3),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(3) {
-  width: 11.875rem;
-  min-width: 11.875rem;
+  width: 140px;
+  min-width: 140px;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(4),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(4) {
-  width: 5rem;
-  min-width: 5rem;
+  width: 70px;
   font-variant-numeric: tabular-nums;
 }
 
 .admin-course-sections-page .admin-course-sections-table th:nth-child(5),
 .admin-course-sections-page .admin-course-sections-table td:nth-child(5) {
-  width: 7.5rem;
-  min-width: 7.5rem;
+  width: 110px;
+  min-width: 110px;
   white-space: nowrap;
   line-height: 1.25;
 }
@@ -10514,7 +10513,7 @@ select.admin-student-edit-control {
 .admin-course-sections-page .portal-table-wrap {
   overflow-x: auto;
   max-width: 100%;
-  min-width: 520px;
+  min-width: 0;
 }
 
 .admin-course-sections-page .admin-course-sections-list .portal-table-wrap {
@@ -10527,19 +10526,23 @@ select.admin-student-edit-control {
 
 .admin-course-sections-page .admin-course-sections-table {
   table-layout: fixed;
-  min-width: 1740px;
+  width: 100%;
+  min-width: 900px;
 }
 
 .admin-course-sections-page .admin-course-sections-table th,
 .admin-course-sections-page .admin-course-sections-table td {
   text-align: center;
   vertical-align: middle;
-  white-space: normal;
+  white-space: nowrap;
   line-height: 1.25;
+  padding: 10px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 900px) {
   .admin-course-sections-page .admin-course-sections-table th {
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
   }
 }

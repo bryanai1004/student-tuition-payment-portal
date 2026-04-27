@@ -1,5 +1,5 @@
 import { verifyStudentAccessToken } from "../lib/studentAuthToken.js";
-import { RagQuestionValidationError, answerEvidenceDrivenQuestion, answerGeneralQuestion, answerLocalSearchQuestion, answerSchoolFactQuestion, plainTextFormatter, planShortConversationMemory, } from "../services/ragService.js";
+import { RagQuestionValidationError, answerEvidenceDrivenQuestion, answerGeneralQuestion, answerLocalSearchQuestion, answerSchoolFactQuestion, plainTextFormatter, planShortConversationMemory, retrieveCatalogEvidenceForQuestion, } from "../services/ragService.js";
 import { classifyStudentAiIntent, needsCatalogEvidence, needsCourseEvidence, needsStudentEvidence, } from "../services/studentAiQuestionRouter.js";
 import { evaluateCourseEligibility, isLikelyPassingGrade, isLikelyCourseRelatedQuery, isShortCourseLikeQuery, loadStudentAcademicCourseContext, parsePrerequisiteRules, resolveAmuCourse, } from "../services/courseEligibilityService.js";
 import { buildStudentRecordFactsForQuestion, } from "../services/studentRecordAiService.js";
@@ -133,6 +133,8 @@ export async function postAiAsk(req, res) {
         const shortCourseLike = isShortCourseLikeQuery(q);
         let studentEvidence = null;
         let courseEvidence = null;
+        let catalogEvidence;
+        let weakCatalogRetrieval = false;
         console.debug("[ai/ask] detected intent", {
             initialIntent,
             effectiveIntent: routedIntent,
@@ -282,17 +284,31 @@ export async function postAiAsk(req, res) {
                 ].join("\n\n");
             }
         }
+        if (wantsCatalogEvidence) {
+            const retrieved = await retrieveCatalogEvidenceForQuestion(q, memoryPlan.history);
+            catalogEvidence = retrieved.chunks;
+            weakCatalogRetrieval = retrieved.weakRetrieval;
+            if (weakCatalogRetrieval && (catalogEvidence?.length ?? 0) > 0) {
+                console.warn("[ai/ask] catalog retrieval confidence is weak", {
+                    question: q,
+                    sourceCount: catalogEvidence?.length ?? 0,
+                    topSource: catalogEvidence[0]?.source ?? null,
+                    topScore: catalogEvidence[0]?.score ?? null,
+                });
+            }
+        }
         console.debug("[ai/ask] pipeline used", {
             pipeline: "unified_evidence",
             finalPipeline: "evidence_driven",
             hasStudentEvidence: studentEvidence != null,
-            hasCatalogEvidence: wantsCatalogEvidence,
+            hasCatalogEvidence: (catalogEvidence?.length ?? 0) > 0,
             hasCourseEvidence: courseEvidence != null,
+            weakCatalogRetrieval,
         });
         const result = await answerEvidenceDrivenQuestion({
             question: q,
             studentEvidence,
-            catalogEvidence: wantsCatalogEvidence,
+            catalogEvidence,
             courseEvidence,
             identityContext,
             history: memoryPlan.history,

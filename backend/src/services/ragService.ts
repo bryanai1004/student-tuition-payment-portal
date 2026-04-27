@@ -118,13 +118,15 @@ export type GroundedAmuPipeline = "policy" | "mixed";
 export type AnswerAmuQuestionOptions = {
   studentContext?: string | null;
   pipeline?: GroundedAmuPipeline;
+  catalogEvidence?: RetrievedChunk[];
+  weakRetrieval?: boolean;
   identityContext?: IdentityContext | null;
 };
 
 export type UnifiedEvidenceInput = {
   question: string;
   studentEvidence?: string | null;
-  catalogEvidence?: boolean;
+  catalogEvidence?: RetrievedChunk[];
   courseEvidence?: string | null;
   identityContext?: IdentityContext | null;
   history?: unknown;
@@ -731,6 +733,31 @@ function formatRetrievedDocumentContextBlock(
     return "No retrieved AMU handbook or policy excerpts were available.";
   }
   return buildContextBlock(items);
+}
+
+function formatRetrievedChunkContextBlock(items: RetrievedChunk[]): string {
+  if (items.length === 0) {
+    return "No retrieved AMU handbook or policy excerpts were available.";
+  }
+  return items
+    .map((chunk) => {
+      const metaParts = [
+        chunk.program && `Program: ${chunk.program}`,
+        chunk.sectionTitle && `Section: ${chunk.sectionTitle}`,
+        chunk.subsectionTitle && `Subsection: ${chunk.subsectionTitle}`,
+        chunk.pageStart != null &&
+          `Pages: ${chunk.pageStart}${
+            chunk.pageEnd != null && chunk.pageEnd !== chunk.pageStart
+              ? `–${chunk.pageEnd}`
+              : ""
+          }`,
+        `Source file: ${chunk.source}`,
+        `Chunk: ${chunk.chunkIndex}`,
+        `Match score: ${chunk.score.toFixed(3)}`,
+      ].filter(Boolean);
+      return `Source: ${chunk.source}\nContent: [${metaParts.join(" | ")}]\n${chunk.content}`;
+    })
+    .join("\n\n---\n\n");
 }
 
 /** True when the latest question looks like a follow-up or vague reference (with history present). */
@@ -1755,7 +1782,8 @@ export async function answerEvidenceDrivenQuestion(
 ): Promise<RagAnswerResult> {
   const q = validateQuestion(input.question);
   const history = sanitizeChatHistory(input.history);
-  const catalogRequested = input.catalogEvidence === true;
+  const catalogRequested = input.catalogEvidence != null;
+  const catalogEvidence = input.catalogEvidence ?? [];
   const studentEvidence = input.studentEvidence?.trim() ?? "";
   const courseEvidence = input.courseEvidence?.trim() ?? "";
   const hasStudentEvidence = studentEvidence.length > 0;
@@ -1779,8 +1807,27 @@ export async function answerEvidenceDrivenQuestion(
   return answerAmuQuestion(q, history, {
     pipeline,
     studentContext: mergedStudentContext,
+    catalogEvidence,
     identityContext: input.identityContext,
   });
+}
+
+export async function retrieveCatalogEvidenceForQuestion(
+  question: string,
+  rawHistory?: unknown,
+): Promise<{ chunks: RetrievedChunk[]; weakRetrieval: boolean }> {
+  const q = validateQuestion(question);
+  const history = sanitizeChatHistory(rawHistory);
+  const client = getOpenAiClient();
+  const { top, weakRetrieval } = await retrieveChunksForCatalog({
+    client,
+    question: q,
+    history,
+  });
+  return {
+    chunks: top.map(({ chunk, score }) => toRetrieved(chunk, score)),
+    weakRetrieval,
+  };
 }
 
 export async function answerGraduationQuestion(
@@ -1859,23 +1906,54 @@ export async function answerAmuQuestion(
   const history = sanitizeChatHistory(rawHistory);
   const pipeline = options?.pipeline ?? "policy";
   const client = getOpenAiClient();
-
-  const { top, debug, weakRetrieval } = await retrieveChunksForCatalog({
-    client,
-    question: q,
-    history,
-  });
+  const providedCatalogEvidence = options?.catalogEvidence ?? [];
+  const hasProvidedCatalogEvidence = providedCatalogEvidence.length > 0;
+  const retrieval =
+    hasProvidedCatalogEvidence
+      ? null
+      : await retrieveChunksForCatalog({
+          client,
+          question: q,
+          history,
+        });
+  const retrievedTop = retrieval?.top ?? [];
+  const retrievedSources = hasProvidedCatalogEvidence
+    ? providedCatalogEvidence
+    : retrievedTop.map(({ chunk, score }) => toRetrieved(chunk, score));
+  const debug: CatalogRetrievalDebug = retrieval?.debug ?? {
+    originalUserQuery: q,
+    normalizedRetrievalQuery: q,
+    embeddingQueryVariants: [],
+    programHint: null,
+    topChunks: retrievedSources.slice(0, 5).map((chunk) => ({
+      id: chunk.id,
+      source: chunk.source,
+      program: chunk.program,
+      sectionTitle: chunk.sectionTitle,
+      subsectionTitle: chunk.subsectionTitle,
+      pageStart: chunk.pageStart,
+      pageEnd: chunk.pageEnd,
+      score: chunk.score,
+    })),
+    maxScore: retrievedSources[0]?.score ?? 0,
+  };
+  const weakRetrieval =
+    options?.weakRetrieval ??
+    retrieval?.weakRetrieval ??
+    isWeakCatalogRetrieval(debug.maxScore);
 
   const studentContextBlock = formatStudentContextBlock(options?.studentContext);
-  const contextBlock = formatRetrievedDocumentContextBlock(top);
-  if (top.length === 0 || weakRetrieval) {
+  const contextBlock = hasProvidedCatalogEvidence
+    ? formatRetrievedChunkContextBlock(retrievedSources)
+    : formatRetrievedDocumentContextBlock(retrievedTop);
+  if (retrievedSources.length === 0) {
     const fallback =
       `I do not see this detail in the available AMU catalog context. ` +
       `If you want, I can help refine the question with the exact program, catalog year, or course code so I can check again.`;
     return {
       question: q,
       answer: fallback,
-      sources: top.map(({ chunk, score }) => toRetrieved(chunk, score)),
+      sources: retrievedSources,
     };
   }
   const identityBlock = formatIdentityContextForPrompt(options?.identityContext);
@@ -1906,8 +1984,8 @@ ${q}`;
   console.debug("[ai/ask] retrieval context prepared", {
     pipeline,
     hasStudentContext: pipeline === "mixed",
-    retrievedSourceCount: top.length,
-    topRetrievedSource: top[0]?.chunk.source ?? null,
+    retrievedSourceCount: retrievedSources.length,
+    topRetrievedSource: retrievedSources[0]?.source ?? null,
     maxRetrievalScore: debug.maxScore,
     weakRetrieval,
     programHint: debug.programHint,
@@ -1915,7 +1993,7 @@ ${q}`;
 
   console.log("[rag/answer mode]", {
     path: "amu_policy_or_mixed",
-    answerMode: "catalog_rag",
+    answerMode: weakRetrieval ? "catalog_rag_weak_retrieval" : "catalog_rag",
     pipeline,
     maxRetrievalScore: debug.maxScore,
     weakRetrieval,
@@ -1945,6 +2023,6 @@ ${q}`;
   return {
     question: q,
     answer,
-    sources: top.map(({ chunk, score }) => toRetrieved(chunk, score)),
+    sources: retrievedSources,
   };
 }
