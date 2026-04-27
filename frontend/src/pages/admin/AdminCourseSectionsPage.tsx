@@ -155,13 +155,13 @@ function AdminCourseSectionGroupTable({
       <div className="portal-table-wrap admin-table-wrap">
         <table
           className="portal-table portal-data-table admin-course-sections-table"
-          style={{ minWidth: '1700px' }}
+          style={{ minWidth: '1780px' }}
         >
           <colgroup>
             <col style={{ width: '80px' }} />
             <col style={{ width: '180px' }} />
             <col style={{ width: '170px', minWidth: '170px' }} />
-            <col style={{ width: '110px', minWidth: '110px' }} />
+            <col style={{ width: '130px', minWidth: '130px' }} />
             <col style={{ width: '100px' }} />
             <col style={{ width: '100px' }} />
             <col style={{ width: '90px' }} />
