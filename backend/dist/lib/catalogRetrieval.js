@@ -1,4 +1,7 @@
 const WEAK_RETRIEVAL_MAX_SCORE = 0.22;
+const RAG_TOP_K = 12;
+const RAG_CONTEXT_MIN = 6;
+const RAG_CONTEXT_MAX = 8;
 function uniqueStrings(values) {
     const seen = new Set();
     const out = [];
@@ -77,6 +80,19 @@ export function detectCatalogProgramHint(text) {
         return "DAHM";
     return null;
 }
+function buildRetrievalBoostProfile(query) {
+    const lower = query.toLowerCase();
+    const boostMahm = /\bmahm\b|\bmaster\b|硕士/.test(lower + query);
+    const boostDahm = /\bdahm\b|\bdoctoral\b|\bdoctoral\b|博士/.test(lower + query);
+    return {
+        programHint: detectCatalogProgramHint(query),
+        boostMahm,
+        boostDahm,
+        boostFinancial: /\btuition\b|\bfee\b|\bfees\b|\bcost\b|学费|费用|收费/.test(lower + query),
+        boostGraduation: /\bcredits?\b|\bgraduation\b|学分|毕业/.test(lower + query),
+        boostPrerequisite: /\bprerequisite\b|\bprereq\b|先修|先决/.test(lower + query),
+    };
+}
 function programScoreMultiplier(chunk, hint) {
     if (!hint || !chunk.program)
         return 1;
@@ -98,6 +114,42 @@ export function rankCatalogChunksByEmbeddingMaxWithHint(chunks, queryEmbeddings,
     scored.sort((a, b) => b.score - a.score);
     return scored;
 }
+function sourceOrContentHas(chunk, pattern) {
+    return pattern.test(`${chunk.source}\n${chunk.sectionTitle ?? ""}\n${chunk.subsectionTitle ?? ""}\n${chunk.content}`);
+}
+function applyKeywordBoosts(chunk, baseScore, profile) {
+    let score = baseScore;
+    if (profile.boostMahm &&
+        sourceOrContentHas(chunk, /\bMAHM\b|master|硕士/i)) {
+        score *= 1.1;
+    }
+    if (profile.boostDahm &&
+        sourceOrContentHas(chunk, /\bDAHM\b|doctoral|doctor|博士/i)) {
+        score *= 1.1;
+    }
+    if (profile.boostFinancial &&
+        sourceOrContentHas(chunk, /\btuition\b|\bfee\b|\bcost\b|payment|学费|费用|收费/i)) {
+        score *= 1.12;
+    }
+    if (profile.boostGraduation &&
+        sourceOrContentHas(chunk, /\bcredit\b|\bcredits\b|graduation|required|学分|毕业|requirements?/i)) {
+        score *= 1.12;
+    }
+    if (profile.boostPrerequisite &&
+        sourceOrContentHas(chunk, /\bprerequisite\b|\bprereq\b|co-?requisite|先修|先决/i)) {
+        score *= 1.15;
+    }
+    return score;
+}
+export function rerankCatalogChunksWithKeywordBoosts(ranked, query) {
+    const profile = buildRetrievalBoostProfile(query);
+    const boosted = ranked.map(({ chunk, score }) => ({
+        chunk,
+        score: applyKeywordBoosts(chunk, score, profile),
+    }));
+    boosted.sort((a, b) => b.score - a.score);
+    return boosted;
+}
 export function buildRetrievalQueryVariants(args) {
     const normalizedRewrite = normalizeCatalogQueryText(args.rewrittenRetrievalQuery);
     const expansion = expandCatalogQueryForEmbedding(args.originalQuestion, normalizedRewrite);
@@ -111,22 +163,24 @@ export function buildRetrievalQueryVariants(args) {
     return { variants, expansion, normalizedRewrite };
 }
 export function selectCatalogChunksForContext(ranked, options) {
-    const maxChunks = options?.maxChunks ?? 8;
+    const topK = options?.topK ?? RAG_TOP_K;
+    const maxChunks = options?.maxChunks ?? RAG_CONTEXT_MAX;
     const relativeFloor = options?.relativeFloor ?? 0.76;
     if (ranked.length === 0) {
         return { selected: [], maxScore: 0 };
     }
-    const maxScore = ranked[0].score;
+    const candidates = ranked.slice(0, topK);
+    const maxScore = candidates[0].score;
     const floor = Math.max(0.06, maxScore * relativeFloor);
     const selected = [];
-    for (const row of ranked) {
+    for (const row of candidates) {
         if (selected.length >= maxChunks)
             break;
         if (row.score >= floor) {
             selected.push(row);
             continue;
         }
-        if (selected.length < 4) {
+        if (selected.length < RAG_CONTEXT_MIN) {
             selected.push(row);
             continue;
         }

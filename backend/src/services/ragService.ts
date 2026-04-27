@@ -24,10 +24,12 @@ import {
   buildRetrievalQueryVariants,
   detectCatalogProgramHint,
   isWeakCatalogRetrieval,
+  rerankCatalogChunksWithKeywordBoosts,
   rankCatalogChunksByEmbeddingMaxWithHint,
   selectCatalogChunksForContext,
   type CatalogRetrievalDebug,
 } from "../lib/catalogRetrieval.js";
+import { env } from "../config/env.js";
 
 const MAX_QUESTION_CHARS = 2000;
 const MAX_HISTORY_MESSAGES = 4;
@@ -844,7 +846,7 @@ function buildContextBlock(items: { chunk: KnowledgeChunkRow; score: number }[])
         `Chunk: ${chunk.chunkIndex}`,
         `Match score: ${score.toFixed(3)}`,
       ].filter(Boolean);
-      return `[${metaParts.join(" | ")}]\n${chunk.content}`;
+      return `Source: ${chunk.source}\nContent: [${metaParts.join(" | ")}]\n${chunk.content}`;
     })
     .join("\n\n---\n\n");
 }
@@ -1002,7 +1004,8 @@ Do not answer AMU-specific questions from general knowledge.`;
 When the catalog excerpts clearly support an answer, state it confidently and cite the catalog naturally (for example "Based on the MAHM 2025–26 catalog..." or "According to the DAHM catalog section on..."). Do not apologize or say you need "official documents" when those excerpts already contain the rule.
 If the question could differ between DAHM and MAHM and the excerpts or question do not pin down a single program, ask one short clarifying question or briefly address both programs only when each is supported by the excerpts.
 If the excerpts do not contain the rule, say plainly that this point is not found in the retrieved catalog text—do not guess or invent numbers, deadlines, or policies.
-When retrieval quality is uncertain, be explicit about what is and is not shown in the excerpts.`;
+When retrieval quality is uncertain, be explicit about what is and is not shown in the excerpts.
+For official AMU policy facts, rely only on the provided retrieved context.`;
 
   const weakHint =
     options?.weakRetrieval === true
@@ -1014,7 +1017,12 @@ When retrieval quality is uncertain, be explicit about what is and is not shown 
 ${pipelineLine}
 ${advisorVoice}
 ${weakHint}
-If student-specific confirmation is missing, say "I don't have enough information from your records to confirm this."
+If the context fully answers the question, answer clearly and directly.
+If the context only partially answers, explicitly separate what is confirmed and what is missing.
+If the detail is not found in retrieved context, say exactly: "I do not see this detail in the available AMU catalog context".
+Never hallucinate AMU policy, credits, tuition, or rules.
+For policy-only questions, never claim "from your record".
+If student-specific confirmation is missing for mixed questions, say "I don't have enough information from your records to confirm this."
 Keep the answer natural, concise, and grounded.
 ${languageInstructionForLlm(question, identityContext)}`;
 }
@@ -1675,8 +1683,13 @@ async function retrieveChunksForCatalog(args: {
     programHint,
     cosineSimilarity,
   );
+  const reranked = rerankCatalogChunksWithKeywordBoosts(ranked, args.question);
 
-  const { selected, maxScore } = selectCatalogChunksForContext(ranked);
+  const { selected, maxScore } = selectCatalogChunksForContext(reranked, {
+    topK: 12,
+    maxChunks: 8,
+    relativeFloor: 0.74,
+  });
 
   const debug: CatalogRetrievalDebug = {
     originalUserQuery: args.question,
@@ -1708,6 +1721,22 @@ async function retrieveChunksForCatalog(args: {
     weakRetrieval,
     topChunks: debug.topChunks,
   });
+  if (env.nodeEnv === "development") {
+    console.log("[RAG] query", args.question);
+    console.log(
+      "[RAG] selected sources",
+      selected.map(({ chunk }) => chunk.source),
+    );
+    console.log("[RAG] chunk count", selected.length);
+    for (const row of selected) {
+      console.log("[RAG] chunk", {
+        source: row.chunk.source,
+        chunkIndex: row.chunk.chunkIndex,
+        similarity: Number(row.score.toFixed(4)),
+        preview: row.chunk.content.slice(0, 200),
+      });
+    }
+  }
 
   return { top: selected, retrievalQuery, debug, weakRetrieval };
 }
@@ -1797,6 +1826,16 @@ export async function answerAmuQuestion(
 
   const studentContextBlock = formatStudentContextBlock(options?.studentContext);
   const contextBlock = formatRetrievedDocumentContextBlock(top);
+  if (top.length === 0 || weakRetrieval) {
+    const fallback =
+      `I do not see this detail in the available AMU catalog context. ` +
+      `If you want, I can help refine the question with the exact program, catalog year, or course code so I can check again.`;
+    return {
+      question: q,
+      answer: fallback,
+      sources: top.map(({ chunk, score }) => toRetrieved(chunk, score)),
+    };
+  }
   const identityBlock = formatIdentityContextForPrompt(options?.identityContext);
   const historyPrefix =
     history != null && history.length > 0

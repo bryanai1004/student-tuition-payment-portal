@@ -29,6 +29,13 @@ export declare function rankCatalogChunksByEmbeddingMaxWithHint(chunks: Knowledg
     chunk: KnowledgeChunkRow;
     score: number;
 }>;
+export declare function rerankCatalogChunksWithKeywordBoosts(ranked: Array<{
+    chunk: KnowledgeChunkRow;
+    score: number;
+}>, query: string): Array<{
+    chunk: KnowledgeChunkRow;
+    score: number;
+}>;
 export declare function buildRetrievalQueryVariants(args: {
     originalQuestion: string;
     rewrittenRetrievalQuery: string;
@@ -41,6 +48,7 @@ export declare function selectCatalogChunksForContext(ranked: Array<{
     chunk: KnowledgeChunkRow;
     score: number;
 }>, options?: {
+    topK?: number;
     maxChunks?: number;
     relativeFloor?: number;
 }): {

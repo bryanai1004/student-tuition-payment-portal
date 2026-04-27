@@ -221,6 +221,11 @@ export function detectGraduationRequirementCreditsQuestion(question) {
         /毕业要求.{0,6}(多少|几).{0,4}学分/.test(normalized) ||
         /(毕业|毕业要求).{0,8}(学分).{0,6}(多少|几|是多少)/.test(normalized));
 }
+export function detectCourseEligibilityIntent(question) {
+    const normalized = lower(question);
+    return (/\b(can\s+i\s+take|am\s+i\s+eligible|eligible\s+for|prerequisite|prereq|co-?requisite|what\s+am\s+i\s+missing)\b/i.test(normalized) ||
+        /我可以选|我可不可以选|我能选|我还差什么课|先修|先决|能不能修|是否满足先修/.test(normalized));
+}
 export function classifyStudentAiIntent(question) {
     if (isConversationalWritingAssistOnly(question)) {
         return "general";
@@ -235,10 +240,10 @@ export function classifyStudentAiIntent(question) {
     const canITakeCourse = courseCode != null &&
         /\bcan\s+i\s+take\b/i.test(normalized) &&
         /\b(next term|next semester|this term|now|currently|later)\b/i.test(normalized);
-    const canITakeCourseZh = courseCode != null &&
-        /我.{0,8}(现在|这学期|下学期).{0,8}(能不能|可不可以|能否).{0,8}(选|修)/.test(normalized);
+    const canITakeCourseZh = /我.{0,12}(现在|这学期|下学期|目前)?.{0,10}(能不能|可不可以|能否|可以|能).{0,10}(选|修)/.test(normalized);
     if (canITakeCourse ||
         canITakeCourseZh ||
+        detectCourseEligibilityIntent(question) ||
         mixedApplicabilityCue ||
         (policyCue && personalAcademicCue)) {
         return "mixed";

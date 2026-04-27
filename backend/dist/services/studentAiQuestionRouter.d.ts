@@ -33,5 +33,6 @@ export declare function extractHistoricalLookupTerm(question: string): string | 
 export declare function detectStudentRecordQuestion(question: string): StudentRecordQuestionMatch | null;
 export declare function detectGraduationEligibilityQuestion(question: string): boolean;
 export declare function detectGraduationRequirementCreditsQuestion(question: string): boolean;
+export declare function detectCourseEligibilityIntent(question: string): boolean;
 export declare function classifyStudentAiIntent(question: string): StudentAiIntent;
 //# sourceMappingURL=studentAiQuestionRouter.d.ts.map

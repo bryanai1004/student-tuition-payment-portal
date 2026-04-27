@@ -168,9 +168,10 @@ type StreamEvent =
   | { kind: "h_subsection"; text: string; page: number }
   | { kind: "body"; text: string; page: number };
 
-const TARGET_MIN = 480;
-const TARGET_MAX = 1650;
+const TARGET_MIN = 900;
+const TARGET_MAX = 1400;
 const HARD_MAX = 2100;
+const CHUNK_OVERLAP_CHARS = 200;
 
 function splitOversizedBody(text: string): string[] {
   const t = text.trim();
@@ -253,9 +254,13 @@ export async function draftChunksFromPdf(options: {
   const buf: string[] = [];
   const bufPages: number[] = [];
   const out: CatalogChunkDraft[] = [];
+  let carryOverBody = "";
 
   const flush = (): void => {
-    const body = normalizeWhitespace(buf.join("\n\n"));
+    const rawBody = normalizeWhitespace(buf.join("\n\n"));
+    const body = carryOverBody
+      ? normalizeWhitespace(`${carryOverBody}\n\n${rawBody}`)
+      : rawBody;
     if (body.length < 70) {
       buf.length = 0;
       bufPages.length = 0;
@@ -290,6 +295,7 @@ export async function draftChunksFromPdf(options: {
       content,
       embedText,
     });
+    carryOverBody = body.slice(Math.max(0, body.length - CHUNK_OVERLAP_CHARS)).trim();
     buf.length = 0;
     bufPages.length = 0;
   };
@@ -299,11 +305,13 @@ export async function draftChunksFromPdf(options: {
       if (joinedLen(buf) >= TARGET_MIN) flush();
       sectionTitle = ev.text;
       subsectionTitle = "";
+      carryOverBody = "";
       continue;
     }
     if (ev.kind === "h_subsection") {
       if (joinedLen(buf) >= TARGET_MIN) flush();
       subsectionTitle = ev.text;
+      carryOverBody = "";
       continue;
     }
     buf.push(ev.text);

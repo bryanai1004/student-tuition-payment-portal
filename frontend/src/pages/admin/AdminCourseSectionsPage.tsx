@@ -88,25 +88,46 @@ function toggleWeekday(
   return WEEKDAYS_FULL_ORDERED.filter((d) => set.has(d))
 }
 
+type AdminCourseSectionsTableColumn = {
+  key: string
+  label: string
+  width: number
+  align?: 'left' | 'center'
+}
+
+const ADMIN_COURSE_SECTIONS_TABLE_COLUMNS: AdminCourseSectionsTableColumn[] = [
+  { key: 'section', label: 'Section', width: 80 },
+  { key: 'course_title', label: 'Course Title', width: 180 },
+  { key: 'prerequisite', label: 'Prerequisite', width: 170 },
+  { key: 'credits', label: 'Credits', width: 110, align: 'center' },
+  { key: 'track', label: 'Track', width: 100 },
+  { key: 'weekdays', label: 'Weekdays', width: 100 },
+  { key: 'start', label: 'Start', width: 90 },
+  { key: 'end', label: 'End', width: 90 },
+  { key: 'delivery', label: 'Delivery', width: 100 },
+  { key: 'room', label: 'Room', width: 80 },
+  { key: 'instructor', label: 'Instructor', width: 130 },
+  { key: 'enrolled', label: 'Enrolled', width: 90, align: 'center' },
+  { key: 'registrations', label: 'Registrations', width: 130 },
+  { key: 'notes', label: 'Notes', width: 100 },
+  { key: 'actions', label: 'Actions', width: 140 },
+]
+
 function AdminCourseSectionsTableHead() {
   return (
     <thead>
       <tr>
-        <th scope="col">Section</th>
-        <th scope="col">Course Title</th>
-        <th scope="col">Prerequisite</th>
-        <th scope="col">Credits</th>
-        <th scope="col">Track</th>
-        <th scope="col">Weekdays</th>
-        <th scope="col">Start</th>
-        <th scope="col">End</th>
-        <th scope="col">Delivery</th>
-        <th scope="col">Room</th>
-        <th scope="col">Instructor</th>
-        <th scope="col">Enrolled</th>
-        <th scope="col">Registrations</th>
-        <th scope="col">Notes</th>
-        <th scope="col">Actions</th>
+        {ADMIN_COURSE_SECTIONS_TABLE_COLUMNS.map((column) => (
+          <th
+            key={column.key}
+            scope="col"
+            style={{
+              textAlign: column.align === 'center' ? 'center' : undefined,
+            }}
+          >
+            {column.label}
+          </th>
+        ))}
       </tr>
     </thead>
   )
@@ -158,28 +179,16 @@ function AdminCourseSectionGroupTable({
           style={{ minWidth: '1780px' }}
         >
           <colgroup>
-            <col style={{ width: '80px' }} />
-            <col style={{ width: '180px' }} />
-            <col style={{ width: '170px', minWidth: '170px' }} />
-            <col style={{ width: '130px', minWidth: '130px' }} />
-            <col style={{ width: '100px' }} />
-            <col style={{ width: '100px' }} />
-            <col style={{ width: '90px' }} />
-            <col style={{ width: '90px' }} />
-            <col style={{ width: '100px' }} />
-            <col style={{ width: '80px' }} />
-            <col style={{ width: '130px' }} />
-            <col style={{ width: '90px' }} />
-            <col style={{ width: '130px' }} />
-            <col style={{ width: '100px' }} />
-            <col style={{ width: '140px' }} />
+            {ADMIN_COURSE_SECTIONS_TABLE_COLUMNS.map((column) => (
+              <col key={column.key} style={{ width: `${column.width}px` }} />
+            ))}
           </colgroup>
           <AdminCourseSectionsTableHead />
           <tbody>
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={15}
+                  colSpan={ADMIN_COURSE_SECTIONS_TABLE_COLUMNS.length}
                   className="admin-course-sections-table__empty-row"
                 >
                   {emptyMessage}
