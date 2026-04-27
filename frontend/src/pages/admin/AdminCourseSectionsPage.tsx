@@ -93,11 +93,11 @@ function AdminCourseSectionsTableHead() {
     <thead>
       <tr>
         <th scope="col">Section</th>
-        <th scope="col">Course title</th>
+        <th scope="col">Course Title</th>
         <th scope="col">Prerequisite</th>
-        <th scope="col">CREDITS</th>
+        <th scope="col">Credits</th>
         <th scope="col">Track</th>
-        <th scope="col">Weekday</th>
+        <th scope="col">Weekdays</th>
         <th scope="col">Start</th>
         <th scope="col">End</th>
         <th scope="col">Delivery</th>
@@ -106,7 +106,6 @@ function AdminCourseSectionsTableHead() {
         <th scope="col">Enrolled</th>
         <th scope="col">Registrations</th>
         <th scope="col">Notes</th>
-        <th scope="col">Actions</th>
       </tr>
     </thead>
   )
@@ -120,14 +119,6 @@ type AdminCourseSectionGroupTableProps = {
   /** Per-row title from catalog (eng/chi) and section track + optional legacy `course_title`. */
   resolveRowTitle: (row: AdminCourseSection) => string
   resolvePrerequisiteCode: (row: AdminCourseSection) => string
-  busy: boolean
-  csvExportSectionId: number | null
-  feedbackExportSectionId: number | null
-  onViewStudents: (row: AdminCourseSection) => void
-  onExportCsv: (row: AdminCourseSection) => void
-  onExportFeedback: (row: AdminCourseSection) => void
-  onEdit: (row: AdminCourseSection) => void
-  onDeleteRow: (row: AdminCourseSection) => void
 }
 
 function AdminCourseSectionGroupTable({
@@ -137,14 +128,6 @@ function AdminCourseSectionGroupTable({
   emptyMessage,
   resolveRowTitle,
   resolvePrerequisiteCode,
-  busy,
-  csvExportSectionId,
-  feedbackExportSectionId,
-  onViewStudents,
-  onExportCsv,
-  onExportFeedback,
-  onEdit,
-  onDeleteRow,
 }: AdminCourseSectionGroupTableProps) {
   return (
     <section
@@ -156,12 +139,28 @@ function AdminCourseSectionGroupTable({
       </h3>
       <div className="portal-table-wrap admin-table-wrap">
         <table className="portal-table portal-data-table admin-course-sections-table">
+          <colgroup>
+            <col style={{ width: '80px' }} />
+            <col style={{ width: '180px' }} />
+            <col style={{ width: '130px' }} />
+            <col style={{ width: '90px' }} />
+            <col style={{ width: '100px' }} />
+            <col style={{ width: '100px' }} />
+            <col style={{ width: '90px' }} />
+            <col style={{ width: '90px' }} />
+            <col style={{ width: '100px' }} />
+            <col style={{ width: '80px' }} />
+            <col style={{ width: '130px' }} />
+            <col style={{ width: '90px' }} />
+            <col style={{ width: '130px' }} />
+            <col style={{ width: '100px' }} />
+          </colgroup>
           <AdminCourseSectionsTableHead />
           <tbody>
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={15}
+                  colSpan={14}
                   className="admin-course-sections-table__empty-row"
                 >
                   {emptyMessage}
@@ -199,63 +198,6 @@ function AdminCourseSectionGroupTable({
                   </td>
                   <td className="admin-course-sections-table__notes">
                     {displayCell(row.notes)}
-                  </td>
-                  <td className="admin-course-sections-table__actions">
-                    <div
-                      className="admin-course-sections-table__action-stack"
-                      role="group"
-                      aria-label={`Actions for section ${row.section_code}`}
-                    >
-                      <button
-                        type="button"
-                        className="portal-btn portal-btn--secondary portal-btn--compact"
-                        disabled={busy || row.enrolled_count === 0}
-                        title={
-                          row.enrolled_count === 0
-                            ? 'No students enrolled'
-                            : undefined
-                        }
-                        onClick={() => onViewStudents(row)}
-                      >
-                        View students
-                      </button>
-                      <button
-                        type="button"
-                        className="portal-btn portal-btn--secondary portal-btn--compact"
-                        disabled={busy || csvExportSectionId === row.id}
-                        onClick={() => onExportCsv(row)}
-                      >
-                        {csvExportSectionId === row.id
-                          ? 'Exporting…'
-                          : 'Export CSV'}
-                      </button>
-                      <button
-                        type="button"
-                        className="portal-btn portal-btn--secondary portal-btn--compact"
-                        disabled={busy || feedbackExportSectionId === row.id}
-                        onClick={() => onExportFeedback(row)}
-                      >
-                        {feedbackExportSectionId === row.id
-                          ? 'Exporting…'
-                          : 'Export Feedback'}
-                      </button>
-                      <button
-                        type="button"
-                        className="portal-btn portal-btn--secondary portal-btn--compact"
-                        disabled={busy}
-                        onClick={() => onEdit(row)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="portal-btn portal-btn--secondary portal-btn--compact portal-btn--admin-danger"
-                        disabled={busy}
-                        onClick={() => void onDeleteRow(row)}
-                      >
-                        Delete
-                      </button>
-                    </div>
                   </td>
                 </tr>
               ))
@@ -1073,14 +1015,6 @@ export function AdminCourseSectionsPage() {
             emptyMessage="None for this course in this term."
             resolveRowTitle={resolveSectionRowTitle}
             resolvePrerequisiteCode={resolvePrerequisiteCode}
-            busy={busy}
-            csvExportSectionId={csvExportSectionId}
-            feedbackExportSectionId={feedbackExportSectionId}
-            onViewStudents={openRosterForSection}
-            onExportCsv={onExportCsvForSection}
-            onExportFeedback={onExportFeedbackForSection}
-            onEdit={beginEdit}
-            onDeleteRow={onDeleteRow}
           />
           <AdminCourseSectionGroupTable
             ariaLabelledBy="admin-course-sections-cn-heading"
@@ -1089,14 +1023,6 @@ export function AdminCourseSectionsPage() {
             emptyMessage="None for this course in this term."
             resolveRowTitle={resolveSectionRowTitle}
             resolvePrerequisiteCode={resolvePrerequisiteCode}
-            busy={busy}
-            csvExportSectionId={csvExportSectionId}
-            feedbackExportSectionId={feedbackExportSectionId}
-            onViewStudents={openRosterForSection}
-            onExportCsv={onExportCsvForSection}
-            onExportFeedback={onExportFeedbackForSection}
-            onEdit={beginEdit}
-            onDeleteRow={onDeleteRow}
           />
         </div>
       ) : null}
