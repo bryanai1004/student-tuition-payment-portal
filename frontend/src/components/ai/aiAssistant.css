@@ -695,8 +695,8 @@
 
 .portal-ai-assistant-compose {
   display: flex;
-  gap: 10px;
   align-items: center;
+  gap: 10px;
   padding: 0;
   margin: 0;
   background: transparent;
@@ -743,7 +743,7 @@
 }
 
 .portal-ai-assistant-input {
-  flex: 1 1 0;
+  flex: 1;
   min-width: 0;
   resize: none;
   box-sizing: border-box;

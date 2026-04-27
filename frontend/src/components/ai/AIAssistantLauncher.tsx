@@ -31,9 +31,6 @@ export function AIAssistantLauncher() {
     messages,
     draft,
     setDraft,
-    attachments,
-    addAttachments,
-    removeAttachment,
     isAwaitingReply,
     inputRef,
     openPanel,
@@ -218,9 +215,6 @@ export function AIAssistantLauncher() {
               isAwaitingReply={isAwaitingReply}
               draft={draft}
               setDraft={setDraft}
-              attachments={attachments}
-              onAddAttachments={addAttachments}
-              onRemoveAttachment={removeAttachment}
               onSend={() => void submitDraft()}
               inputRef={inputRef}
               onClose={closePanel}
@@ -242,9 +236,6 @@ export function AIAssistantLauncher() {
               isAwaitingReply={isAwaitingReply}
               draft={draft}
               setDraft={setDraft}
-              attachments={attachments}
-              onAddAttachments={addAttachments}
-              onRemoveAttachment={removeAttachment}
               onSend={() => void submitDraft()}
               inputRef={inputRef}
               onClose={closePanel}

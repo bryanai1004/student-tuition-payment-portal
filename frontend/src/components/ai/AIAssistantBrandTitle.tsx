@@ -15,6 +15,10 @@ export function AIAssistantBrandTitle({ variant }: AIAssistantBrandTitleProps) {
       ? 'portal-ai-assistant-brand-title portal-ai-assistant-brand-title--panel'
       : 'portal-ai-assistant-brand-title portal-ai-assistant-brand-title--minimized'
 
+  if (variant === 'panel') {
+    return <span className={base}>AMU AI Assist - 1.0</span>
+  }
+
   return (
     <span className={base}>
       <span className="portal-ai-assistant-brand-title__mark">{t('amuAiAssistMark')}</span>

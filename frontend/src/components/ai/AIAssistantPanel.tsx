@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent, Ref } from 'react'
 import { useStudentPortalT } from '../../LanguageContext'
-import type { AIAssistantAttachment, AIAssistantChatMessage } from '../../hooks/useAIAssistant'
+import type { AIAssistantChatMessage } from '../../hooks/useAIAssistant'
 import { AIAssistantBrandTitle } from './AIAssistantBrandTitle'
 import { AIAssistantInput } from './AIAssistantInput'
 import { AIAssistantWelcomeMessage } from './AIAssistantWelcomeMessage'
@@ -15,9 +15,6 @@ type AIAssistantPanelProps = {
   isAwaitingReply: boolean
   draft: string
   setDraft: (next: string) => void
-  attachments: AIAssistantAttachment[]
-  onAddAttachments: (files: FileList | File[]) => void
-  onRemoveAttachment: (id: string) => void
   onSend: () => void
   inputRef: Ref<HTMLTextAreaElement>
   onClose: () => void
@@ -37,9 +34,6 @@ export function AIAssistantPanel({
   isAwaitingReply,
   draft,
   setDraft,
-  attachments,
-  onAddAttachments,
-  onRemoveAttachment,
   onSend,
   inputRef,
   onClose,
@@ -170,9 +164,6 @@ export function AIAssistantPanel({
         onSubmit={onSend}
         disabled={isAwaitingReply}
         inputRef={inputRef}
-        attachments={attachments}
-        onAddAttachments={onAddAttachments}
-        onRemoveAttachment={onRemoveAttachment}
       />
     </section>
   )
