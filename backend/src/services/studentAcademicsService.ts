@@ -33,7 +33,6 @@ import {
   legacyCompletedBlocksPortalRow,
   pickNewerRegistrationAnchor,
   portalEnrollmentRowToAcademicCourseRecord,
-  resolveCourseDisplayTitle,
   resolveRegistrationAnchoredAcademicTerm,
   sortTranscriptPreviewRecords,
   termsMatch,
@@ -226,11 +225,11 @@ export async function getStudentAcademicsPayload(
       portalEnrollmentRowToAcademicCourseRecord(
         trimmed,
         p,
-        resolveCourseDisplayTitle(
-          p.course_code,
-          p.course_title_raw.length > 0 ? p.course_title_raw : p.course_code,
-          courseLookup,
-        ),
+        p.display_course_title.length > 0
+          ? p.display_course_title
+          : p.course_title_raw.length > 0
+            ? p.course_title_raw
+            : p.course_code,
         resolvedActiveForRecords,
       ),
     );

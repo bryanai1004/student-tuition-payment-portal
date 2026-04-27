@@ -703,10 +703,15 @@ export async function listAdminEnrollmentRowsForSection(
 export type PortalEnrollmentAcademicRow = {
   /** Stable row id for ordering when the same course appears in multiple sections. */
   portal_enrollment_id: number;
+  registration_id: number;
+  course_section_id: number | null;
   course_code: string;
   course_title_raw: string;
+  display_course_title: string;
   term: string;
   year: number;
+  academic_term_id: string | null;
+  withdraw_deadline: string | null;
   units: number | null;
   weekday: string | null;
   start_time: unknown;
@@ -716,7 +721,39 @@ export type PortalEnrollmentAcademicRow = {
   withdrawn_at: string | null;
   section_code: string | null;
   schedule_track: string | null;
+  can_withdraw: boolean;
 };
+
+let courseSectionsColumnsPromise: Promise<Set<string>> | null = null;
+async function listCourseSectionsColumns(): Promise<Set<string>> {
+  if (courseSectionsColumnsPromise != null) return courseSectionsColumnsPromise;
+  courseSectionsColumnsPromise = (async () => {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT COLUMN_NAME AS column_name
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'course_sections'`,
+    );
+    const out = new Set<string>();
+    for (const row of rows) {
+      const name = String(row.column_name ?? "").trim().toLowerCase();
+      if (name !== "") out.add(name);
+    }
+    return out;
+  })();
+  return courseSectionsColumnsPromise;
+}
+
+function titleExpr(alias: "cs_direct" | "cs_leg", columns: Set<string>): string {
+  const candidates: string[] = [];
+  if (columns.has("chinese_title")) candidates.push(`NULLIF(TRIM(${alias}.chinese_title), '')`);
+  if (columns.has("course_title_zh")) candidates.push(`NULLIF(TRIM(${alias}.course_title_zh), '')`);
+  if (columns.has("course_title")) candidates.push(`NULLIF(TRIM(${alias}.course_title), '')`);
+  if (columns.has("title_zh")) candidates.push(`NULLIF(TRIM(${alias}.title_zh), '')`);
+  if (columns.has("title")) candidates.push(`NULLIF(TRIM(${alias}.title), '')`);
+  if (candidates.length === 0) return "NULL";
+  return `COALESCE(${candidates.join(", ")})`;
+}
 
 export type AdminStudentRegistrationTermRow = {
   term: string;
@@ -886,13 +923,31 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
   studentExternalId: string,
 ): Promise<PortalEnrollmentAcademicRow[]> {
   const sid = studentExternalId.trim();
+  const sectionColumns = await listCourseSectionsColumns();
+  const directTitleExpr = titleExpr("cs_direct", sectionColumns);
+  const legacyTitleExpr = titleExpr("cs_leg", sectionColumns);
   const sql = `
     SELECT
       e.id AS portal_enrollment_id,
+      e.id AS registration_id,
+      e.course_section_id AS course_section_id,
       TRIM(pc.course_code) AS course_code,
       TRIM(pc.title) AS course_title_raw,
+      COALESCE(
+        ${directTitleExpr},
+        ${legacyTitleExpr},
+        CASE
+          WHEN UPPER(TRIM(COALESCE(e.schedule_track, cs_direct.schedule_track, cs_leg.schedule_track))) = 'CN'
+            THEN NULLIF(TRIM(cat.chi_name), '')
+          ELSE NULL
+        END,
+        NULLIF(TRIM(cat.eng_name), ''),
+        NULLIF(TRIM(pc.title), '')
+      ) AS display_course_title,
       TRIM(e.term) AS term,
       e.year,
+      at.id AS academic_term_id,
+      at.withdraw_deadline AS withdraw_deadline,
       pc.units,
       NULLIF(TRIM(e.section_code), '') AS enrollment_section_code,
       NULLIF(TRIM(e.schedule_track), '') AS enrollment_schedule_track,
@@ -901,7 +956,21 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
       COALESCE(cs_direct.end_time, cs_leg.end_time) AS end_time,
       COALESCE(cs_direct.instructor, cs_leg.instructor) AS instructor,
       e.status AS enrollment_status,
-      e.withdrawn_at AS withdrawn_at
+      e.withdrawn_at AS withdrawn_at,
+      CASE
+        WHEN (
+          e.status IS NULL
+          OR LOWER(TRIM(e.status)) IN ('active', 'enrolled', 'registered')
+        )
+        AND e.withdrawn_at IS NULL
+        AND e.course_section_id IS NOT NULL
+        AND (
+          at.withdraw_deadline IS NULL
+          OR DATE(at.withdraw_deadline) >= CURRENT_DATE()
+        )
+        THEN 1
+        ELSE 0
+      END AS can_withdraw
     FROM portal_enrollments e
     INNER JOIN portal_courses pc
       ON pc.course_id COLLATE utf8mb4_unicode_ci =
@@ -932,6 +1001,13 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
           cs2.id ASC
         LIMIT 1
       )
+    LEFT JOIN courses cat
+      ON TRIM(cat.code) COLLATE utf8mb4_unicode_ci =
+         TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+    LEFT JOIN academic_terms at
+      ON TRIM(at.term_name) COLLATE utf8mb4_unicode_ci =
+         TRIM(e.term) COLLATE utf8mb4_unicode_ci
+      AND at.year = e.year
     WHERE TRIM(e.student_external_id) = TRIM(?)
     ORDER BY e.year DESC,
       CASE UPPER(TRIM(e.term))
@@ -962,12 +1038,36 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
       r.enrollment_schedule_track == null
         ? null
         : String(r.enrollment_schedule_track).trim() || null;
+    const wd = r.withdraw_deadline;
+    let withdrawDeadline: string | null = null;
+    if (wd != null && wd !== "") {
+      withdrawDeadline =
+        wd instanceof Date
+          ? wd.toISOString().slice(0, 10)
+          : String(wd).trim().slice(0, 10) || null;
+    }
     return {
       portal_enrollment_id: Number(r.portal_enrollment_id ?? 0),
+      registration_id: Number(r.registration_id ?? 0),
+      course_section_id:
+        r.course_section_id == null
+          ? null
+          : Number.isFinite(Number(r.course_section_id))
+            ? Number(r.course_section_id)
+            : null,
       course_code: String(r.course_code ?? "").trim(),
       course_title_raw: String(r.course_title_raw ?? "").trim(),
+      display_course_title:
+        String(r.display_course_title ?? "").trim() ||
+        String(r.course_title_raw ?? "").trim() ||
+        String(r.course_code ?? "").trim(),
       term: String(r.term ?? "").trim(),
       year: Number(r.year),
+      academic_term_id:
+        r.academic_term_id == null
+          ? null
+          : String(r.academic_term_id).trim() || null,
+      withdraw_deadline: withdrawDeadline,
       units:
         r.units == null || r.units === ""
           ? null
@@ -983,6 +1083,9 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
       withdrawn_at: withdrawnAt,
       section_code: sec,
       schedule_track: tr,
+      can_withdraw:
+        Number.isFinite(Number(r.can_withdraw)) &&
+        Number(r.can_withdraw) > 0,
     };
   });
 }

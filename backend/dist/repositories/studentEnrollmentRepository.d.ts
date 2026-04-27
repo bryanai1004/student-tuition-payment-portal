@@ -90,10 +90,15 @@ export declare function listAdminEnrollmentRowsForSection(courseCode: string, te
 export type PortalEnrollmentAcademicRow = {
     /** Stable row id for ordering when the same course appears in multiple sections. */
     portal_enrollment_id: number;
+    registration_id: number;
+    course_section_id: number | null;
     course_code: string;
     course_title_raw: string;
+    display_course_title: string;
     term: string;
     year: number;
+    academic_term_id: string | null;
+    withdraw_deadline: string | null;
     units: number | null;
     weekday: string | null;
     start_time: unknown;
@@ -103,6 +108,7 @@ export type PortalEnrollmentAcademicRow = {
     withdrawn_at: string | null;
     section_code: string | null;
     schedule_track: string | null;
+    can_withdraw: boolean;
 };
 export type AdminStudentRegistrationTermRow = {
     term: string;

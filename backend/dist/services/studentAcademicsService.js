@@ -11,7 +11,7 @@ import { getLegacyStudentDisplayName, listMarksForStudent, } from "../repositori
 import { findLatestLegacyTermYear } from "../repositories/studentLegacyAccountRepository.js";
 import { findLatestPortalEnrollmentTermYear, getPortalStudentDisplayName, listPortalEnrollmentRowsForStudentAcademics, } from "../repositories/studentEnrollmentRepository.js";
 import { loadCoursesTranscriptLookup } from "../repositories/studentTranscriptRepository.js";
-import { buildAcademicCourseRecordsFromMarksWithLookup, buildAvailableTermsFromCourseRecords, courseRecordToEnrollmentItem, courseRecordToScheduleItem, courseRecordToTranscriptItem, legacyCompletedBlocksPortalRow, pickNewerRegistrationAnchor, portalEnrollmentRowToAcademicCourseRecord, resolveCourseDisplayTitle, resolveRegistrationAnchoredAcademicTerm, sortTranscriptPreviewRecords, termsMatch, } from "./studentAcademicCourseRecords.js";
+import { buildAcademicCourseRecordsFromMarksWithLookup, buildAvailableTermsFromCourseRecords, courseRecordToEnrollmentItem, courseRecordToScheduleItem, courseRecordToTranscriptItem, legacyCompletedBlocksPortalRow, pickNewerRegistrationAnchor, portalEnrollmentRowToAcademicCourseRecord, resolveRegistrationAnchoredAcademicTerm, sortTranscriptPreviewRecords, termsMatch, } from "./studentAcademicCourseRecords.js";
 import { courseFeedbackLookupKey, getFeedbackSubmittedAtMapForStudent, } from "./studentCourseFeedbackService.js";
 /** Attaches course feedback flags to the combined timeline; response field stays `enrollmentHistory` for clients. */
 function mergeEnrollmentFeedbackIntoPayload(payload, submittedAtByKey) {
@@ -134,7 +134,11 @@ export async function getStudentAcademicsPayload(studentId) {
         : [];
     const portalCourseRecords = portalRows
         .filter((p) => !legacyCompletedBlocksPortalRow(legacyCourseRecords, p.course_code, p.term, p.year))
-        .map((p) => portalEnrollmentRowToAcademicCourseRecord(trimmed, p, resolveCourseDisplayTitle(p.course_code, p.course_title_raw.length > 0 ? p.course_title_raw : p.course_code, courseLookup), resolvedActiveForRecords));
+        .map((p) => portalEnrollmentRowToAcademicCourseRecord(trimmed, p, p.display_course_title.length > 0
+        ? p.display_course_title
+        : p.course_title_raw.length > 0
+            ? p.course_title_raw
+            : p.course_code, resolvedActiveForRecords));
     const payload = buildMergedPayload(trimmed, studentName, marksRows, legacyCourseRecords, portalCourseRecords, latestRegistration);
     console.debug("[academics] merged payload summary", {
         studentId: trimmed,

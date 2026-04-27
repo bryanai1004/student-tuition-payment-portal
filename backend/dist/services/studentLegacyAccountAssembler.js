@@ -1,4 +1,4 @@
-import { buildAcademicCourseRecordsFromMarksWithLookup, portalEnrollmentRowToAcademicCourseRecord, resolveCourseDisplayTitle, resolveRegistrationAnchoredAcademicTermConsideringPortal, scheduleRowsFromAcademicCourseRecords, termsMatch, } from "./studentAcademicCourseRecords.js";
+import { buildAcademicCourseRecordsFromMarksWithLookup, portalEnrollmentRowToAcademicCourseRecord, resolveRegistrationAnchoredAcademicTermConsideringPortal, scheduleRowsFromAcademicCourseRecords, termsMatch, } from "./studentAcademicCourseRecords.js";
 import { buildAccountCurrentTerm, deriveAccountRegistration, } from "./studentAccountDashboard.js";
 function roundMoney(n) {
     return Math.round(n * 100) / 100;
@@ -112,7 +112,11 @@ allMarksRows, courseLookup, options) {
      * catalog `course_code` + enrollment `term` + `year`, so `scheduleRowsFromAcademicCourseRecords`
      * can render timetables for terms without marks.
      */
-    const portalBrowseRecords = portalRowsForScheduleMerge.map((p) => portalEnrollmentRowToAcademicCourseRecord(snap.studentId, p, resolveCourseDisplayTitle(p.course_code, p.course_title_raw.length > 0 ? p.course_title_raw : p.course_code, courseLookup), portalActiveTerm));
+    const portalBrowseRecords = portalRowsForScheduleMerge.map((p) => portalEnrollmentRowToAcademicCourseRecord(snap.studentId, p, p.display_course_title.length > 0
+        ? p.display_course_title
+        : p.course_title_raw.length > 0
+            ? p.course_title_raw
+            : p.course_code, portalActiveTerm));
     const scheduleSourceRecords = portalBrowseRecords.length > 0
         ? mergeBrowseTermScheduleRecords(portalBrowseRecords, browseRecords)
         : browseRecords.filter((r) => r.status !== "withdrawn");

@@ -4,6 +4,7 @@ import { useLanguage, useStudentPortalT } from '../../LanguageContext'
 import type { PortalLocale } from '../../lib/i18n'
 import {
   fetchStudentAcademics,
+  postStudentWithdraw,
   fetchStudentTranscriptPreview,
   type StudentAcademicsResponse,
   type StudentTranscriptPreviewResponse,
@@ -50,6 +51,20 @@ function instructorCell(v: string | null | undefined, dash: string): string {
   return s && s.length > 0 ? s : dash
 }
 
+function hasFinalGrade(grade: string | null | undefined): boolean {
+  const g = grade?.trim()
+  return g != null && g !== ''
+}
+
+function canShowWithdraw(row: EnrollmentHistoryRow): boolean {
+  if (row.canWithdraw !== true) return false
+  if ((row.sectionId ?? null) == null) return false
+  if ((row.academicTermId ?? '').trim() === '') return false
+  if (hasFinalGrade(row.grade)) return false
+  const status = (row.status ?? '').trim().toLowerCase()
+  return !['completed', 'withdrawn', 'dropped'].includes(status)
+}
+
 export function AcademicsPortalPage() {
   const { locale } = useLanguage()
   const t = useStudentPortalT()
@@ -70,6 +85,9 @@ export function AcademicsPortalPage() {
     | null
   >(null)
   const [selectedRegistrationTermKey, setSelectedRegistrationTermKey] = useState('')
+  const [withdrawTarget, setWithdrawTarget] = useState<EnrollmentHistoryRow | null>(null)
+  const [withdrawing, setWithdrawing] = useState(false)
+  const [withdrawError, setWithdrawError] = useState<string | null>(null)
 
   useEffect(() => {
     const id = currentStudentId?.trim()
@@ -151,6 +169,41 @@ export function AcademicsPortalPage() {
     )
   }, [registrationTermOptions, selectedRegistrationTermKey])
 
+  useEffect(() => {
+    if (withdrawTarget == null) return
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape' && !withdrawing) setWithdrawTarget(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [withdrawTarget, withdrawing])
+
+  const confirmWithdraw = async () => {
+    if (!currentStudentId || withdrawTarget == null) return
+    const sectionId = withdrawTarget.sectionId
+    const termId = withdrawTarget.academicTermId?.trim() ?? ''
+    if (sectionId == null || sectionId <= 0 || termId === '') return
+    setWithdrawing(true)
+    setWithdrawError(null)
+    try {
+      const res = await postStudentWithdraw({
+        studentId: currentStudentId,
+        academic_term_id: termId,
+        course_section_id: sectionId,
+      })
+      if (!res.success || res.removedCount < 1) {
+        setWithdrawError(t('withdrawalFailedGeneric'))
+        return
+      }
+      setWithdrawTarget(null)
+      setReloadKey((k) => k + 1)
+    } catch (e) {
+      setWithdrawError(e instanceof Error ? e.message : t('withdrawalFailedGeneric'))
+    } finally {
+      setWithdrawing(false)
+    }
+  }
+
   const groupedPreview = useMemo(
     () =>
       transcriptPreview ? groupTranscriptByTermYear(transcriptPreview.transcript) : [],
@@ -198,6 +251,47 @@ export function AcademicsPortalPage() {
           onClose={() => setFeedbackModal(null)}
           onSubmitted={() => setReloadKey((k) => k + 1)}
         />
+      ) : null}
+      {id && withdrawTarget ? (
+        <div
+          className="portal-offered-section-modal-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !withdrawing) setWithdrawTarget(null)
+          }}
+        >
+          <div className="portal-offered-section-modal" role="dialog" aria-modal="true">
+            <h2 className="portal-offered-section-modal__title">
+              Withdraw from {withdrawTarget.courseCode} - {courseRowDisplayTitle(withdrawTarget)}?
+            </h2>
+            <p className="portal-text-muted" style={{ margin: '0.75rem 0 0' }}>
+              This will update the registration status and record a W grade if applicable.
+            </p>
+            {withdrawError ? (
+              <p className="portal-text-muted" style={{ margin: '0.75rem 0 0' }}>
+                {withdrawError}
+              </p>
+            ) : null}
+            <div className="portal-offered-section-modal__actions">
+              <button
+                type="button"
+                className="portal-btn portal-btn--secondary portal-btn--compact"
+                disabled={withdrawing}
+                onClick={() => setWithdrawTarget(null)}
+              >
+                {t('dropCourseModalCancel')}
+              </button>
+              <button
+                type="button"
+                className="portal-btn portal-btn--secondary portal-btn--compact"
+                disabled={withdrawing}
+                onClick={() => void confirmWithdraw()}
+              >
+                {withdrawing ? t('droppingEllipsis') : 'Withdraw'}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
       <div
         className="portal-academics-print-hide portal-academics-sections-tabs"
@@ -336,11 +430,27 @@ export function AcademicsPortalPage() {
                                 <td>{formatGradeCell(row.grade)}</td>
                                 <td>{instructorCell(row.instructor, dash)}</td>
                                 <td>
-                                  <CourseFeedbackCell
-                                    row={row}
-                                    onOpenSubmit={(r) => setFeedbackModal({ mode: 'submit', row: r })}
-                                    onOpenView={(r) => setFeedbackModal({ mode: 'view', row: r })}
-                                  />
+                                  <div className="portal-stack" style={{ gap: '0.35rem' }}>
+                                    <CourseFeedbackCell
+                                      row={row}
+                                      onOpenSubmit={(r) =>
+                                        setFeedbackModal({ mode: 'submit', row: r })
+                                      }
+                                      onOpenView={(r) => setFeedbackModal({ mode: 'view', row: r })}
+                                    />
+                                    {canShowWithdraw(row) ? (
+                                      <button
+                                        type="button"
+                                        className="portal-btn portal-btn--secondary portal-btn--compact"
+                                        onClick={() => {
+                                          setWithdrawError(null)
+                                          setWithdrawTarget(row)
+                                        }}
+                                      >
+                                        Withdraw
+                                      </button>
+                                    ) : null}
+                                  </div>
                                 </td>
                               </tr>
                             ))}

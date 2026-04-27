@@ -333,10 +333,18 @@ export function courseRecordToTranscriptItem(r) {
 }
 export function courseRecordToEnrollmentItem(r, feedback) {
     return {
+        registrationId: r.registrationId,
+        sectionId: r.sectionId ?? null,
+        sectionCode: r.sectionCode ?? null,
         courseCode: r.courseCode,
+        displayedCourseTitle: r.courseTitle,
         courseTitle: r.courseTitle,
         term: r.term,
         year: r.year,
+        academicTermId: r.academicTermId ?? null,
+        withdrawDeadline: r.withdrawDeadline ?? null,
+        scheduleTrack: r.scheduleTrack ?? null,
+        canWithdraw: r.canWithdraw ?? false,
         credits: r.credits,
         grade: r.grade,
         status: r.status,
@@ -412,10 +420,15 @@ export function portalEnrollmentRowToAcademicCourseRecord(studentId, row, course
     if (row.status === "withdrawn") {
         return {
             studentId,
+            registrationId: row.registration_id,
+            sectionId: row.course_section_id,
             courseCode: row.course_code,
             courseTitle,
             term: row.term,
             year: row.year,
+            academicTermId: row.academic_term_id,
+            withdrawDeadline: row.withdraw_deadline,
+            canWithdraw: false,
             credits: row.units,
             instructor: nullableStr(row.instructor ?? ""),
             days: row.weekday,
@@ -439,10 +452,15 @@ export function portalEnrollmentRowToAcademicCourseRecord(studentId, row, course
     });
     return {
         studentId,
+        registrationId: row.registration_id,
+        sectionId: row.course_section_id,
         courseCode: row.course_code,
         courseTitle,
         term: row.term,
         year: row.year,
+        academicTermId: row.academic_term_id,
+        withdrawDeadline: row.withdraw_deadline,
+        canWithdraw: row.can_withdraw,
         credits: row.units,
         instructor: nullableStr(row.instructor ?? ""),
         days: row.weekday,

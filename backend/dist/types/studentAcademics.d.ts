@@ -14,10 +14,15 @@ export type StudentAcademicCourseStatus = "active" | "completed" | "withdrawn"
  */
 export type StudentAcademicCourseRecord = {
     studentId: string;
+    registrationId?: number;
+    sectionId?: number | null;
     courseCode: string;
     courseTitle: string;
     term: string;
     year: number;
+    academicTermId?: string | null;
+    withdrawDeadline?: string | null;
+    canWithdraw?: boolean;
     credits: number | null;
     instructor: string | null;
     days: string | null;
@@ -66,10 +71,18 @@ export type StudentAcademicsTranscriptItem = {
     credits: number | null;
 };
 export type StudentAcademicsEnrollmentItem = {
+    registrationId?: number;
+    sectionId?: number | null;
+    sectionCode?: string | null;
     courseCode: string;
+    displayedCourseTitle?: string;
     courseTitle: string;
     term: string;
     year: number;
+    academicTermId?: string | null;
+    withdrawDeadline?: string | null;
+    scheduleTrack?: string | null;
+    canWithdraw?: boolean;
     credits: number | null;
     grade: string | null;
     status: StudentAcademicCourseStatus;

@@ -2244,10 +2244,16 @@ export type StudentAcademicCourseStatus =
 /** One normalized course row from GET /academics (`courseRecords`) — use for schedule, history, feedback eligibility. */
 export type StudentAcademicCourseRecord = {
   studentId: string
+  registrationId?: number
+  sectionId?: number | null
   courseCode: string
   courseTitle: string
   term: string
   year: number
+  academicTermId?: string | null
+  withdrawDeadline?: string | null
+  scheduleTrack?: string | null
+  canWithdraw?: boolean
   credits: number | null
   instructor: string | null
   days: string | null
@@ -2297,10 +2303,18 @@ export type StudentAcademicsResponse = {
     course_title_zh?: string | null
   }>
   enrollmentHistory: Array<{
+    registrationId?: number
+    sectionId?: number | null
+    sectionCode?: string | null
     courseCode: string
+    displayedCourseTitle?: string
     courseTitle: string
     term: string
     year: number
+    academicTermId?: string | null
+    withdrawDeadline?: string | null
+    scheduleTrack?: string | null
+    canWithdraw?: boolean
     credits: number | null
     grade: string | null
     status: StudentAcademicCourseStatus
