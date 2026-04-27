@@ -495,3 +495,43 @@ export function classifyStudentAiIntent(question: string): StudentAiIntent {
 
   return "general";
 }
+
+function hasCatalogSemanticCue(value: string): boolean {
+  return (
+    /\b(amu|catalog|program|graduation|degree|credits?|credit load|tuition|fees?|prerequisite|requirement|requirements|policy|curriculum)\b/i.test(
+      value,
+    ) ||
+    /AMU|目录|目錄|项目|項目|毕业|畢業|学分|學分|学费|學費|费用|費用|先修|先決|要求|政策|课程要求|課程要求/.test(
+      value,
+    )
+  );
+}
+
+function hasPersonalStudentCue(value: string): boolean {
+  return (
+    /\b(i|me|my|mine|am i|do i|did i|have i|for me|my transcript|my grades|my credits|my eligibility|what am i missing)\b/i.test(
+      value,
+    ) ||
+    /我|我的|我现在|我目前|我当前|我还差|我還差|成绩单|成績單|我的成绩|我的成績|我的学分|我的學分|我的资格|我的資格|我缺什么|我缺什麼/.test(
+      value,
+    )
+  );
+}
+
+export function needsCatalogEvidence(question: string): boolean {
+  const normalized = lower(question);
+  return hasCatalogSemanticCue(normalized) || detectCourseEligibilityIntent(question);
+}
+
+export function needsStudentEvidence(question: string): boolean {
+  const normalized = lower(question);
+  return (
+    hasPersonalStudentCue(normalized) ||
+    detectStudentRecordQuestion(question) != null ||
+    detectGraduationEligibilityQuestion(question)
+  );
+}
+
+export function needsCourseEvidence(question: string): boolean {
+  return extractCourseCode(question) != null || detectCourseEligibilityIntent(question);
+}

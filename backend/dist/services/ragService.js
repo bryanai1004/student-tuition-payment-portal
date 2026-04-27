@@ -218,6 +218,10 @@ async function getKnowledgeChunks() {
     if (cachedChunks !== null)
         return cachedChunks;
     cachedChunks = await loadKnowledgeChunks();
+    console.log("[RAG] chunk count", cachedChunks.length);
+    if (cachedChunks.length === 0) {
+        console.warn("[RAG] warning: knowledge chunk count is 0");
+    }
     return cachedChunks;
 }
 function validateQuestion(raw) {
@@ -1250,18 +1254,36 @@ async function retrieveChunksForCatalog(args) {
     });
     if (env.nodeEnv === "development") {
         console.log("[RAG] query", args.question);
-        console.log("[RAG] selected sources", selected.map(({ chunk }) => chunk.source));
-        console.log("[RAG] chunk count", selected.length);
-        for (const row of selected) {
-            console.log("[RAG] chunk", {
-                source: row.chunk.source,
-                chunkIndex: row.chunk.chunkIndex,
-                similarity: Number(row.score.toFixed(4)),
-                preview: row.chunk.content.slice(0, 200),
-            });
-        }
     }
+    console.log("[RAG] query", args.question);
+    console.log("[RAG] top matches", selected.slice(0, 5).map((row) => ({
+        source: row.chunk.source,
+        score: Number(row.score.toFixed(4)),
+        preview: row.chunk.content.slice(0, 160),
+    })));
     return { top: selected, retrievalQuery, debug, weakRetrieval };
+}
+export async function answerEvidenceDrivenQuestion(input) {
+    const q = validateQuestion(input.question);
+    const history = sanitizeChatHistory(input.history);
+    const catalogRequested = input.catalogEvidence === true;
+    const studentEvidence = input.studentEvidence?.trim() ?? "";
+    const courseEvidence = input.courseEvidence?.trim() ?? "";
+    const hasStudentEvidence = studentEvidence.length > 0;
+    const hasCourseEvidence = courseEvidence.length > 0;
+    const pipeline = hasStudentEvidence || hasCourseEvidence ? "mixed" : "policy";
+    const mergedStudentContext = [studentEvidence, courseEvidence].filter((v) => v.length > 0).join("\n\n") || null;
+    if (!catalogRequested) {
+        if (!hasStudentEvidence && !hasCourseEvidence) {
+            return answerGeneralQuestion(q, history, { identityContext: input.identityContext });
+        }
+        return answerStudentRecordQuestionFromFacts(q, mergedStudentContext ?? "No verified student evidence available.", input.identityContext);
+    }
+    return answerAmuQuestion(q, history, {
+        pipeline,
+        studentContext: mergedStudentContext,
+        identityContext: input.identityContext,
+    });
 }
 export async function answerGraduationQuestion(question, rawHistory, options) {
     const q = validateQuestion(question);

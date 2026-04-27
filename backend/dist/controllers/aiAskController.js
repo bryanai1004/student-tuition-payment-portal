@@ -1,8 +1,7 @@
 import { verifyStudentAccessToken } from "../lib/studentAuthToken.js";
-import { RagQuestionValidationError, answerGeneralQuestion, answerAmuQuestion, answerGraduationQuestion, answerLocalSearchQuestion, answerSchoolFactQuestion, answerStudentRecordQuestionFromFacts, plainTextFormatter, planShortConversationMemory, } from "../services/ragService.js";
-import { classifyStudentAiIntent, detectCourseEligibilityIntent, detectGraduationEligibilityQuestion, detectGraduationRequirementCreditsQuestion, } from "../services/studentAiQuestionRouter.js";
-import { detectEligibilityQuestion, detectPrerequisiteQuestion, evaluateCourseEligibility, isLikelyPassingGrade, isLikelyCourseRelatedQuery, isShortCourseLikeQuery, loadStudentAcademicCourseContext, parsePrerequisiteRules, resolveAmuCourse, } from "../services/courseEligibilityService.js";
-import { evaluateGraduation, formatGraduationEvaluationFacts, } from "../services/graduationEvaluationService.js";
+import { RagQuestionValidationError, answerEvidenceDrivenQuestion, answerGeneralQuestion, answerLocalSearchQuestion, answerSchoolFactQuestion, plainTextFormatter, planShortConversationMemory, } from "../services/ragService.js";
+import { classifyStudentAiIntent, needsCatalogEvidence, needsCourseEvidence, needsStudentEvidence, } from "../services/studentAiQuestionRouter.js";
+import { evaluateCourseEligibility, isLikelyPassingGrade, isLikelyCourseRelatedQuery, isShortCourseLikeQuery, loadStudentAcademicCourseContext, parsePrerequisiteRules, resolveAmuCourse, } from "../services/courseEligibilityService.js";
 import { buildStudentRecordFactsForQuestion, } from "../services/studentRecordAiService.js";
 import { getStudentAcademicsPayload } from "../services/studentAcademicsService.js";
 import { getLegacyStudentProfile } from "../services/studentProfileService.js";
@@ -128,14 +127,12 @@ export async function postAiAsk(req, res) {
         const initialIntent = classifyStudentAiIntent(q);
         const memoryPlan = planShortConversationMemory(q, rawHistory, initialIntent);
         const routedIntent = memoryPlan.effectiveIntent;
-        const isGraduationQuestion = detectGraduationEligibilityQuestion(q);
-        const isGraduationRequirementCreditsQuestion = detectGraduationRequirementCreditsQuestion(q);
-        const isGraduationBackendQuestion = isGraduationQuestion || isGraduationRequirementCreditsQuestion;
-        const isCourseEligibilityQuestion = detectCourseEligibilityIntent(q);
-        const courseCodeDetected = /\b([a-z]{2,6})[\s-]?(\d{3}[a-z]?)\b/i.test(q);
-        const prerequisiteIntent = detectPrerequisiteQuestion(q);
-        const eligibilityIntent = detectEligibilityQuestion(q);
+        const wantsStudentEvidence = needsStudentEvidence(q);
+        const wantsCatalogEvidence = needsCatalogEvidence(q);
+        const wantsCourseEvidence = needsCourseEvidence(q);
         const shortCourseLike = isShortCourseLikeQuery(q);
+        let studentEvidence = null;
+        let courseEvidence = null;
         console.debug("[ai/ask] detected intent", {
             initialIntent,
             effectiveIntent: routedIntent,
@@ -143,17 +140,12 @@ export async function postAiAsk(req, res) {
             isTopicSwitch: memoryPlan.isTopicSwitch,
             previousDomain: memoryPlan.previousDomain,
             retainedHistoryMessages: memoryPlan.history?.length ?? 0,
-            isGraduationQuestion,
-            isGraduationRequirementCreditsQuestion,
-            isCourseEligibilityQuestion,
-            courseCodeDetected,
-            prerequisiteIntent,
-            eligibilityIntent,
+            wantsStudentEvidence,
+            wantsCatalogEvidence,
+            wantsCourseEvidence,
             shortCourseLike,
         });
-        if (isGraduationBackendQuestion ||
-            routedIntent === "student_record" ||
-            routedIntent === "mixed") {
+        if (wantsStudentEvidence) {
             const academics = await getStudentAcademicsPayload(authStudent.studentId);
             let transcriptPreviewCount = 0;
             if (!hasVerifiedAcademicData(academics)) {
@@ -177,8 +169,6 @@ export async function postAiAsk(req, res) {
                     studentId: authStudent.studentId,
                     question: q,
                     routedIntent,
-                    isGraduationQuestion,
-                    isGraduationRequirementCreditsQuestion,
                     currentTerm: academics.currentTerm,
                     availableTerms: academics.availableTerms.length,
                     currentScheduleCount: academics.currentSchedule.length,
@@ -194,66 +184,10 @@ export async function postAiAsk(req, res) {
                 });
                 return;
             }
-        }
-        if (routedIntent === "student_record") {
             const recordFacts = await buildStudentRecordFactsForQuestion(authStudent.studentId, q);
             if (recordFacts != null) {
-                console.debug("[ai/ask] pipeline used", {
-                    pipeline: "student_record",
-                    finalPipeline: "student_record",
-                    deterministicStudentFactsUsed: true,
-                    ragUsed: true,
-                    helperCount: recordFacts.usedHelpers.length,
-                });
-                const result = await answerStudentRecordQuestionFromFacts(q, recordFacts.contextText, identityContext);
-                res.status(200).json(formatResponseAnswer(result));
-                return;
+                studentEvidence = recordFacts.contextText;
             }
-            console.debug("[ai/ask] pipeline used", {
-                pipeline: "student_record",
-                finalPipeline: "student_record",
-                deterministicStudentFactsUsed: false,
-                ragUsed: false,
-            });
-            console.error("[AI DEBUG] student_record fell through without deterministic facts", {
-                studentId: authStudent.studentId,
-                question: q,
-            });
-            res.status(200).json({
-                question: q,
-                answer: buildEvidenceUnavailableMessage(q),
-                sources: [],
-            });
-            return;
-        }
-        if (isGraduationBackendQuestion) {
-            const evaluation = await evaluateGraduation(authStudent.studentId);
-            const structuredEvaluation = formatGraduationEvaluationFacts(evaluation);
-            console.debug("[ai/ask] graduation evaluation summary", {
-                resolvedStudentId: authStudent.studentId,
-                earnedCredits: evaluation.earnedCredits,
-                requiredCredits: evaluation.requiredCredits,
-                eligible: evaluation.eligible,
-                missingCredits: evaluation.missingCredits,
-                creditSource: "backend",
-                missingCourseCount: evaluation.missingCourses.length,
-                ruleSetId: evaluation.ruleSetId,
-            });
-            console.debug("[ai/ask] pipeline used", {
-                pipeline: "graduation_evaluation",
-                finalPipeline: "graduation_evaluation",
-                eligible: evaluation.eligible,
-                ruleSetId: evaluation.ruleSetId,
-                missingCourseCount: evaluation.missingCourses.length,
-                missingCredits: evaluation.missingCredits,
-                structuredEvaluation,
-            });
-            const result = await answerGraduationQuestion(q, memoryPlan.history, {
-                graduationEvaluation: structuredEvaluation,
-                identityContext,
-            });
-            res.status(200).json(formatResponseAnswer(result));
-            return;
         }
         if (routedIntent === "general") {
             console.debug("[ai/ask] pipeline used", {
@@ -285,14 +219,10 @@ export async function postAiAsk(req, res) {
             res.status(200).json(formatResponseAnswer(result));
             return;
         }
-        const isLikelyCourseQuery = isLikelyCourseRelatedQuery(q);
-        if (isLikelyCourseQuery) {
+        if (wantsCourseEvidence && isLikelyCourseRelatedQuery(q)) {
             console.debug("[ai/ask] course routing selected", {
                 finalPipeline: "course_resolution",
-                courseCodeDetected,
                 shortCourseLike,
-                prerequisiteIntent,
-                eligibilityIntent,
             });
             const studentCourseContext = await loadStudentAcademicCourseContext(authStudent.studentId);
             const resolved = await resolveAmuCourse(q, studentCourseContext);
@@ -319,29 +249,10 @@ export async function postAiAsk(req, res) {
                 }
             }
             else {
-                const studentContextText = buildStudentCourseContextText(studentCourseContext);
                 const resolvedCourse = resolved.course;
                 const rules = parsePrerequisiteRules(resolvedCourse);
-                if (prerequisiteIntent) {
-                    if ((resolvedCourse.prerequisiteText ?? "").trim() !== "") {
-                        const ragResult = await answerAmuQuestion(`${resolvedCourse.code} prerequisite requirement`, memoryPlan.history, {
-                            pipeline: "policy",
-                            identityContext,
-                        });
-                        res.status(200).json(formatResponseAnswer({
-                            ...ragResult,
-                            answer: `${resolvedCourse.code} 的先修要求是：${resolvedCourse.prerequisiteText}\n\n基于可用的 AMU 目录上下文，补充说明：${ragResult.answer}`,
-                        }));
-                        return;
-                    }
-                    res.status(200).json({
-                        question: q,
-                        answer: `我找到了 ${resolvedCourse.code}，但目前可用的 AMU 课程资料没有列出明确先修要求。建议向 Academic Advising 确认。`,
-                        sources: [],
-                    });
-                    return;
-                }
-                if (eligibilityIntent) {
+                let eligibilityText = "Eligibility evaluation unavailable.";
+                if (rules != null) {
                     const eligibility = evaluateCourseEligibility({
                         targetCourse: resolvedCourse,
                         prerequisites: rules,
@@ -354,77 +265,37 @@ export async function postAiAsk(req, res) {
                             status: "active",
                         })),
                     });
-                    if (eligibility.eligible === true) {
-                        res.status(200).json({
-                            question: q,
-                            answer: `根据你当前可用的 AMU 学业记录，你目前满足 ${resolvedCourse.code} 的已解析先修要求，可以尝试选课。`,
-                            sources: [],
-                        });
-                        return;
-                    }
-                    if (eligibility.missingPrerequisites.length > 0) {
-                        res.status(200).json({
-                            question: q,
-                            answer: `根据你当前可用的 AMU 学业记录，你选 ${resolvedCourse.code} 还缺这些已解析先修课：${eligibility.missingPrerequisites.join("、")}。`,
-                            sources: [],
-                        });
-                        return;
-                    }
-                    res.status(200).json({
-                        question: q,
-                        answer: `我找到了 ${resolvedCourse.code}，但基于当前可用 AMU 课程资料无法明确解析完整先修规则，所以暂时无法确定你是否可以选这门课。`,
-                        sources: [],
-                    });
-                    return;
+                    eligibilityText = [
+                        "Course eligibility analysis",
+                        `- eligible: ${eligibility.eligible}`,
+                        `- matched prerequisites: ${eligibility.matchedPrerequisites.join(", ") || "none"}`,
+                        `- missing prerequisites: ${eligibility.missingPrerequisites.join(", ") || "none"}`,
+                        `- blocking reasons: ${eligibility.blockingReasons.join(" | ") || "none"}`,
+                    ].join("\n");
                 }
-                const result = await answerAmuQuestion(`${q}\n\nUse this resolved AMU course as the target course: ${resolvedCourse.code} ${resolvedCourse.engName ?? ""} ${resolvedCourse.chiName ?? ""}`.trim(), memoryPlan.history, {
-                    pipeline: "mixed",
-                    studentContext: buildResolvedCourseContextText(resolvedCourse, studentContextText),
-                    identityContext,
-                });
-                res.status(200).json(formatResponseAnswer(result));
-                return;
+                courseEvidence = [
+                    buildResolvedCourseContextText(resolvedCourse, buildStudentCourseContextText(studentCourseContext)),
+                    "Parsed prerequisite rules",
+                    `- prerequisite field: ${resolvedCourse.prerequisiteText ?? "Not listed"}`,
+                    `- corequisite field: ${resolvedCourse.corequisiteText ?? "Not listed"}`,
+                    eligibilityText,
+                ].join("\n\n");
             }
         }
-        if (routedIntent === "policy") {
-            console.debug("[ai/ask] pipeline used", {
-                pipeline: "policy",
-                finalPipeline: "policy_rag",
-                answerMode: "catalog_rag",
-            });
-            const result = await answerAmuQuestion(q, memoryPlan.history, {
-                pipeline: "policy",
-                identityContext,
-            });
-            res.status(200).json(formatResponseAnswer(result));
-            return;
-        }
-        const recordFacts = await buildStudentRecordFactsForQuestion(authStudent.studentId, q);
-        if (recordFacts == null) {
-            console.error("[AI DEBUG] mixed intent missing student record facts", {
-                studentId: authStudent.studentId,
-                question: q,
-            });
-            res.status(200).json({
-                question: q,
-                answer: buildEvidenceUnavailableMessage(q),
-                sources: [],
-            });
-            return;
-        }
-        const studentContextText = recordFacts.contextText;
         console.debug("[ai/ask] pipeline used", {
-            pipeline: "mixed",
-            finalPipeline: "policy_rag",
-            answerMode: "catalog_rag_with_student_context",
-            deterministicStudentFactsUsed: true,
-            ragUsed: true,
-            helperCount: recordFacts.usedHelpers.length,
+            pipeline: "unified_evidence",
+            finalPipeline: "evidence_driven",
+            hasStudentEvidence: studentEvidence != null,
+            hasCatalogEvidence: wantsCatalogEvidence,
+            hasCourseEvidence: courseEvidence != null,
         });
-        const result = await answerAmuQuestion(q, memoryPlan.history, {
-            pipeline: "mixed",
-            studentContext: studentContextText,
+        const result = await answerEvidenceDrivenQuestion({
+            question: q,
+            studentEvidence,
+            catalogEvidence: wantsCatalogEvidence,
+            courseEvidence,
             identityContext,
+            history: memoryPlan.history,
         });
         res.status(200).json(formatResponseAnswer(result));
     }

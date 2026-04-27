@@ -35,6 +35,14 @@ export type AnswerAmuQuestionOptions = {
     pipeline?: GroundedAmuPipeline;
     identityContext?: IdentityContext | null;
 };
+export type UnifiedEvidenceInput = {
+    question: string;
+    studentEvidence?: string | null;
+    catalogEvidence?: boolean;
+    courseEvidence?: string | null;
+    identityContext?: IdentityContext | null;
+    history?: unknown;
+};
 export type AnswerGeneralQuestionOptions = {
     identityContext?: IdentityContext | null;
 };
@@ -55,6 +63,7 @@ export declare function answerSchoolFactQuestion(question: string): Promise<RagA
 export declare function answerLocalSearchQuestion(question: string): Promise<RagAnswerResult>;
 export declare function answerGeneralQuestion(question: string, rawHistory?: unknown, options?: AnswerGeneralQuestionOptions): Promise<RagAnswerResult>;
 export declare function answerStudentRecordQuestionFromFacts(question: string, studentFacts: string, identityContext?: IdentityContext | null): Promise<RagAnswerResult>;
+export declare function answerEvidenceDrivenQuestion(input: UnifiedEvidenceInput): Promise<RagAnswerResult>;
 export declare function answerGraduationQuestion(question: string, rawHistory?: unknown, options?: AnswerGraduationQuestionOptions): Promise<RagAnswerResult>;
 /**
  * Grounded AMU answer path for policy-only and mixed student+policy questions.

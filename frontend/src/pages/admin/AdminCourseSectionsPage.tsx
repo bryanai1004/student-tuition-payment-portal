@@ -97,10 +97,10 @@ type AdminCourseSectionsTableColumn = {
 
 const ADMIN_COURSE_SECTIONS_TABLE_COLUMNS: AdminCourseSectionsTableColumn[] = [
   { key: 'section', label: 'Section', width: 80 },
-  { key: 'course_title', label: 'Course Title', width: 180 },
-  { key: 'prerequisite', label: 'Prerequisite', width: 170 },
-  { key: 'credits', label: 'Credits', width: 110, align: 'center' },
-  { key: 'track', label: 'Track', width: 100 },
+  { key: 'course_title', label: 'Course Title', width: 200 },
+  { key: 'prerequisite', label: 'Prerequisite', width: 190 },
+  { key: 'credits', label: 'Credits', width: 80, align: 'center' },
+  { key: 'track', label: 'Track', width: 120 },
   { key: 'weekdays', label: 'Weekdays', width: 100 },
   { key: 'start', label: 'Start', width: 90 },
   { key: 'end', label: 'End', width: 90 },
@@ -109,9 +109,10 @@ const ADMIN_COURSE_SECTIONS_TABLE_COLUMNS: AdminCourseSectionsTableColumn[] = [
   { key: 'instructor', label: 'Instructor', width: 130 },
   { key: 'enrolled', label: 'Enrolled', width: 90, align: 'center' },
   { key: 'registrations', label: 'Registrations', width: 130 },
-  { key: 'notes', label: 'Notes', width: 100 },
+  { key: 'notes', label: 'Notes', width: 120 },
   { key: 'actions', label: 'Actions', width: 140 },
 ]
+const ADMIN_COURSE_SECTIONS_TABLE_MIN_WIDTH = `${ADMIN_COURSE_SECTIONS_TABLE_COLUMNS.reduce((sum, col) => sum + col.width, 0)}px`
 
 function AdminCourseSectionsTableHead() {
   return (
@@ -121,11 +122,12 @@ function AdminCourseSectionsTableHead() {
           <th
             key={column.key}
             scope="col"
+            className={`admin-course-sections-table__head admin-course-sections-table__head--${column.key}`}
             style={{
               textAlign: column.align === 'center' ? 'center' : undefined,
             }}
           >
-            {column.label}
+            <span className="admin-course-sections-table__header-label">{column.label}</span>
           </th>
         ))}
       </tr>
@@ -176,7 +178,7 @@ function AdminCourseSectionGroupTable({
       <div className="portal-table-wrap admin-table-wrap">
         <table
           className="portal-table portal-data-table admin-course-sections-table"
-          style={{ minWidth: '1780px' }}
+          style={{ minWidth: ADMIN_COURSE_SECTIONS_TABLE_MIN_WIDTH }}
         >
           <colgroup>
             {ADMIN_COURSE_SECTIONS_TABLE_COLUMNS.map((column) => (

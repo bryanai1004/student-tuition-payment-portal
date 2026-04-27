@@ -35,4 +35,7 @@ export declare function detectGraduationEligibilityQuestion(question: string): b
 export declare function detectGraduationRequirementCreditsQuestion(question: string): boolean;
 export declare function detectCourseEligibilityIntent(question: string): boolean;
 export declare function classifyStudentAiIntent(question: string): StudentAiIntent;
+export declare function needsCatalogEvidence(question: string): boolean;
+export declare function needsStudentEvidence(question: string): boolean;
+export declare function needsCourseEvidence(question: string): boolean;
 //# sourceMappingURL=studentAiQuestionRouter.d.ts.map
