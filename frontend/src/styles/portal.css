@@ -10497,3 +10497,39 @@ select.admin-student-edit-control {
     white-space: normal;
   }
 }
+
+.admin-course-sections-page .admin-course-sections-list .portal-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-course-sections-page .admin-course-sections-table {
+  width: max-content !important;
+  min-width: 1420px;
+  table-layout: fixed;
+}
+
+.admin-course-sections-page .admin-course-sections-table th,
+.admin-course-sections-page .admin-course-sections-table td {
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.25;
+}
+
+.admin-course-sections-page .admin-course-sections-table th:nth-child(3),
+.admin-course-sections-page .admin-course-sections-table td:nth-child(3) {
+  width: 130px;
+  min-width: 130px;
+}
+
+.admin-course-sections-page .admin-course-sections-table th:nth-child(4),
+.admin-course-sections-page .admin-course-sections-table td:nth-child(4) {
+  width: 90px;
+  min-width: 90px;
+  text-align: center;
+}

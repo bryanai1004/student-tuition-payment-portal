@@ -155,7 +155,7 @@ function AdminCourseSectionGroupTable({
         {title}
       </h3>
       <div className="portal-table-wrap admin-table-wrap">
-        <table className="portal-table admin-course-sections-table">
+        <table className="portal-table portal-data-table admin-course-sections-table">
           <AdminCourseSectionsTableHead />
           <tbody>
             {rows.length === 0 ? (
