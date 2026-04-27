@@ -1,12 +1,38 @@
 import { listCoursesFromMysql } from "../repositories/courseRepository.js";
 import { getStudentAcademicsPayload } from "./studentAcademicsService.js";
+import { getLegacyStudentProfile } from "./studentProfileService.js";
+import { evaluateStudentGraduation } from "./graduationEvaluationService.js";
 function normalizeText(value) {
     return (value ?? "").trim().toLowerCase();
 }
 function normalizeCode(value) {
     return (value ?? "").replace(/[\s-]+/g, "").trim().toUpperCase();
 }
-function isLikelyPassingGrade(value) {
+function normalizeForNameSearch(value) {
+    return (value ?? "")
+        .toLowerCase()
+        .replace(/[\s\-_]+/g, "")
+        .trim();
+}
+function extractLikelyCourseNameToken(question) {
+    const compact = question
+        .replace(/[\s?？!！.,，。:：;；"“”'‘’()（）]/g, "")
+        .trim();
+    if (compact.length < 2 || compact.length > 20)
+        return null;
+    if (/^[a-z]{1,20}$/i.test(compact))
+        return compact.toLowerCase();
+    if (/^[\u4E00-\u9FFF]{2,20}$/.test(compact))
+        return compact;
+    return null;
+}
+function parseCatalogYearFromTrack(track) {
+    if (track == null)
+        return null;
+    const m = track.match(/\b(20\d{2})\b/);
+    return m?.[1] ?? null;
+}
+export function isLikelyPassingGrade(value) {
     const grade = normalizeText(value);
     if (grade === "")
         return false;
@@ -31,7 +57,7 @@ function tokenizePrerequisiteCodes(text) {
     }
     return [...out];
 }
-function parsePrerequisiteRules(course) {
+export function parsePrerequisiteRules(course) {
     const prerequisiteText = (course.prerequisiteText ?? "").trim();
     const corequisiteText = (course.corequisiteText ?? "").trim();
     const merged = [prerequisiteText, corequisiteText].filter(Boolean).join(" | ");
@@ -48,6 +74,37 @@ function parsePrerequisiteRules(course) {
 function hasEligibilityIntent(question) {
     const q = question.toLowerCase();
     return (/\b(can\s+i\s+take|eligible|prerequisite|prereq|co-?requisite|what\s+am\s+i\s+missing)\b/.test(q) || /我可以选|我还差什么课|先修|先决|能不能修|能选吗/.test(question));
+}
+export function isLikelyCourseRelatedQuery(question) {
+    const q = question.trim();
+    if (q === "")
+        return false;
+    const lower = q.toLowerCase();
+    if (/\b([a-z]{2,6})[\s-]?(\d{3}[a-z]?)\b/i.test(q))
+        return true;
+    if (/\b(course|class|prerequisite|prereq|co-?requisite|register|registration|eligible)\b/i.test(lower)) {
+        return true;
+    }
+    if (/课程|先修|先决|选课|注册|我可以选|能选吗|能不能修|还差什么课|eligible/.test(q)) {
+        return true;
+    }
+    return extractLikelyCourseNameToken(q) != null;
+}
+export function isShortCourseLikeQuery(question) {
+    const q = question.trim();
+    if (q.length === 0 || q.length > 24)
+        return false;
+    if (/\b([a-z]{2,6})[\s-]?(\d{3}[a-z]?)\b/i.test(q))
+        return true;
+    return extractLikelyCourseNameToken(q) != null;
+}
+export function detectPrerequisiteQuestion(question) {
+    const q = question.toLowerCase();
+    return /\b(prerequisite|prereq|pre-req|先修|先决)\b/i.test(q);
+}
+export function detectEligibilityQuestion(question) {
+    const q = question.toLowerCase();
+    return (/\b(can\s+i\s+take|am\s+i\s+eligible|eligible|what\s+am\s+i\s+missing)\b/i.test(q) || /我可以选|我可不可以选|我能选|我还差什么课|是否满足先修|能不能修/.test(question));
 }
 function resolveTargetCourse(question, courses) {
     const qRaw = question.trim();
@@ -72,13 +129,22 @@ function resolveTargetCourse(question, courses) {
         if (codeMatches.length > 1)
             return { resolved: null, ambiguous: codeMatches };
     }
+    const queryNameNormalized = normalizeForNameSearch(qRaw);
     const nameMatches = candidates.filter((c) => {
-        const eng = normalizeText(c.engName);
-        const chi = c.chiName?.trim() ?? "";
-        if (eng.length >= 3 && qLower.includes(eng))
+        const eng = normalizeForNameSearch(c.engName);
+        const chi = (c.chiName ?? "").trim();
+        if (eng.length >= 3 && queryNameNormalized.includes(eng))
             return true;
         if (chi.length >= 2 && qRaw.includes(chi))
             return true;
+        if (eng.length >= 3 && eng.includes(queryNameNormalized) && queryNameNormalized.length >= 3) {
+            return true;
+        }
+        if (chi.length >= 2 &&
+            queryNameNormalized.length >= 2 &&
+            normalizeForNameSearch(chi).includes(queryNameNormalized)) {
+            return true;
+        }
         return false;
     });
     if (nameMatches.length === 1)
@@ -86,6 +152,17 @@ function resolveTargetCourse(question, courses) {
     if (nameMatches.length > 1)
         return { resolved: null, ambiguous: nameMatches.slice(0, 5) };
     return { resolved: null, ambiguous: [] };
+}
+export async function resolveAmuCourse(query, _studentContext) {
+    const courses = await listCoursesFromMysql();
+    const resolved = resolveTargetCourse(query, courses);
+    if (resolved.resolved != null) {
+        return { status: "resolved", course: resolved.resolved };
+    }
+    if (resolved.ambiguous.length > 0) {
+        return { status: "ambiguous", matches: resolved.ambiguous.slice(0, 5) };
+    }
+    return { status: "no_match" };
 }
 export function evaluateCourseEligibility(args) {
     if (args.prerequisites == null) {
@@ -142,6 +219,38 @@ function buildStudentInputs(academics) {
             code: r.courseCode,
             status: r.status,
         })),
+    };
+}
+export async function loadStudentAcademicCourseContext(studentId) {
+    const trimmed = studentId.trim();
+    const [profile, academics, graduation] = await Promise.all([
+        getLegacyStudentProfile(trimmed),
+        getStudentAcademicsPayload(trimmed),
+        evaluateStudentGraduation(trimmed),
+    ]);
+    const completedCourses = academics.courseRecords
+        .filter((r) => r.status === "completed")
+        .map((r) => ({
+        code: normalizeCode(r.courseCode),
+        title: r.courseTitle,
+        grade: r.grade ?? null,
+    }));
+    const currentRegistrations = academics.courseRecords
+        .filter((r) => r.status === "active")
+        .map((r) => ({
+        code: normalizeCode(r.courseCode),
+        title: r.courseTitle,
+    }));
+    return {
+        studentId: trimmed,
+        studentExternalId: trimmed,
+        program: profile?.program ?? null,
+        track: profile?.track ?? null,
+        preferredLanguage: null,
+        catalogYear: parseCatalogYearFromTrack(profile?.track),
+        completedCourses,
+        transferCredits: graduation.transferCredits,
+        currentRegistrations,
     };
 }
 export async function evaluateEligibilityQuestion(studentId, question) {

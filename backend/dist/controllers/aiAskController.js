@@ -1,6 +1,7 @@
 import { verifyStudentAccessToken } from "../lib/studentAuthToken.js";
 import { RagQuestionValidationError, answerGeneralQuestion, answerAmuQuestion, answerGraduationQuestion, answerLocalSearchQuestion, answerSchoolFactQuestion, answerStudentRecordQuestionFromFacts, plainTextFormatter, planShortConversationMemory, } from "../services/ragService.js";
 import { classifyStudentAiIntent, detectCourseEligibilityIntent, detectGraduationEligibilityQuestion, detectGraduationRequirementCreditsQuestion, } from "../services/studentAiQuestionRouter.js";
+import { detectEligibilityQuestion, detectPrerequisiteQuestion, evaluateCourseEligibility, isLikelyPassingGrade, isLikelyCourseRelatedQuery, isShortCourseLikeQuery, loadStudentAcademicCourseContext, parsePrerequisiteRules, resolveAmuCourse, } from "../services/courseEligibilityService.js";
 import { evaluateGraduation, formatGraduationEvaluationFacts, } from "../services/graduationEvaluationService.js";
 import { buildStudentRecordFactsForQuestion, } from "../services/studentRecordAiService.js";
 import { getStudentAcademicsPayload } from "../services/studentAcademicsService.js";
@@ -30,6 +31,41 @@ function hasVerifiedAcademicData(academics) {
         academics.transcript.length > 0 ||
         academics.enrollmentHistory.length > 0 ||
         academics.currentSchedule.length > 0);
+}
+function formatMatchedCourseLabel(course) {
+    const title = course.chiName ?? course.engName ?? "";
+    return title ? `${course.code} ${title}` : course.code;
+}
+function buildResolvedCourseContextText(course, studentContextText) {
+    const courseLines = [
+        "Resolved AMU Course",
+        `- Course code: ${course.code}`,
+        `- Course title (EN): ${course.engName ?? "Unavailable"}`,
+        `- Course title (ZH): ${course.chiName ?? "Unavailable"}`,
+        `- Prerequisite field: ${course.prerequisiteText ?? "Not listed"}`,
+        `- Corequisite field: ${course.corequisiteText ?? "Not listed"}`,
+    ];
+    return `${courseLines.join("\n")}\n\n${studentContextText}`;
+}
+function buildStudentCourseContextText(input) {
+    const completed = input.completedCourses
+        .slice(0, 40)
+        .map((c) => `${c.code}${c.grade ? ` (${c.grade})` : ""} - ${c.title}`)
+        .join("; ");
+    const currentRegs = input.currentRegistrations
+        .slice(0, 20)
+        .map((c) => `${c.code} - ${c.title}`)
+        .join("; ");
+    return [
+        "Student Context",
+        `- Student ID: ${input.studentId}`,
+        `- Program: ${input.program ?? "Unavailable"}`,
+        `- Track: ${input.track ?? "Unavailable"}`,
+        `- Catalog year: ${input.catalogYear ?? "Unavailable"}`,
+        `- Transfer credits: ${input.transferCredits}`,
+        `- Completed courses: ${completed || "None found"}`,
+        `- Current registrations: ${currentRegs || "None found"}`,
+    ].join("\n");
 }
 /**
  * POST /api/ai/ask
@@ -107,6 +143,102 @@ export async function postAiAsk(req, res) {
             isGraduationRequirementCreditsQuestion,
             isCourseEligibilityQuestion,
         });
+        const isLikelyCourseQuery = isLikelyCourseRelatedQuery(q);
+        if (isLikelyCourseQuery) {
+            const studentCourseContext = await loadStudentAcademicCourseContext(authStudent.studentId);
+            const resolved = await resolveAmuCourse(q, studentCourseContext);
+            if (resolved.status === "ambiguous") {
+                const options = resolved.matches
+                    .slice(0, 4)
+                    .map((match) => formatMatchedCourseLabel(match))
+                    .join("；");
+                res.status(200).json({
+                    question: q,
+                    answer: `我找到了多个可能匹配的 AMU 课程：${options}。请提供课程代码或完整课程名称，我可以继续为你精确查询。`,
+                    sources: [],
+                });
+                return;
+            }
+            if (resolved.status === "no_match") {
+                if (isShortCourseLikeQuery(q)) {
+                    res.status(200).json({
+                        question: q,
+                        answer: "我目前没有在可用的 AMU 课程资料中找到这个课程。请提供课程代码或完整课程名称，我可以再帮你查。",
+                        sources: [],
+                    });
+                    return;
+                }
+            }
+            else {
+                const studentContextText = buildStudentCourseContextText(studentCourseContext);
+                const resolvedCourse = resolved.course;
+                const isPrerequisite = detectPrerequisiteQuestion(q);
+                const isEligibility = detectEligibilityQuestion(q);
+                const rules = parsePrerequisiteRules(resolvedCourse);
+                if (isPrerequisite) {
+                    if ((resolvedCourse.prerequisiteText ?? "").trim() !== "") {
+                        const ragResult = await answerAmuQuestion(`${resolvedCourse.code} prerequisite requirement`, memoryPlan.history, {
+                            pipeline: "policy",
+                            identityContext,
+                        });
+                        res.status(200).json(formatResponseAnswer({
+                            ...ragResult,
+                            answer: `${resolvedCourse.code} 的先修要求是：${resolvedCourse.prerequisiteText}\n\n基于可用的 AMU 目录上下文，补充说明：${ragResult.answer}`,
+                        }));
+                        return;
+                    }
+                    res.status(200).json({
+                        question: q,
+                        answer: `我找到了 ${resolvedCourse.code}，但目前可用的 AMU 课程资料没有列出明确先修要求。建议向 Academic Advising 确认。`,
+                        sources: [],
+                    });
+                    return;
+                }
+                if (isEligibility) {
+                    const eligibility = evaluateCourseEligibility({
+                        targetCourse: resolvedCourse,
+                        prerequisites: rules,
+                        studentCompletedCourses: studentCourseContext.completedCourses.map((c) => ({
+                            code: c.code,
+                            passed: isLikelyPassingGrade(c.grade),
+                        })),
+                        studentEnrollments: studentCourseContext.currentRegistrations.map((r) => ({
+                            code: r.code,
+                            status: "active",
+                        })),
+                    });
+                    if (eligibility.eligible === true) {
+                        res.status(200).json({
+                            question: q,
+                            answer: `根据你当前可用的 AMU 学业记录，你目前满足 ${resolvedCourse.code} 的已解析先修要求，可以尝试选课。`,
+                            sources: [],
+                        });
+                        return;
+                    }
+                    if (eligibility.missingPrerequisites.length > 0) {
+                        res.status(200).json({
+                            question: q,
+                            answer: `根据你当前可用的 AMU 学业记录，你选 ${resolvedCourse.code} 还缺这些已解析先修课：${eligibility.missingPrerequisites.join("、")}。`,
+                            sources: [],
+                        });
+                        return;
+                    }
+                    res.status(200).json({
+                        question: q,
+                        answer: `我找到了 ${resolvedCourse.code}，但基于当前可用 AMU 课程资料无法明确解析完整先修规则，所以暂时无法确定你是否可以选这门课。`,
+                        sources: [],
+                    });
+                    return;
+                }
+                const result = await answerAmuQuestion(`${q}\n\nUse this resolved AMU course as the target course: ${resolvedCourse.code} ${resolvedCourse.engName ?? ""} ${resolvedCourse.chiName ?? ""}`.trim(), memoryPlan.history, {
+                    pipeline: "mixed",
+                    studentContext: buildResolvedCourseContextText(resolvedCourse, studentContextText),
+                    identityContext,
+                });
+                res.status(200).json(formatResponseAnswer(result));
+                return;
+            }
+        }
         if (isGraduationBackendQuestion ||
             routedIntent === "student_record" ||
             routedIntent === "mixed") {
