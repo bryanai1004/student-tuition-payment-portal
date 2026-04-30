@@ -18,7 +18,7 @@ import {
   assertChatModelForCompletions,
   createOpenAiEmbeddingVectors,
   EMBEDDING_MODEL,
-  client as OPENAI_CLIENT,
+  requireOpenAiClient,
 } from "../config/openai.js";
 import {
   buildRetrievalQueryVariants,
@@ -1627,7 +1627,7 @@ ${referenceLine ?? "None"}`,
 }
 
 function getOpenAiClient(): OpenAI {
-  return OPENAI_CLIENT;
+  return requireOpenAiClient();
 }
 
 export async function answerGeneralQuestion(

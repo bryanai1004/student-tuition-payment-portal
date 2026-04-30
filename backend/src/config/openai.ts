@@ -1,8 +1,22 @@
 import OpenAI from "openai";
 
-export const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let cachedClient: OpenAI | null = null;
+
+/** Returns a shared client; throws if OPENAI_API_KEY is unset (call only when OpenAI is required). */
+export function requireOpenAiClient(): OpenAI {
+  const key = process.env.OPENAI_API_KEY?.trim();
+  if (!key) {
+    throw new Error(
+      "OPENAI_API_KEY is not set; this operation requires OpenAI.",
+    );
+  }
+  cachedClient ??= new OpenAI({ apiKey: key });
+  return cachedClient;
+}
+
+export function isOpenAiConfigured(): boolean {
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
+}
 
 export const CHAT_MODEL = process.env.OPENAI_MODEL || "gpt-5.4";
 
@@ -54,11 +68,23 @@ if (!EMBEDDING_MODEL.toLowerCase().includes("embedding")) {
   throw new Error("Embedding model misconfigured");
 }
 
-console.log("[OPENAI CONFIG] (startup)");
-console.log("active chat model:", CHAT_MODEL);
-console.log("active embedding model:", EMBEDDING_MODEL);
+if (isOpenAiConfigured()) {
+  console.log("[OPENAI CONFIG] (startup)");
+  console.log("active chat model:", CHAT_MODEL);
+  console.log("active embedding model:", EMBEDDING_MODEL);
+} else {
+  console.log(
+    "[OPENAI CONFIG] OPENAI_API_KEY not set — student AI / RAG routes need a key; API otherwise runs.",
+  );
+}
 
 export function logOpenAiModelConfiguration(): void {
+  if (!isOpenAiConfigured()) {
+    console.log(
+      "[OPENAI CONFIG] disabled (no OPENAI_API_KEY); chat/embeddings unavailable.",
+    );
+    return;
+  }
   console.log("[OPENAI CONFIG]");
   console.log("active chat model:", CHAT_MODEL);
   console.log("active embedding model:", EMBEDDING_MODEL);
@@ -72,7 +98,7 @@ export async function createOpenAiEmbeddingVectors(
 ): Promise<number[][]> {
   assertEmbeddingModelForVectors(EMBEDDING_MODEL);
   if (inputs.length === 0) return [];
-  const res = await client.embeddings.create({
+  const res = await requireOpenAiClient().embeddings.create({
     model: EMBEDDING_MODEL,
     input: inputs,
   });
@@ -86,8 +112,14 @@ export async function createOpenAiEmbeddingVectors(
 }
 
 export async function verifyOpenAiResponsesApi(): Promise<void> {
+  if (!isOpenAiConfigured()) {
+    console.warn(
+      "[openai] OPENAI_API_KEY not set; skipping Responses API verification.",
+    );
+    return;
+  }
   assertChatModelForCompletions(CHAT_MODEL);
-  await client.responses.create({
+  await requireOpenAiClient().responses.create({
     model: CHAT_MODEL,
     input: "ping",
   });
