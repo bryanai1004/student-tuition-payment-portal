@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { adminSchedulingQueryString } from '../../lib/adminSchedulingSearchParams'
 import {
@@ -35,6 +35,22 @@ export function AdminCoursesPage() {
   const [openRowsRaw, setOpenRowsRaw] = useState<OpenRegistrationCourseRow[] | null>(null)
   const [openLoading, setOpenLoading] = useState(false)
   const [openError, setOpenError] = useState<string | null>(null)
+
+  const reloadCatalog = useCallback(async () => {
+    setCatalogLoading(true)
+    setCatalogError(null)
+    try {
+      const c = await fetchCourses()
+      setCatalog(c)
+    } catch (e) {
+      setCatalog([])
+      setCatalogError(
+        e instanceof Error ? e.message : 'Could not load courses.',
+      )
+    } finally {
+      setCatalogLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     const ac = new AbortController()
@@ -201,6 +217,7 @@ export function AdminCoursesPage() {
             rows={filteredAll}
             loading={catalogLoading}
             error={catalogError}
+            onCourseSaved={reloadCatalog}
           />
         </>
       ) : (

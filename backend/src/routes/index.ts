@@ -69,6 +69,7 @@ import {
   postAuthorizeNetTuitionChargeHandler,
 } from "../controllers/studentAuthorizePaymentController.js";
 import { getStudentAcademics } from "../controllers/studentAcademicsController.js";
+import { getStudentProgramProgress } from "../controllers/studentProgramProgressController.js";
 import {
   getAdminStudentCourseFeedback,
   getStudentCourseFeedback,
@@ -388,6 +389,7 @@ apiRouter.post(
 );
 apiRouter.get("/students/:studentId/profile", getStudentProfile);
 apiRouter.get("/students/:studentId/academics", getStudentAcademics);
+apiRouter.get("/students/:studentId/program-progress", getStudentProgramProgress);
 apiRouter.get(
   "/students/:studentId/course-feedback",
   getStudentCourseFeedback,

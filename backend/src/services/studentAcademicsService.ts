@@ -139,14 +139,11 @@ export async function getStudentAcademicsPayload(
     };
   }
 
-  const [marksRows, latestLegacy, latestPortal, courseLookup, portalRows] =
-    await Promise.all([
-      listMarksForStudent(pool, trimmed),
-      findLatestLegacyTermYear(pool, trimmed),
-      findLatestPortalEnrollmentTermYear(trimmed),
-      loadCoursesTranscriptLookup(pool),
-      listPortalEnrollmentRowsForStudentAcademics(trimmed),
-    ]);
+  const marksRows = await listMarksForStudent(pool, trimmed);
+  const courseLookup = await loadCoursesTranscriptLookup(pool);
+  const latestLegacy = await findLatestLegacyTermYear(pool, trimmed);
+  const latestPortal = await findLatestPortalEnrollmentTermYear(trimmed);
+  const portalRows = await listPortalEnrollmentRowsForStudentAcademics(trimmed);
 
   const latestRegistration = pickNewerRegistrationAnchor(
     latestLegacy,

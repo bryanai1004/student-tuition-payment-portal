@@ -9,7 +9,8 @@ const poolConfig: mysql.PoolOptions = {
   password: env.db.password,
   database: env.db.database,
   waitForConnections: true,
-  connectionLimit: 10,
+  /** Lower cap reduces pressure on shared MySQL max_connections when multiple dev processes run. */
+  connectionLimit: 5,
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,

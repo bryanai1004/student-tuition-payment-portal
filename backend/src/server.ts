@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { env } from "./config/env.js";
 import { app } from "./app.js";
 import { closePool, testDatabaseConnection } from "./lib/db.js";
+import { warmCourseSectionsColumnMetadataCache } from "./repositories/studentEnrollmentRepository.js";
 import { initSocket } from "./lib/socket.js";
 import {
   logOpenAiModelConfiguration,
@@ -21,6 +22,11 @@ if (env.nodeEnv === "development") {
 async function start(): Promise<void> {
   try {
     await testDatabaseConnection();
+    await warmCourseSectionsColumnMetadataCache().catch((warmErr: unknown) => {
+      const msg =
+        warmErr instanceof Error ? warmErr.message : String(warmErr);
+      console.warn("[server] course_sections column metadata warm skipped:", msg);
+    });
   } catch (err) {
     if (env.nodeEnv === "development") {
       console.warn(

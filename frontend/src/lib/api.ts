@@ -2365,6 +2365,56 @@ export async function fetchStudentAcademics(
   return parseStudentAcademicsResponse(data)
 }
 
+/** GET /api/students/:studentId/program-progress */
+export type StudentProgramProgressBucket = {
+  id: 'didactic' | 'lab' | 'clinical'
+  unitKind: 'quarter_units' | 'clinical_hours'
+  required: number
+  completed: number
+  remaining: number
+}
+
+export type StudentProgramProgressResponse = {
+  studentId: string
+  program: string | null
+  ruleSetId: string
+  quarterUnitsRequired: number
+  quarterUnitsEarned: number
+  quarterUnitsRemaining: number
+  buckets: StudentProgramProgressBucket[]
+  notes: string[]
+}
+
+function parseStudentProgramProgressResponse(data: unknown): StudentProgramProgressResponse {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected program progress response')
+  }
+  const o = data as Record<string, unknown>
+  if (typeof o.studentId !== 'string' || typeof o.ruleSetId !== 'string') {
+    throw new Error('Unexpected program progress response')
+  }
+  if (
+    typeof o.quarterUnitsRequired !== 'number' ||
+    typeof o.quarterUnitsEarned !== 'number' ||
+    typeof o.quarterUnitsRemaining !== 'number'
+  ) {
+    throw new Error('Unexpected program progress response')
+  }
+  if (!Array.isArray(o.buckets) || !Array.isArray(o.notes)) {
+    throw new Error('Unexpected program progress response')
+  }
+  return data as StudentProgramProgressResponse
+}
+
+export async function fetchStudentProgramProgress(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<StudentProgramProgressResponse> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/program-progress`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  return parseStudentProgramProgressResponse(data)
+}
+
 /** GET /api/students/:studentId/clinical-schedule — JSON array of assignment rows. */
 export type ClinicalScheduleSession = {
   id: number
@@ -4481,12 +4531,91 @@ export async function deleteAcademicTerm(
 /** GET /api/courses — catalog rows for admin scheduling pickers. */
 export type CourseCatalogItem = {
   course_id: string | null
+  /** Primary key on `school.courses` when exposed by the API (admin edits). */
+  sequence_number?: number | null
   code: string
   eng_name: string | null
   chi_name: string | null
   units: number | string | null
   /** Present when the `courses` table exposes a category column. */
   category?: string | null
+}
+
+/** GET /api/admin/course-categories */
+export type AdminCourseCategoryOption = {
+  id: number
+  category_id: string
+  category_name: string
+}
+
+function parseAdminCourseCategoryList(data: unknown): AdminCourseCategoryOption[] {
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected course categories response')
+  }
+  const out: AdminCourseCategoryOption[] = []
+  for (const el of data) {
+    if (el == null || typeof el !== 'object') continue
+    const o = el as Record<string, unknown>
+    const idRaw = o.id
+    const cid = o.category_id ?? o.categoryId
+    const cname = o.category_name ?? o.categoryName
+    const id =
+      typeof idRaw === 'number'
+        ? idRaw
+        : typeof idRaw === 'string'
+          ? Number(idRaw)
+          : NaN
+    if (!Number.isFinite(id)) continue
+    if (typeof cid !== 'string' || cid.trim() === '') continue
+    if (typeof cname !== 'string') continue
+    out.push({
+      id: Math.trunc(id),
+      category_id: cid.trim(),
+      category_name: cname.trim(),
+    })
+  }
+  return out
+}
+
+export async function fetchAdminCourseCategories(options?: {
+  signal?: AbortSignal
+}): Promise<AdminCourseCategoryOption[]> {
+  const data = (await fetchApiJson('/api/admin/course-categories', {
+    signal: options?.signal,
+  })) as unknown
+  return parseAdminCourseCategoryList(data)
+}
+
+export async function patchAdminCatalogCourse(params: {
+  sequenceNumber: number
+  body: { units?: number; category?: string }
+  signal?: AbortSignal
+}): Promise<{ ok: true; affected: number }> {
+  const sn = params.sequenceNumber
+  const data = (await fetchApiJson(
+    `/api/admin/catalog/courses/${encodeURIComponent(String(sn))}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params.body),
+      signal: params.signal,
+    },
+  )) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected patch catalog course response')
+  }
+  const o = data as Record<string, unknown>
+  if (o.ok !== true) {
+    throw new Error('Unexpected patch catalog course response')
+  }
+  const aff = o.affected
+  const n =
+    typeof aff === 'number'
+      ? aff
+      : typeof aff === 'string'
+        ? Number(aff)
+        : 0
+  return { ok: true, affected: Number.isFinite(n) ? n : 0 }
 }
 
 function parseCourseCatalogList(data: unknown): CourseCatalogItem[] {
@@ -4510,8 +4639,18 @@ function parseCourseCatalogList(data: unknown): CourseCatalogItem[] {
     const eng = o.eng_name
     const chi = o.chi_name
     const cat = o.category
+    const seqRaw = o.sequence_number ?? o.sequenceNumber
+    let sequence_number: number | null = null
+    if (typeof seqRaw === 'number' && Number.isFinite(seqRaw)) {
+      sequence_number = Math.trunc(seqRaw)
+    } else if (typeof seqRaw === 'string' && seqRaw.trim() !== '') {
+      const sn = Number(seqRaw.trim())
+      if (Number.isFinite(sn)) sequence_number = Math.trunc(sn)
+    }
+
     const item: CourseCatalogItem = {
       course_id: courseId,
+      ...(sequence_number != null ? { sequence_number } : {}),
       code: o.code.trim(),
       eng_name: typeof eng === 'string' ? eng : null,
       chi_name: typeof chi === 'string' ? chi : null,

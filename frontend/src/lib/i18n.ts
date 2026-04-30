@@ -445,6 +445,32 @@ export const STUDENT_PORTAL_EN = {
   amuOfficialTranscriptSchoolName: 'ALHAMBRA MEDICAL UNIVERSITY',
   cumulativeTotal: 'Cumulative Total',
 
+  programProgressSectionHeading: 'Program progress',
+  programProgressSectionAria: 'Program progress toward degree requirements',
+  loadingProgramProgress: 'Loading program progress…',
+  couldNotLoadProgramProgress: 'Could not load program progress.',
+  programProgressQuarterUnitsTitle: 'Quarter units (non-clinical)',
+  programProgressPieCaption:
+    '{earned} of {required} units completed; {remaining} units still needed toward the configured requirement.',
+  programProgressBreakdownTitle: 'Requirement breakdown',
+  programProgressColCategory: 'Category',
+  programProgressBucketDidactic: 'Didactic units',
+  programProgressBucketLab: 'Laboratory units',
+  programProgressBucketClinical: 'Clinical internship hours',
+  programProgressColRequired: 'Required',
+  programProgressColCompleted: 'Completed',
+  programProgressColRemaining: 'Remaining',
+  programProgressUnitsAbbr: 'units',
+  programProgressHoursAbbr: 'hrs',
+  programProgressPieLegendCompleted: 'Completed',
+  programProgressPieLegendNeeded: 'Still needed',
+  programProgressTooltipCompleted:
+    'Completed: {earned} of {required} quarter units ({pct}% of the configured requirement).',
+  programProgressTooltipRemaining:
+    'Still needed: {remaining} quarter units to reach the configured requirement.',
+  programProgressFootnote:
+    'Figures follow the portal catalog and your unofficial transcript. Official graduation clearance may differ.',
+
   // Enrollment status (registration history table)
   enrollmentStatusActive: 'Active',
   enrollmentStatusCompleted: 'Completed',
@@ -1796,6 +1822,31 @@ const STUDENT_PORTAL_ZH: Record<StudentPortalKey, string> = {
   printButton: '列印',
   amuOfficialTranscriptSchoolName: 'ALHAMBRA MEDICAL UNIVERSITY',
   cumulativeTotal: '累計合計',
+
+  programProgressSectionHeading: '學程進度',
+  programProgressSectionAria: '學位要求之學程進度',
+  loadingProgramProgress: '正在載入學程進度…',
+  couldNotLoadProgramProgress: '無法載入學程進度。',
+  programProgressQuarterUnitsTitle: '季制學分（非臨床）',
+  programProgressPieCaption:
+    '已修 {required} 單位中之 {earned} 單位；尚餘 {remaining} 單位未達目前設定之要求。',
+  programProgressBreakdownTitle: '要求項目明細',
+  programProgressColCategory: '項目',
+  programProgressBucketDidactic: '講授學分',
+  programProgressBucketLab: '實驗／實習室學分',
+  programProgressBucketClinical: '臨床實習時數',
+  programProgressColRequired: '應修',
+  programProgressColCompleted: '已完成',
+  programProgressColRemaining: '尚缺',
+  programProgressUnitsAbbr: '單位',
+  programProgressHoursAbbr: '小時',
+  programProgressPieLegendCompleted: '已完成',
+  programProgressPieLegendNeeded: '尚缺',
+  programProgressTooltipCompleted:
+    '已完成：{required} 單位中之 {earned} 單位（約為設定要求之 {pct}%）。',
+  programProgressTooltipRemaining: '尚缺：距設定要求尚餘 {remaining} 單位。',
+  programProgressFootnote:
+    '數據依入口網站課程目錄與非正式成績單計算；正式畢業審核以註冊組為準。',
 
   enrollmentStatusActive: '進行中',
   enrollmentStatusCompleted: '已完成',

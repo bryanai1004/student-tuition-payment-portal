@@ -4238,6 +4238,168 @@ table.portal-academics-portal-grades-table.portal-table--grades td {
   color: var(--portal-text);
 }
 
+.portal-academics-program-progress-outer {
+  margin-bottom: 1.25rem;
+}
+
+.portal-academics-program-progress {
+  padding: 1rem 1.1rem 1.15rem;
+}
+
+.portal-academics-program-progress--loading {
+  padding: 1rem 1.1rem;
+}
+
+.portal-academics-program-progress__heading {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--portal-text);
+}
+
+.portal-academics-program-progress__grid {
+  display: grid;
+  grid-template-columns: minmax(11rem, 1fr) minmax(0, 2.2fr);
+  gap: 1.25rem 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .portal-academics-program-progress__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.portal-academics-program-progress__chart-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.portal-academics-program-progress__tooltip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  max-width: min(16rem, 92vw);
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--portal-text, #1c2333);
+  background: var(--portal-surface-elevated, #fff);
+  border: 1px solid var(--portal-border-subtle, #e8e8e8);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+.portal-academics-program-progress__tooltip--visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.portal-academics-program-progress__svg {
+  position: relative;
+  z-index: 1;
+  width: 10.5rem;
+  height: 10.5rem;
+  max-width: 100%;
+}
+
+.portal-academics-program-progress__slice--interactive {
+  cursor: pointer;
+}
+
+.portal-academics-program-progress__slice--remaining {
+  fill: var(--portal-border-subtle, #e8e8e8);
+}
+
+.portal-academics-program-progress__slice--completed {
+  fill: var(--portal-accent, #a6192e);
+}
+
+.portal-academics-program-progress__pct {
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--portal-text, #1c2333);
+  pointer-events: none;
+}
+
+.portal-academics-program-progress__chart-label {
+  margin: 0;
+  text-align: center;
+}
+
+.portal-academics-program-progress__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--portal-text-muted);
+  text-align: left;
+  width: 100%;
+  max-width: 14rem;
+}
+
+.portal-academics-program-progress__legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.portal-academics-program-progress__swatch {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.portal-academics-program-progress__swatch--completed {
+  background: var(--portal-accent, #a6192e);
+}
+
+.portal-academics-program-progress__swatch--remaining {
+  background: var(--portal-border-subtle, #e8e8e8);
+}
+
+.portal-academics-program-progress__caption {
+  margin: 0.25rem 0 0;
+  text-align: center;
+  max-width: 20rem;
+}
+
+.portal-academics-program-progress__subheading {
+  margin: 0 0 0.65rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--portal-text);
+}
+
+.portal-academics-program-progress-table th,
+.portal-academics-program-progress-table td {
+  font-size: 0.8125rem;
+}
+
+.portal-academics-program-progress-table th[scope='row'] {
+  font-weight: 500;
+  text-align: left;
+}
+
+.portal-academics-program-progress__footnote {
+  margin: 0.65rem 0 0;
+}
+
 .portal-academics-registration-history > * + * {
   margin-top: 1.5rem;
 }

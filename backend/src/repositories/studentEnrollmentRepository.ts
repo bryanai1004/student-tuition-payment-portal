@@ -209,7 +209,8 @@ export async function listStudentHistoricalCourseReferences(
        INNER JOIN portal_courses pc
          ON pc.course_id COLLATE utf8mb4_unicode_ci =
             e.course_id COLLATE utf8mb4_unicode_ci
-       WHERE TRIM(e.student_external_id) = TRIM(?)`,
+       WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci`,
       [sid],
     ),
     listMarksForStudent(pool, sid),
@@ -311,7 +312,8 @@ export async function enrollStudentInSections(
 
       const [[existing]] = await conn.query<RowDataPacket[]>(
         `SELECT id, status FROM portal_enrollments
-         WHERE TRIM(student_external_id) = TRIM(?)
+         WHERE CONVERT(TRIM(student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+               CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
            AND course_section_id = ?
            AND term COLLATE utf8mb4_unicode_ci =
                CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
@@ -404,7 +406,8 @@ export async function listStudentEnrolledSectionsForTerm(
   const countSql = `
     SELECT COUNT(*) AS cnt
     FROM portal_enrollments e
-    WHERE TRIM(e.student_external_id) = TRIM(?)
+    WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.term COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.year = ?
@@ -461,7 +464,8 @@ export async function listStudentEnrolledSectionsForTerm(
     LEFT JOIN courses cat
       ON TRIM(cat.code) COLLATE utf8mb4_unicode_ci =
          TRIM(COALESCE(cs_direct.course_code, cs_leg.course_code)) COLLATE utf8mb4_unicode_ci
-    WHERE TRIM(e.student_external_id) = TRIM(?)
+    WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.term COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.year = ?
@@ -641,9 +645,12 @@ export async function listAdminEnrollmentRowsForSection(
       (
         SELECT TRIM(m.grade)
         FROM marks m
-        WHERE TRIM(m.id) = TRIM(e.student_external_id)
-          AND TRIM(m.code) = TRIM(pc.course_code)
-          AND LOWER(TRIM(m.term)) = LOWER(TRIM(e.term))
+        WHERE CONVERT(TRIM(m.id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+              CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          AND CONVERT(TRIM(m.code) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+              CONVERT(TRIM(pc.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          AND LOWER(CONVERT(TRIM(m.term) USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+              LOWER(CONVERT(TRIM(e.term) USING utf8mb4)) COLLATE utf8mb4_unicode_ci
           AND m.year = e.year
         ORDER BY m.seqNumber DESC
         LIMIT 1
@@ -651,9 +658,12 @@ export async function listAdminEnrollmentRowsForSection(
     FROM portal_enrollments e
     INNER JOIN portal_courses pc ON pc.course_id = e.course_id
     LEFT JOIN portal_students ps
-      ON TRIM(ps.student_external_id) = TRIM(e.student_external_id)
-    WHERE TRIM(pc.course_code) = TRIM(?)
-      AND TRIM(e.term) = TRIM(?)
+      ON CONVERT(TRIM(ps.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+         CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+    WHERE CONVERT(TRIM(pc.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+            CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND CONVERT(TRIM(e.term) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+            CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.year = ?
       ${sectionFilter}
     ORDER BY
@@ -744,6 +754,11 @@ async function listCourseSectionsColumns(): Promise<Set<string>> {
   return courseSectionsColumnsPromise;
 }
 
+/** Prime INFORMATION_SCHEMA cache once at API boot so cold requests do not stack on it. */
+export async function warmCourseSectionsColumnMetadataCache(): Promise<void> {
+  await listCourseSectionsColumns();
+}
+
 function titleExpr(alias: "cs_direct" | "cs_leg", columns: Set<string>): string {
   const candidates: string[] = [];
   if (columns.has("chinese_title")) candidates.push(`NULLIF(TRIM(${alias}.chinese_title), '')`);
@@ -790,7 +805,8 @@ export async function listPortalEnrollmentTermsForStudent(
        TRIM(e.term) AS term,
        e.year AS year
      FROM portal_enrollments e
-     WHERE TRIM(e.student_external_id) = TRIM(?)
+     WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
      GROUP BY TRIM(e.term), e.year
      ORDER BY e.year DESC,
        ${portalQuarterOrderSql("e.term")} DESC`,
@@ -851,7 +867,8 @@ export async function listPortalEnrollmentHistoryForStudentTerm(
               TRIM(e.term) COLLATE utf8mb4_unicode_ci
           AND cs2.year = e.year
       )
-    WHERE TRIM(e.student_external_id) = TRIM(?)
+    WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND TRIM(e.term) COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.year = ?
@@ -895,7 +912,8 @@ export async function findLatestPortalEnrollmentTermYear(
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT TRIM(e.term) AS term, e.year
      FROM portal_enrollments e
-     WHERE TRIM(e.student_external_id) = TRIM(?)
+     WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
      ORDER BY e.year DESC,
        CASE UPPER(TRIM(e.term))
          WHEN 'FALL' THEN 4
@@ -937,7 +955,7 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
         ${directTitleExpr},
         ${legacyTitleExpr},
         CASE
-          WHEN UPPER(TRIM(COALESCE(e.schedule_track, cs_direct.schedule_track, cs_leg.schedule_track))) = 'CN'
+          WHEN UPPER(TRIM(CONVERT(COALESCE(e.schedule_track, cs_direct.schedule_track, cs_leg.schedule_track) USING utf8mb4))) = CONVERT('CN' USING utf8mb4)
             THEN NULLIF(TRIM(cat.chi_name), '')
           ELSE NULL
         END,
@@ -960,7 +978,11 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
       CASE
         WHEN (
           e.status IS NULL
-          OR LOWER(TRIM(e.status)) IN ('active', 'enrolled', 'registered')
+          OR LOWER(TRIM(CONVERT(IFNULL(e.status, '') USING utf8mb4))) IN (
+            CONVERT('active' USING utf8mb4),
+            CONVERT('enrolled' USING utf8mb4),
+            CONVERT('registered' USING utf8mb4)
+          )
         )
         AND e.withdrawn_at IS NULL
         AND e.course_section_id IS NOT NULL
@@ -973,42 +995,48 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
       END AS can_withdraw
     FROM portal_enrollments e
     INNER JOIN portal_courses pc
-      ON pc.course_id COLLATE utf8mb4_unicode_ci =
-         e.course_id COLLATE utf8mb4_unicode_ci
+      ON CONVERT(pc.course_id USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+         CONVERT(e.course_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
     LEFT JOIN course_sections cs_direct
       ON e.course_section_id IS NOT NULL
       AND cs_direct.id = e.course_section_id
-      AND TRIM(cs_direct.term) COLLATE utf8mb4_unicode_ci =
-          TRIM(e.term) COLLATE utf8mb4_unicode_ci
+      AND CONVERT(TRIM(cs_direct.term) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(e.term) USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND cs_direct.year = e.year
     LEFT JOIN course_sections cs_leg
       ON e.course_section_id IS NULL
-      AND TRIM(cs_leg.course_code) COLLATE utf8mb4_unicode_ci =
-          TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
-      AND TRIM(cs_leg.term) COLLATE utf8mb4_unicode_ci =
-          TRIM(e.term) COLLATE utf8mb4_unicode_ci
+      AND CONVERT(TRIM(cs_leg.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(pc.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND CONVERT(TRIM(cs_leg.term) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(e.term) USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND cs_leg.year = e.year
       AND cs_leg.id = (
         SELECT cs2.id
         FROM course_sections cs2
-        WHERE TRIM(cs2.course_code) COLLATE utf8mb4_unicode_ci =
-              TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
-          AND TRIM(cs2.term) COLLATE utf8mb4_unicode_ci =
-              TRIM(e.term) COLLATE utf8mb4_unicode_ci
+        WHERE CONVERT(TRIM(cs2.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+              CONVERT(TRIM(pc.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          AND CONVERT(TRIM(cs2.term) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+              CONVERT(TRIM(e.term) USING utf8mb4) COLLATE utf8mb4_unicode_ci
           AND cs2.year = e.year
         ORDER BY
-          (cs2.weekday IS NULL OR TRIM(cs2.weekday) = '' OR cs2.start_time IS NULL OR cs2.end_time IS NULL) ASC,
+          (
+            cs2.weekday IS NULL
+            OR TRIM(CONVERT(IFNULL(cs2.weekday, '') USING utf8mb4)) = ''
+            OR cs2.start_time IS NULL
+            OR cs2.end_time IS NULL
+          ) ASC,
           cs2.id ASC
         LIMIT 1
       )
     LEFT JOIN courses cat
-      ON TRIM(cat.code) COLLATE utf8mb4_unicode_ci =
-         TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+      ON CONVERT(TRIM(cat.code) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+         CONVERT(TRIM(pc.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci
     LEFT JOIN academic_terms at
-      ON TRIM(at.term_name) COLLATE utf8mb4_unicode_ci =
-         TRIM(e.term) COLLATE utf8mb4_unicode_ci
+      ON CONVERT(TRIM(at.term_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+         CONVERT(TRIM(e.term) USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND at.year = e.year
-    WHERE TRIM(e.student_external_id) = TRIM(?)
+    WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
     ORDER BY e.year DESC,
       CASE UPPER(TRIM(e.term))
         WHEN 'FALL' THEN 4
@@ -1115,7 +1143,8 @@ export async function softWithdrawPortalEnrollmentByCourseSection(
     SET
       e.status = 'withdrawn',
       e.withdrawn_at = NOW()
-    WHERE TRIM(e.student_external_id) = TRIM(?)
+    WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.term COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.year = ?
@@ -1175,7 +1204,8 @@ export async function deletePortalEnrollmentByStudentCourseTermYear(
     SET
       e.status = 'withdrawn',
       e.withdrawn_at = NOW()
-    WHERE TRIM(e.student_external_id) = TRIM(?)
+    WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND pc.course_code COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.term COLLATE utf8mb4_unicode_ci =
@@ -1195,7 +1225,8 @@ export async function getPortalStudentDisplayName(
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT TRIM(ps.full_name) AS full_name
      FROM portal_students ps
-     WHERE TRIM(ps.student_external_id) = TRIM(?)
+     WHERE CONVERT(TRIM(ps.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+           CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
      LIMIT 1`,
     [sid],
   );

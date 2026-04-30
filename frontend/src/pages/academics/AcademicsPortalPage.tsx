@@ -6,9 +6,12 @@ import {
   fetchStudentAcademics,
   postStudentWithdraw,
   fetchStudentTranscriptPreview,
+  fetchStudentProgramProgress,
   type StudentAcademicsResponse,
   type StudentTranscriptPreviewResponse,
+  type StudentProgramProgressResponse,
 } from '../../lib/api'
+import { ProgramProgressPanel } from '../../components/academics/ProgramProgressPanel'
 import { CourseFeedbackCell } from '../../components/academics/CourseFeedbackCell'
 import { CourseFeedbackModal } from '../../components/academics/CourseFeedbackModal'
 import {
@@ -88,6 +91,9 @@ export function AcademicsPortalPage() {
   const [withdrawTarget, setWithdrawTarget] = useState<EnrollmentHistoryRow | null>(null)
   const [withdrawing, setWithdrawing] = useState(false)
   const [withdrawError, setWithdrawError] = useState<string | null>(null)
+  const [programProgress, setProgramProgress] = useState<StudentProgramProgressResponse | null>(null)
+  const [programProgressError, setProgramProgressError] = useState<string | null>(null)
+  const [programProgressLoading, setProgramProgressLoading] = useState(false)
 
   useEffect(() => {
     const id = currentStudentId?.trim()
@@ -98,6 +104,9 @@ export function AcademicsPortalPage() {
       setTranscriptPreview(null)
       setTranscriptPreviewError(null)
       setTranscriptPreviewLoading(false)
+      setProgramProgress(null)
+      setProgramProgressError(null)
+      setProgramProgressLoading(false)
       return
     }
 
@@ -108,8 +117,11 @@ export function AcademicsPortalPage() {
     setTranscriptPreview(null)
     setTranscriptPreviewError(null)
     setTranscriptPreviewLoading(true)
+    setProgramProgress(null)
+    setProgramProgressError(null)
+    setProgramProgressLoading(true)
 
-    ;(async () => {
+    void (async () => {
       try {
         const data = await fetchStudentAcademics(id, { signal: ac.signal })
         if (ac.signal.aborted) return
@@ -124,9 +136,9 @@ export function AcademicsPortalPage() {
       } finally {
         if (!ac.signal.aborted) setAcademicsLoading(false)
       }
-    })()
 
-    ;(async () => {
+      if (ac.signal.aborted) return
+
       try {
         const data = await fetchStudentTranscriptPreview(id, { signal: ac.signal })
         if (ac.signal.aborted) return
@@ -140,6 +152,23 @@ export function AcademicsPortalPage() {
         )
       } finally {
         if (!ac.signal.aborted) setTranscriptPreviewLoading(false)
+      }
+
+      if (ac.signal.aborted) return
+
+      try {
+        const data = await fetchStudentProgramProgress(id, { signal: ac.signal })
+        if (ac.signal.aborted) return
+        setProgramProgress(data)
+        setProgramProgressError(null)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setProgramProgress(null)
+        setProgramProgressError(
+          e instanceof Error ? e.message : t('couldNotLoadProgramProgress'),
+        )
+      } finally {
+        if (!ac.signal.aborted) setProgramProgressLoading(false)
       }
     })()
 
@@ -338,6 +367,15 @@ export function AcademicsPortalPage() {
 
       {!showEmpty && tab === 'history' ? (
         <>
+          <div className="portal-stack portal-academics-program-progress-outer">
+            <ProgramProgressPanel
+              t={t}
+              loading={programProgressLoading}
+              error={programProgressError}
+              progress={programProgress}
+              onRetry={() => setReloadKey((k) => k + 1)}
+            />
+          </div>
           {academicsBlocking ? (
             <section className="portal-card portal-profile-state" aria-busy="true" aria-live="polite">
               <p className="portal-profile-state__title">{t('loadingRegistrationHistory')}</p>
