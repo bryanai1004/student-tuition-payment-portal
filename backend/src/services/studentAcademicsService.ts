@@ -97,13 +97,16 @@ function buildMergedPayload(
   const combinedAcademicHistory: CombinedAcademicHistoryItem[] =
     courseRecords.map((r) => courseRecordToEnrollmentItem(r));
 
+  /** Unofficial transcript lines: legacy `marks` attempts plus portal rows (incl. W after withdraw). */
+  const transcript = courseRecords.map(courseRecordToTranscriptItem);
+
   return {
     studentId,
     studentName,
     currentTerm,
     availableTerms: buildAvailableTermsFromCourseRecords(courseRecords),
     currentSchedule,
-    transcript: academicAttemptsFromMarks.map(courseRecordToTranscriptItem),
+    transcript,
     enrollmentHistory: combinedAcademicHistory,
     courseRecords,
   };

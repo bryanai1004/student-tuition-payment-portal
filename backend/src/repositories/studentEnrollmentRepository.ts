@@ -323,7 +323,12 @@ export async function enrollStudentInSections(
       );
       if (existing != null) {
         const st = normalizeEnrollmentStatusForCompare(existing.status);
-        if (st === "active" || st === "") {
+        if (
+          st === "active" ||
+          st === "" ||
+          st === "enrolled" ||
+          st === "registered"
+        ) {
           continue;
         }
         if (st === "withdrawn") {
@@ -374,9 +379,21 @@ export async function enrollStudentInSections(
   }
 }
 
-/** Active portal enrollment: legacy rows may omit `status` (treated as active). */
-const SQL_ACTIVE_PORTAL_ENROLLMENT_E =
-  "(e.status IS NULL OR LOWER(TRIM(e.status)) = 'active')";
+/**
+ * Active portal enrollment: legacy rows may omit `status` (treated as active).
+ * Includes enrolled/registered so timetable and withdraw match Academics `can_withdraw` rules.
+ */
+const SQL_ACTIVE_PORTAL_ENROLLMENT_E = `(
+  e.status IS NULL
+  OR LOWER(TRIM(CONVERT(IFNULL(e.status, '') USING utf8mb4))) COLLATE utf8mb4_unicode_ci IN (
+    CONVERT('active' USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+    CONVERT('enrolled' USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+    CONVERT('registered' USING utf8mb4) COLLATE utf8mb4_unicode_ci
+  )
+)`;
+
+/** Same statuses as {@link SQL_ACTIVE_PORTAL_ENROLLMENT_E} — rows eligible for soft-withdraw UPDATE. */
+const SQL_WITHDRAWABLE_PORTAL_ENROLLMENT_E = SQL_ACTIVE_PORTAL_ENROLLMENT_E;
 
 export type StudentEnrolledSectionsQueryMeta = {
   activePortalEnrollmentCount: number;
@@ -759,13 +776,18 @@ export async function warmCourseSectionsColumnMetadataCache(): Promise<void> {
   await listCourseSectionsColumns();
 }
 
+/** Non-empty trimmed text as utf8mb4 (avoids latin1 vs utf8mb4 in outer COALESCE). */
+function utf8mb4TrimNonEmpty(columnRef: string): string {
+  return `NULLIF(TRIM(CONVERT(IFNULL(${columnRef}, '') USING utf8mb4)), CONVERT('' USING utf8mb4))`;
+}
+
 function titleExpr(alias: "cs_direct" | "cs_leg", columns: Set<string>): string {
   const candidates: string[] = [];
-  if (columns.has("chinese_title")) candidates.push(`NULLIF(TRIM(${alias}.chinese_title), '')`);
-  if (columns.has("course_title_zh")) candidates.push(`NULLIF(TRIM(${alias}.course_title_zh), '')`);
-  if (columns.has("course_title")) candidates.push(`NULLIF(TRIM(${alias}.course_title), '')`);
-  if (columns.has("title_zh")) candidates.push(`NULLIF(TRIM(${alias}.title_zh), '')`);
-  if (columns.has("title")) candidates.push(`NULLIF(TRIM(${alias}.title), '')`);
+  if (columns.has("chinese_title")) candidates.push(utf8mb4TrimNonEmpty(`${alias}.chinese_title`));
+  if (columns.has("course_title_zh")) candidates.push(utf8mb4TrimNonEmpty(`${alias}.course_title_zh`));
+  if (columns.has("course_title")) candidates.push(utf8mb4TrimNonEmpty(`${alias}.course_title`));
+  if (columns.has("title_zh")) candidates.push(utf8mb4TrimNonEmpty(`${alias}.title_zh`));
+  if (columns.has("title")) candidates.push(utf8mb4TrimNonEmpty(`${alias}.title`));
   if (candidates.length === 0) return "NULL";
   return `COALESCE(${candidates.join(", ")})`;
 }
@@ -785,12 +807,13 @@ export type AdminStudentRegistrationHistoryRow = {
   year: number;
 };
 
-function portalQuarterOrderSql(termSql: string): string {
-  return `CASE UPPER(TRIM(${termSql}))
-    WHEN 'FALL' THEN 4
-    WHEN 'SUMMER' THEN 3
-    WHEN 'SPRING' THEN 2
-    WHEN 'WINTER' THEN 1
+function portalQuarterOrderSql(termColumnRef: string): string {
+  const t = `CONVERT(TRIM(IFNULL(${termColumnRef}, '')) USING utf8mb4)`;
+  return `CASE
+    WHEN UPPER(${t}) = CONVERT('FALL' USING utf8mb4) THEN 4
+    WHEN UPPER(${t}) = CONVERT('SUMMER' USING utf8mb4) THEN 3
+    WHEN UPPER(${t}) = CONVERT('SPRING' USING utf8mb4) THEN 2
+    WHEN UPPER(${t}) = CONVERT('WINTER' USING utf8mb4) THEN 1
     ELSE 0
   END`;
 }
@@ -915,11 +938,19 @@ export async function findLatestPortalEnrollmentTermYear(
      WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
           CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
      ORDER BY e.year DESC,
-       CASE UPPER(TRIM(e.term))
-         WHEN 'FALL' THEN 4
-         WHEN 'SUMMER' THEN 3
-         WHEN 'SPRING' THEN 2
-         WHEN 'WINTER' THEN 1
+       CASE
+         WHEN UPPER(CONVERT(TRIM(IFNULL(e.term, '')) USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+              CONVERT('FALL' USING utf8mb4) COLLATE utf8mb4_unicode_ci
+           THEN 4
+         WHEN UPPER(CONVERT(TRIM(IFNULL(e.term, '')) USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+              CONVERT('SUMMER' USING utf8mb4) COLLATE utf8mb4_unicode_ci
+           THEN 3
+         WHEN UPPER(CONVERT(TRIM(IFNULL(e.term, '')) USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+              CONVERT('SPRING' USING utf8mb4) COLLATE utf8mb4_unicode_ci
+           THEN 2
+         WHEN UPPER(CONVERT(TRIM(IFNULL(e.term, '')) USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+              CONVERT('WINTER' USING utf8mb4) COLLATE utf8mb4_unicode_ci
+           THEN 1
          ELSE 0
        END DESC
      LIMIT 1`,
@@ -955,12 +986,13 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
         ${directTitleExpr},
         ${legacyTitleExpr},
         CASE
-          WHEN UPPER(TRIM(CONVERT(COALESCE(e.schedule_track, cs_direct.schedule_track, cs_leg.schedule_track) USING utf8mb4))) = CONVERT('CN' USING utf8mb4)
-            THEN NULLIF(TRIM(cat.chi_name), '')
+          WHEN UPPER(TRIM(CONVERT(COALESCE(e.schedule_track, cs_direct.schedule_track, cs_leg.schedule_track) USING utf8mb4))) =
+               CONVERT('CN' USING utf8mb4)
+            THEN ${utf8mb4TrimNonEmpty("cat.chi_name")}
           ELSE NULL
         END,
-        NULLIF(TRIM(cat.eng_name), ''),
-        NULLIF(TRIM(pc.title), '')
+        ${utf8mb4TrimNonEmpty("cat.eng_name")},
+        ${utf8mb4TrimNonEmpty("pc.title")}
       ) AS display_course_title,
       TRIM(e.term) AS term,
       e.year,
@@ -978,10 +1010,10 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
       CASE
         WHEN (
           e.status IS NULL
-          OR LOWER(TRIM(CONVERT(IFNULL(e.status, '') USING utf8mb4))) IN (
-            CONVERT('active' USING utf8mb4),
-            CONVERT('enrolled' USING utf8mb4),
-            CONVERT('registered' USING utf8mb4)
+          OR LOWER(TRIM(CONVERT(IFNULL(e.status, '') USING utf8mb4))) COLLATE utf8mb4_unicode_ci IN (
+            CONVERT('active' USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+            CONVERT('enrolled' USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+            CONVERT('registered' USING utf8mb4) COLLATE utf8mb4_unicode_ci
           )
         )
         AND e.withdrawn_at IS NULL
@@ -1021,7 +1053,7 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
         ORDER BY
           (
             cs2.weekday IS NULL
-            OR TRIM(CONVERT(IFNULL(cs2.weekday, '') USING utf8mb4)) = ''
+            OR LENGTH(TRIM(CONVERT(IFNULL(cs2.weekday, '') USING utf8mb4))) = 0
             OR cs2.start_time IS NULL
             OR cs2.end_time IS NULL
           ) ASC,
@@ -1038,14 +1070,22 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
     WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
           CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
     ORDER BY e.year DESC,
-      CASE UPPER(TRIM(e.term))
-        WHEN 'FALL' THEN 4
-        WHEN 'SUMMER' THEN 3
-        WHEN 'SPRING' THEN 2
-        WHEN 'WINTER' THEN 1
+      CASE
+        WHEN UPPER(CONVERT(TRIM(IFNULL(e.term, '')) USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+             CONVERT('FALL' USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          THEN 4
+        WHEN UPPER(CONVERT(TRIM(IFNULL(e.term, '')) USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+             CONVERT('SUMMER' USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          THEN 3
+        WHEN UPPER(CONVERT(TRIM(IFNULL(e.term, '')) USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+             CONVERT('SPRING' USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          THEN 2
+        WHEN UPPER(CONVERT(TRIM(IFNULL(e.term, '')) USING utf8mb4)) COLLATE utf8mb4_unicode_ci =
+             CONVERT('WINTER' USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          THEN 1
         ELSE 0
       END DESC,
-      pc.course_code ASC,
+      CONVERT(TRIM(pc.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci ASC,
       e.id ASC
   `;
   const [rows] = await pool.query<RowDataPacket[]>(sql, [sid]);
@@ -1118,6 +1158,160 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
   });
 }
 
+/** Result of {@link precheckPortalWithdrawalByCourseSection} / legacy course-only precheck. */
+export type PortalWithdrawalPrecheckCode =
+  | "allowed"
+  | "not_found"
+  | "deadline_passed"
+  | "already_withdrawn"
+  | "completed"
+  | "not_withdrawable_status";
+
+/**
+ * Server-side withdrawal rules aligned with Academics listing: matching enrollment row,
+ * withdrawable status (active/enrolled/registered), and academic term `withdraw_deadline`.
+ */
+export async function precheckPortalWithdrawalByCourseSection(
+  studentExternalId: string,
+  term: string,
+  year: number,
+  courseSectionId: number,
+): Promise<PortalWithdrawalPrecheckCode> {
+  const sid = studentExternalId.trim();
+  const t = term.trim();
+  const csid = Math.trunc(Number(courseSectionId));
+  if (!Number.isFinite(csid) || csid <= 0) return "not_found";
+
+  const sql = `
+    SELECT
+      LOWER(TRIM(CONVERT(IFNULL(e.status, '') USING utf8mb4))) COLLATE utf8mb4_unicode_ci AS st,
+      e.withdrawn_at AS withdrawn_at,
+      CASE
+        WHEN at.withdraw_deadline IS NOT NULL
+          AND DATE(at.withdraw_deadline) < CURRENT_DATE()
+        THEN 1
+        ELSE 0
+      END AS deadline_passed,
+      CASE WHEN ${SQL_WITHDRAWABLE_PORTAL_ENROLLMENT_E} THEN 1 ELSE 0 END AS withdrawable
+    FROM portal_enrollments e
+    INNER JOIN portal_courses pc ON pc.course_id = e.course_id
+    LEFT JOIN academic_terms at
+      ON CONVERT(TRIM(at.term_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+         CONVERT(TRIM(e.term) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND at.year = e.year
+    WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.term COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.year = ?
+      AND (
+        e.course_section_id = ?
+        OR (
+          e.course_section_id IS NULL
+          AND EXISTS (
+            SELECT 1 FROM course_sections cs0
+            WHERE cs0.id = ?
+              AND TRIM(cs0.course_code) COLLATE utf8mb4_unicode_ci =
+                  TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+              AND TRIM(cs0.term) COLLATE utf8mb4_unicode_ci =
+                  TRIM(e.term) COLLATE utf8mb4_unicode_ci
+              AND cs0.year = e.year
+          )
+          AND ? = (
+            SELECT MIN(cs2.id)
+            FROM course_sections cs2
+            WHERE TRIM(cs2.course_code) COLLATE utf8mb4_unicode_ci =
+                  TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci
+              AND TRIM(cs2.term) COLLATE utf8mb4_unicode_ci =
+                  TRIM(e.term) COLLATE utf8mb4_unicode_ci
+              AND cs2.year = e.year
+          )
+        )
+      )
+    LIMIT 1
+  `;
+  const [rows] = await pool.query<RowDataPacket[]>(sql, [
+    sid,
+    t,
+    year,
+    csid,
+    csid,
+    csid,
+  ]);
+  const r = rows[0];
+  if (r == null) return "not_found";
+
+  const withdrawnAt = r.withdrawn_at;
+  if (withdrawnAt != null && String(withdrawnAt).trim() !== "") {
+    return "already_withdrawn";
+  }
+  const st = String(r.st ?? "").trim().toLowerCase();
+  if (st === "withdrawn") return "already_withdrawn";
+  if (st === "completed") return "completed";
+
+  if (Number(r.deadline_passed) === 1) return "deadline_passed";
+
+  if (Number(r.withdrawable) !== 1) return "not_withdrawable_status";
+
+  return "allowed";
+}
+
+export async function precheckPortalWithdrawalLegacyCourseOnly(
+  studentExternalId: string,
+  courseCode: string,
+  term: string,
+  year: number,
+): Promise<PortalWithdrawalPrecheckCode> {
+  const sid = studentExternalId.trim();
+  const code = courseCode.trim();
+  const t = term.trim();
+
+  const sql = `
+    SELECT
+      LOWER(TRIM(CONVERT(IFNULL(e.status, '') USING utf8mb4))) COLLATE utf8mb4_unicode_ci AS st,
+      e.withdrawn_at AS withdrawn_at,
+      CASE
+        WHEN at.withdraw_deadline IS NOT NULL
+          AND DATE(at.withdraw_deadline) < CURRENT_DATE()
+        THEN 1
+        ELSE 0
+      END AS deadline_passed,
+      CASE WHEN ${SQL_WITHDRAWABLE_PORTAL_ENROLLMENT_E} THEN 1 ELSE 0 END AS withdrawable
+    FROM portal_enrollments e
+    INNER JOIN portal_courses pc ON pc.course_id = e.course_id
+    LEFT JOIN academic_terms at
+      ON CONVERT(TRIM(at.term_name) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+         CONVERT(TRIM(e.term) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND at.year = e.year
+    WHERE CONVERT(TRIM(e.student_external_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+          CONVERT(TRIM(?) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND pc.course_code COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.term COLLATE utf8mb4_unicode_ci =
+          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      AND e.year = ?
+      AND e.course_section_id IS NULL
+    LIMIT 1
+  `;
+  const [rows] = await pool.query<RowDataPacket[]>(sql, [sid, code, t, year]);
+  const r = rows[0];
+  if (r == null) return "not_found";
+
+  const withdrawnAt = r.withdrawn_at;
+  if (withdrawnAt != null && String(withdrawnAt).trim() !== "") {
+    return "already_withdrawn";
+  }
+  const st = String(r.st ?? "").trim().toLowerCase();
+  if (st === "withdrawn") return "already_withdrawn";
+  if (st === "completed") return "completed";
+
+  if (Number(r.deadline_passed) === 1) return "deadline_passed";
+
+  if (Number(r.withdrawable) !== 1) return "not_withdrawable_status";
+
+  return "allowed";
+}
+
 /**
  * Soft-withdraws the enrollment row for one `course_sections.id` (and matching calendar term/year).
  * Only `portal_enrollments` is updated.
@@ -1148,7 +1342,7 @@ export async function softWithdrawPortalEnrollmentByCourseSection(
       AND e.term COLLATE utf8mb4_unicode_ci =
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.year = ?
-      AND (e.status IS NULL OR LOWER(TRIM(e.status)) = 'active')
+      AND ${SQL_WITHDRAWABLE_PORTAL_ENROLLMENT_E}
       AND (
         e.course_section_id = ?
         OR (
@@ -1212,7 +1406,7 @@ export async function deletePortalEnrollmentByStudentCourseTermYear(
           CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
       AND e.year = ?
       AND e.course_section_id IS NULL
-      AND (e.status IS NULL OR LOWER(TRIM(e.status)) = 'active')
+      AND ${SQL_WITHDRAWABLE_PORTAL_ENROLLMENT_E}
   `;
   const [result] = await pool.query<ResultSetHeader>(sql, [sid, code, t, year]);
   return result.affectedRows;

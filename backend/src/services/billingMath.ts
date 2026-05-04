@@ -15,6 +15,7 @@ export const MAX_INSTALLMENTS_PER_QUARTER = 3;
 export const MAX_INSTALLMENT_SERVICE_FEE_PER_QUARTER =
   INSTALLMENT_SERVICE_FEE_PER_INSTALLMENT * MAX_INSTALLMENTS_PER_QUARTER;
 
+/** Per-term fees included with portal-synthesized tuition when enrollments exist; see `studentLedgerService` merge. */
 export const STANDARD_TERM_FEES: BillingLineItem[] = [
   { description: "Technology / Facility Fee", amount: 50, category: "fees" },
   { description: "Malpractice Insurance", amount: 50, category: "fees" },

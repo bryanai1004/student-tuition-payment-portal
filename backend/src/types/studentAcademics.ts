@@ -1,8 +1,10 @@
 /**
  * GET /api/students/:studentId/academics — legacy `marks` + merged `portal_enrollments`.
  *
- * Domain: `transcript` is marks-only (didactic history). `enrollmentHistory` is a **combined** timeline of
- * portal registration rows and marks attempts — the JSON key is historical; see {@link CombinedAcademicHistoryItem}.
+ * Domain: `transcript` is the **merged** unofficial transcript slice (marks attempts plus portal rows,
+ * including withdrawn portal rows with grade W). Portal rows are omitted when legacy marks already show
+ * a completed grade for the same course/term (`legacyCompletedBlocksPortalRow`). `enrollmentHistory` is the
+ * same merge as timeline rows — the JSON key is historical; see {@link CombinedAcademicHistoryItem}.
  */
 
 /** Deterministic row status from legacy `marks` (and merged transcript uses the same for `marks`/`clinic`). */
@@ -119,7 +121,7 @@ export type StudentAcademicsResponse = {
   currentTerm: StudentAcademicsCurrentTerm | null;
   availableTerms: StudentAcademicsAvailableTerm[];
   currentSchedule: StudentAcademicsScheduleItem[];
-  /** Didactic history from `marks` only — not the full transcript preview (no `clinic` merge here). */
+  /** Unofficial transcript lines: merged `marks` + `portal` (incl. W on withdrawn portal rows). */
   transcript: StudentAcademicsTranscriptItem[];
   /**
    * Combined portal registration rows + marks attempts (sorted with transcript preview ordering).

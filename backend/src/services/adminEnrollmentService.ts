@@ -1,8 +1,13 @@
+/**
+ * Portal enrollment removal is always a **soft withdraw** (`status = withdrawn`, `withdrawn_at` set).
+ * No `DELETE` from `portal_enrollments` on this path — rows are retained for audit and unofficial W display.
+ */
 import { getAcademicTermById } from "../repositories/academicTermRepository.js";
 import {
   deletePortalEnrollmentByStudentCourseTermYear,
   softWithdrawPortalEnrollmentByCourseSection,
 } from "../repositories/studentEnrollmentRepository.js";
+import { assertPortalWithdrawalAllowed } from "./portalWithdrawalEligibilityService.js";
 import { emitEnrollmentChanged } from "./realtimeEventBus.js";
 
 export async function removeAdminPortalEnrollment(params: {
@@ -33,6 +38,18 @@ export async function removeAdminPortalEnrollment(params: {
   const term = await getAcademicTermById(tid);
   if (term == null) {
     return { ok: false, error: "Invalid or unknown academic_term_id." };
+  }
+
+  const eligibility = await assertPortalWithdrawalAllowed({
+    studentId: sid,
+    termName: term.term_name,
+    year: term.year,
+    courseSectionId: Number.isFinite(csid) && csid > 0 ? csid : null,
+    courseCodeForLegacy:
+      Number.isFinite(csid) && csid > 0 ? null : code !== "" ? code : null,
+  });
+  if (!eligibility.ok) {
+    return { ok: false, error: eligibility.error };
   }
 
   let removedCount = 0;

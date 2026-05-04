@@ -259,6 +259,13 @@ export async function postStudentWithdraw(
       res.status(400).json({ error: result.error });
       return;
     }
+    if (result.removedCount < 1) {
+      res.status(400).json({
+        error:
+          "No active enrollment was withdrawn. Refresh and try again, or verify the withdraw deadline.",
+      });
+      return;
+    }
     res.json({ success: true, removedCount: result.removedCount });
   } catch (e) {
     console.error("[student/withdraw] failed:", e);

@@ -503,6 +503,11 @@ function buildPortalLedgerRowsFromContext(ctx: AccountContext): LedgerRowDto[] {
     });
   }
 
+  /**
+   * Standard term fees and installment service fee apply only when there is at least one **active**
+   * enrollment in context. If the student withdraws from all courses, `ctx.enrollments` becomes empty and
+   * these synthesized fee lines disappear until a new enrollment exists (product policy may differ).
+   */
   if (ctx.enrollments.length > 0) {
     for (const fee of STANDARD_TERM_FEES) {
       rows.push({

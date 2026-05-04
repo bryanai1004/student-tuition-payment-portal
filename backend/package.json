@@ -23,7 +23,9 @@
     "pw:audit-amu-2026": "tsx scripts/audit-amu-2026-password-migration.ts",
     "pw:repair-amu-2026": "tsx scripts/audit-amu-2026-password-migration.ts --repair",
     "job:clinical-hold-cleanup": "tsx scripts/runClinicalPaymentHoldCleanup.ts",
-    "admin:create": "tsx scripts/create-admin.ts"
+    "admin:create": "tsx scripts/create-admin.ts",
+    "smoke:academics": "tsx scripts/smoke-academics-progress.ts",
+    "smoke:withdrawal": "tsx scripts/smoke-portal-withdrawal.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

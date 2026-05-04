@@ -554,6 +554,10 @@ export function portalEnrollmentRowToAcademicCourseRecord(
   const scheduleTrack = row.schedule_track;
   const portalEnrollmentRowId = row.portal_enrollment_id;
 
+  /**
+   * Withdrawn portal rows show grade **W** and do not contribute earned credits to program-progress
+   * (only `status === "completed"` marks rows count). GPA helpers exclude **W** from grade-point averages.
+   */
   if (row.status === "withdrawn") {
     return {
       studentId,

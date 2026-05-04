@@ -73,6 +73,13 @@ export async function deleteAdminPortalEnrollmentHandler(
       res.status(400).json({ error: result.error });
       return;
     }
+    if (result.removedCount < 1) {
+      res.status(400).json({
+        error:
+          "No active enrollment was withdrawn. Verify section id, term, deadline, and enrollment status.",
+      });
+      return;
+    }
     res.json({ success: true, removedCount: result.removedCount });
   } catch (e) {
     console.error("[admin/enrollments] delete failed:", e);
