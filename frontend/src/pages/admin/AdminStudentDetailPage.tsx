@@ -16,6 +16,7 @@ import {
   fetchAdminStudentPhotoUrl,
   fetchAdminStudentDocuments,
   fetchCurrentAcademicTerm,
+  fetchStudentProgramProgress,
   resetAdminStudentDocumentRequirement,
   resetAllAdminStudentDocuments,
   uploadAdminStudentPhoto,
@@ -26,7 +27,10 @@ import {
   type DocumentRequirementType,
   type StudentClinicalProgressResponse,
   type StudentDocumentsResponse,
+  type StudentProgramProgressResponse,
 } from '../../lib/api'
+import { useStudentPortalT } from '../../LanguageContext'
+import { ProgramProgressPanel } from '../../components/academics/ProgramProgressPanel'
 import { groupRowsByTermYear } from '../../lib/academicsTranscriptDisplay'
 import { socket, type EnrollmentChangedEvent } from '../../lib/socket'
 
@@ -183,6 +187,7 @@ function profileInitials(name: string): string {
 export function AdminStudentDetailPage() {
   const { studentId: studentIdParam } = useParams<{ studentId: string }>()
   const studentId = studentIdParam ?? ''
+  const t = useStudentPortalT()
 
   const [detail, setDetail] = useState<AdminStudentDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -229,6 +234,11 @@ export function AdminStudentDetailPage() {
   const [clinicalProgressError, setClinicalProgressError] = useState<string | null>(
     null,
   )
+  const [programProgress, setProgramProgress] =
+    useState<StudentProgramProgressResponse | null>(null)
+  const [programProgressLoading, setProgramProgressLoading] = useState(false)
+  const [programProgressError, setProgramProgressError] = useState<string | null>(null)
+  const [programProgressReloadKey, setProgramProgressReloadKey] = useState(0)
   const [resettingRequirement, setResettingRequirement] =
     useState<DocumentRequirementType | null>(null)
   const [resettingAllDocuments, setResettingAllDocuments] = useState(false)
@@ -263,6 +273,10 @@ export function AdminStudentDetailPage() {
     setClinicalProgressData(null)
     setClinicalProgressLoading(false)
     setClinicalProgressError(null)
+    setProgramProgress(null)
+    setProgramProgressLoading(false)
+    setProgramProgressError(null)
+    setProgramProgressReloadKey(0)
     setResettingRequirement(null)
     setResettingAllDocuments(false)
     setLoaSelection('no')
@@ -573,6 +587,31 @@ export function AdminStudentDetailPage() {
     })()
     return () => ac.abort()
   }, [activeTab, studentId, reloadKey])
+
+  useEffect(() => {
+    if (activeTab !== 'profile' || !studentId.trim()) return
+    const ac = new AbortController()
+    setProgramProgressLoading(true)
+    setProgramProgressError(null)
+    ;(async () => {
+      try {
+        const data = await fetchStudentProgramProgress(studentId, {
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        setProgramProgress(data)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setProgramProgress(null)
+        setProgramProgressError(
+          e instanceof Error ? e.message : 'Could not load program progress.',
+        )
+      } finally {
+        if (!ac.signal.aborted) setProgramProgressLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [activeTab, studentId, programProgressReloadKey])
 
   useEffect(() => {
     if (activeTab !== 'profile' || !detail || !studentId.trim()) {
@@ -1367,6 +1406,16 @@ export function AdminStudentDetailPage() {
                   </dl>
                 </div>
               </section>
+
+              <div className="portal-stack portal-academics-program-progress-outer">
+                <ProgramProgressPanel
+                  t={t}
+                  loading={programProgressLoading}
+                  error={programProgressError}
+                  progress={programProgress}
+                  onRetry={() => setProgramProgressReloadKey((k) => k + 1)}
+                />
+              </div>
 
               <section
                 className="portal-card portal-stack"

@@ -13,12 +13,25 @@ function formatAmount(value: number, isHours: boolean): string {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
 }
 
+/** SVG viewBox center and radius (must match pieSectorPath / full-circle slices). */
+const PIE_CX = 50
+const PIE_CY = 50
+const PIE_R = 42
+
+/** When span is ~1, arc endpoints coincide at the top of the circle — the path is invisible. */
+const PIE_FULL_SLICE_EPS = 1e-5
+
+function isFullPieRing(fracStart: number, fracEnd: number): boolean {
+  return fracEnd - fracStart >= 1 - PIE_FULL_SLICE_EPS
+}
+
 /** Pie slice from center; fractions are [0,1] of the full circle starting at top (−90°). */
 function pieSectorPath(fracStart: number, fracEnd: number): string | null {
   if (!(fracEnd > fracStart)) return null
-  const cx = 50
-  const cy = 50
-  const r = 42
+  if (isFullPieRing(fracStart, fracEnd)) return null
+  const cx = PIE_CX
+  const cy = PIE_CY
+  const r = PIE_R
   const clamp = (f: number) => Math.min(1, Math.max(0, f))
   const toAngle = (f: number) => -Math.PI / 2 + clamp(f) * 2 * Math.PI
   const a0 = toAngle(fracStart)
@@ -101,9 +114,16 @@ export function ProgramProgressPanel({
   const fC = req > 0 ? Math.min(1, Math.max(0, earned / req)) : 0
   const fI = req > 0 ? Math.min(1 - fC, Math.max(0, inProgress / req)) : 0
 
-  const pathRemaining = pieSectorPath(fC + fI, 1)
+  const remA = fC + fI
+  const remB = 1
+  const pathRemaining = pieSectorPath(remA, remB)
+  const remFull = remB - remA >= 1 - PIE_FULL_SLICE_EPS
+
   const pathInProgress = pieSectorPath(fC, fC + fI)
+  const ipFull = fI >= 1 - PIE_FULL_SLICE_EPS
+
   const pathCompleted = pieSectorPath(0, fC)
+  const compFull = fC >= 1 - PIE_FULL_SLICE_EPS
 
   const completedFrac = fC
   const pctLabel =
@@ -174,7 +194,16 @@ export function ProgramProgressPanel({
             aria-describedby={pieHover != null ? 'program-progress-pie-tooltip' : undefined}
           >
             <title>{caption}</title>
-            {pathRemaining ? (
+            {remFull ? (
+              <circle
+                className="portal-academics-program-progress__slice portal-academics-program-progress__slice--remaining portal-academics-program-progress__slice--interactive"
+                cx={PIE_CX}
+                cy={PIE_CY}
+                r={PIE_R}
+                aria-hidden
+                onMouseEnter={() => setPieHover('remaining')}
+              />
+            ) : pathRemaining ? (
               <path
                 className="portal-academics-program-progress__slice portal-academics-program-progress__slice--remaining portal-academics-program-progress__slice--interactive"
                 d={pathRemaining}
@@ -182,7 +211,16 @@ export function ProgramProgressPanel({
                 onMouseEnter={() => setPieHover('remaining')}
               />
             ) : null}
-            {pathInProgress ? (
+            {ipFull ? (
+              <circle
+                className="portal-academics-program-progress__slice portal-academics-program-progress__slice--in-progress portal-academics-program-progress__slice--interactive"
+                cx={PIE_CX}
+                cy={PIE_CY}
+                r={PIE_R}
+                aria-hidden
+                onMouseEnter={() => setPieHover('inProgress')}
+              />
+            ) : pathInProgress ? (
               <path
                 className="portal-academics-program-progress__slice portal-academics-program-progress__slice--in-progress portal-academics-program-progress__slice--interactive"
                 d={pathInProgress}
@@ -190,7 +228,16 @@ export function ProgramProgressPanel({
                 onMouseEnter={() => setPieHover('inProgress')}
               />
             ) : null}
-            {pathCompleted ? (
+            {compFull ? (
+              <circle
+                className="portal-academics-program-progress__slice portal-academics-program-progress__slice--completed portal-academics-program-progress__slice--interactive"
+                cx={PIE_CX}
+                cy={PIE_CY}
+                r={PIE_R}
+                aria-hidden
+                onMouseEnter={() => setPieHover('completed')}
+              />
+            ) : pathCompleted ? (
               <path
                 className="portal-academics-program-progress__slice portal-academics-program-progress__slice--completed portal-academics-program-progress__slice--interactive"
                 d={pathCompleted}
