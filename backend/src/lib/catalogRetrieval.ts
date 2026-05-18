@@ -100,6 +100,7 @@ export function expandCatalogQueryForEmbedding(
   }
   if (/学费|退款|退费|缴费|付款|截止|deadline|payment/i.test(bundle)) {
     add("tuition refund payment deadline fees installment");
+    add("Alhambra Medical University Tuition Payment Portal");
   }
   if (/\btuition\b|\brefund\b|\bpayment\s+deadline\b/i.test(lower)) {
     add("学费 退款 缴费 截止日期");

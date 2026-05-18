@@ -20,6 +20,7 @@ import {
   logTuitionSummaryBreakdown,
 } from "./tuitionBalanceService.js";
 import type { LedgerRowForTuitionFlow } from "./ledgerTuitionFlowMath.js";
+import { validatePaymentBaseAmount } from "./paymentAmountValidation.js";
 
 type OpaqueDataInput = {
   dataDescriptor: string;
@@ -544,15 +545,14 @@ export async function processAuthorizeNetStudentPayment(input: {
         : input.chargeType === "exam_fee"
           ? summary.examFeeCharge.amountDue
           : summary.lateFeeCharge.amountDue;
-  const maxAllowedForCharge =
-    input.chargeType === "tuition" && input.paymentPlan === "installment"
-      ? roundToMoney(selectedDue + 15)
-      : selectedDue;
-  if (selectedDue <= 0) {
-    throw new Error("There is no outstanding balance for the selected charge.");
-  }
-  if (amount > maxAllowedForCharge) {
-    throw new Error("Payment amount cannot exceed the amount due for this charge.");
+  const amountCheck = validatePaymentBaseAmount({
+    amount,
+    chargeType: input.chargeType,
+    paymentPlan: input.paymentPlan,
+    amountDue: selectedDue,
+  });
+  if (!amountCheck.ok) {
+    throw new Error(amountCheck.error);
   }
   const cardFunding = inferCardFundingFromBinPrefix(input.cardBinPrefix);
   const { base, fee, total } = totalChargeWithProcessingFee(amount, cardFunding);

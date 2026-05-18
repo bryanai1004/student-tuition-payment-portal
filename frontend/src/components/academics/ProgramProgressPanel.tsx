@@ -49,14 +49,14 @@ function pieSectorPath(fracStart: number, fracEnd: number): string | null {
 
 function bucketLabelKey(id: StudentProgramProgressResponse['buckets'][number]['id']): StudentPortalKey {
   switch (id) {
-    case 'didactic':
-      return 'programProgressBucketDidactic'
-    case 'lab':
-      return 'programProgressBucketLab'
+    case 'core':
+      return 'programProgressBucketCore'
+    case 'elective':
+      return 'programProgressBucketElective'
     case 'clinical':
       return 'programProgressBucketClinical'
     default:
-      return 'programProgressBucketDidactic'
+      return 'programProgressBucketCore'
   }
 }
 

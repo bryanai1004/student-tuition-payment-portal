@@ -2,6 +2,7 @@ import type { CourseRecord } from "../types/studentAccount.js";
 
 /**
  * MAHM catalog-style course list (didactic/lab: units × $200; clinical: hours × $17).
+ * Align with `knowledge/sources/MAHM_2025-26_Catalog.pdf` — see `knowledge/SOURCE_INDEX.md`.
  */
 export const MAHM_COURSES: CourseRecord[] = [
   {

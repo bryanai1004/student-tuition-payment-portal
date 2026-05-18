@@ -1,5 +1,11 @@
-import { useMemo } from 'react'
+import { useEffect, useState } from 'react'
+import { ProgramProgressPanel } from '../../components/academics/ProgramProgressPanel'
+import { useAccount } from '../../context/AccountContext'
 import { useStudentPortalT } from '../../LanguageContext'
+import {
+  fetchStudentProgramProgress,
+  type StudentProgramProgressResponse,
+} from '../../lib/api'
 
 const MILESTONE_KEYS = [
   { labelKey: 'milestonePreClinicalCore' as const, statusKey: 'milestoneStatusInProgress' as const },
@@ -9,53 +15,62 @@ const MILESTONE_KEYS = [
 
 export function AcademicProgressPage() {
   const t = useStudentPortalT()
-  const completed = 48
-  const required = 180
-  const pct = Math.round((completed / required) * 100)
+  const { currentStudentId } = useAccount()
+  const studentId = currentStudentId?.trim() ?? ''
 
-  const caption = useMemo(
-    () =>
-      t('programCompletionPercentCaption')
-        .replace('{pct}', String(pct))
-        .replace('{completed}', String(completed))
-        .replace('{required}', String(required)),
-    [t, pct, completed, required],
-  )
+  const [progress, setProgress] = useState<StudentProgramProgressResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    if (!studentId) {
+      setProgress(null)
+      setLoading(false)
+      setError(null)
+      return
+    }
+    const ac = new AbortController()
+    setProgress(null)
+    setError(null)
+    setLoading(true)
+    void (async () => {
+      try {
+        const data = await fetchStudentProgramProgress(studentId, { signal: ac.signal })
+        if (ac.signal.aborted) return
+        setProgress(data)
+      } catch (e) {
+        if (ac.signal.aborted) return
+        setProgress(null)
+        setError(e instanceof Error ? e.message : t('couldNotLoadProgramProgress'))
+      } finally {
+        if (!ac.signal.aborted) setLoading(false)
+      }
+    })()
+    return () => ac.abort()
+  }, [studentId, reloadKey, t])
 
   return (
     <main className="portal-page">
       <h2 className="portal-section-heading">{t('academicProgressHeading')}</h2>
-      <p className="portal-page-lede">
-        {t('academicProgressLede')}
-      </p>
+      <p className="portal-page-lede">{t('academicProgressLede')}</p>
 
-      <div className="portal-card portal-academics-progress-card">
-        <p className="portal-card-label">{t('programCompletionSample')}</p>
-        <div
-          className="portal-academics-progress-track"
-          role="progressbar"
-          aria-valuenow={pct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={t('programCompletionAriaLabel')}
-        >
-          <div className="portal-academics-progress-fill" style={{ width: `${pct}%` }} />
+      {!studentId ? (
+        <section className="portal-card portal-profile-state" aria-live="polite">
+          <p className="portal-profile-state__title">{t('signInToViewAcademics')}</p>
+          <p className="portal-profile-state__detail">{t('academicsPortalSignInDetail')}</p>
+        </section>
+      ) : (
+        <div className="portal-stack portal-academics-program-progress-outer">
+          <ProgramProgressPanel
+            t={t}
+            loading={loading}
+            error={error}
+            progress={progress}
+            onRetry={() => setReloadKey((k) => k + 1)}
+          />
         </div>
-        <p className="portal-card-note portal-academics-progress-caption">
-          {caption}
-        </p>
-      </div>
-
-      <div className="portal-grid-2">
-        <div className="portal-card">
-          <p className="portal-card-label">{t('completedCredits')}</p>
-          <p className="portal-card-value">{completed}</p>
-        </div>
-        <div className="portal-card">
-          <p className="portal-card-label">{t('remainingCreditsEst')}</p>
-          <p className="portal-card-value">{required - completed}</p>
-        </div>
-      </div>
+      )}
 
       <section className="portal-module-panel" aria-labelledby="milestones-heading">
         <h3 id="milestones-heading" className="portal-module-panel-heading">
@@ -72,8 +87,7 @@ export function AcademicProgressPage() {
       </section>
 
       <p className="portal-note">
-        <strong>{t('progressComingLaterLabel')}</strong>{' '}
-        {t('progressComingLaterDetail')}
+        <strong>{t('progressComingLaterLabel')}</strong> {t('progressComingLaterDetail')}
       </p>
     </main>
   )

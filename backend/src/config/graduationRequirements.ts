@@ -23,7 +23,10 @@ function uniqueCourseCodes(courseCodes: string[]): string[] {
   return out;
 }
 
-function sumRequiredCredits(): number {
+/** Minimum elective quarter units (beyond MAHM core list). Registrar may raise this. */
+export const DEGREE_ELECTIVE_QUARTER_UNITS_REQUIRED = 0;
+
+function sumMahmNonClinicalCredits(): number {
   let total = 0;
   for (const course of MAHM_COURSES) {
     if (course.type === "clinical") continue;
@@ -32,6 +35,11 @@ function sumRequiredCredits(): number {
     }
   }
   return total;
+}
+
+/** Total quarter units required for graduation (MAHM didactic+lab + configured elective floor). */
+function sumRequiredCredits(): number {
+  return sumMahmNonClinicalCredits() + DEGREE_ELECTIVE_QUARTER_UNITS_REQUIRED;
 }
 
 const DEFAULT_REQUIRED_COURSES = uniqueCourseCodes(

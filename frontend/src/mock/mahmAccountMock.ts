@@ -69,6 +69,7 @@ export type MahmAccountMock = {
     outstandingBalance: number
     /** Optional; omitted when zero */
     otherTotal?: number
+    examTotal?: number
   }
   lineItems: BillingLineItem[]
   installmentPlan: {

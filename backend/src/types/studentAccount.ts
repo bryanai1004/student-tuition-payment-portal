@@ -11,6 +11,8 @@ export type StudentAccountSummary = {
   clinicalTotal: number;
   feesTotal: number;
   otherTotal: number;
+  /** Exam and miscellaneous portal adjustments with category `exam`. */
+  examTotal: number;
   /** Legacy real students (Step 3B+): sum of `accounting.debit` for the term (signed). */
   totalCharges: number;
   /** Legacy real students (Step 3B+): sum of `accounting.credit` for the term. */

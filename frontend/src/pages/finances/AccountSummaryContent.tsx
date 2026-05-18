@@ -15,6 +15,7 @@ export function AccountSummaryContent() {
   const { account } = useAccount()
   const { summary, installmentPlan, billingStatus } = account
   const otherTotal = summary.otherTotal ?? 0
+  const examTotal = summary.examTotal ?? 0
   const installmentRows = toInstallmentRows(installmentPlan.schedule)
   const nextDueRow = nextInstallmentRow(installmentRows)
   const payments = paymentsFromRecentActivity(account.recentActivity)
@@ -59,6 +60,12 @@ export function AccountSummaryContent() {
             <dt>{t('fees')}</dt>
             <dd>{formatMoney(summary.feesTotal)}</dd>
           </div>
+          {examTotal > 0 ? (
+            <div className="portal-row">
+              <dt>{t('examFee')}</dt>
+              <dd>{formatMoney(examTotal)}</dd>
+            </div>
+          ) : null}
           {otherTotal > 0 ? (
             <div className="portal-row">
               <dt>{t('otherCharges')}</dt>

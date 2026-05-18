@@ -2510,7 +2510,7 @@ export async function fetchStudentAcademics(
 
 /** GET /api/students/:studentId/program-progress */
 export type StudentProgramProgressBucket = {
-  id: 'didactic' | 'lab' | 'clinical'
+  id: 'core' | 'elective' | 'clinical'
   unitKind: 'quarter_units' | 'clinical_hours'
   required: number
   completed: number
@@ -2563,15 +2563,35 @@ function parseStudentProgramProgressResponse(data: unknown): StudentProgramProgr
       throw new Error('Unexpected program progress response')
     }
     const inProgress = typeof b.inProgress === 'number' ? b.inProgress : 0
+    const idRaw = b.id
+    if (idRaw !== 'core' && idRaw !== 'elective' && idRaw !== 'clinical') {
+      throw new Error('Unexpected program progress response')
+    }
+    const id: StudentProgramProgressBucket['id'] = idRaw
+    const unitKindRaw = b.unitKind
+    const unitKind: StudentProgramProgressBucket['unitKind'] =
+      unitKindRaw === 'clinical_hours' || unitKindRaw === 'quarter_units'
+        ? unitKindRaw
+        : 'quarter_units'
     return {
-      ...(b as unknown as StudentProgramProgressBucket),
+      id,
+      unitKind,
+      required: b.required as number,
+      completed: b.completed as number,
       inProgress,
+      remaining: b.remaining as number,
     }
   })
   return {
-    ...(o as unknown as StudentProgramProgressResponse),
+    studentId: o.studentId as string,
+    program: typeof o.program === 'string' ? o.program : null,
+    ruleSetId: o.ruleSetId as string,
+    quarterUnitsRequired: o.quarterUnitsRequired as number,
+    quarterUnitsEarned: o.quarterUnitsEarned as number,
     quarterUnitsInProgress,
+    quarterUnitsRemaining: o.quarterUnitsRemaining as number,
     buckets,
+    notes: o.notes as string[],
   }
 }
 

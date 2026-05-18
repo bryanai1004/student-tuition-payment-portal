@@ -551,7 +551,7 @@ export function AcademicsPortalPage() {
                                           setWithdrawTarget(row)
                                         }}
                                       >
-                                        Withdraw
+                                        {t('withdrawButton')}
                                       </button>
                                     ) : null}
                                   </div>

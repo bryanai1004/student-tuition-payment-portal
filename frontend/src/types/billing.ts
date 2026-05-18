@@ -1,4 +1,4 @@
-export type BillingCategory = 'tuition' | 'clinical' | 'fees' | 'other'
+export type BillingCategory = 'tuition' | 'clinical' | 'fees' | 'other' | 'exam'
 
 export type BillingLineItem = {
   description: string
@@ -11,6 +11,7 @@ export type StudentAccountSummary = {
   clinicalTotal: number
   feesTotal: number
   otherTotal: number
+  examTotal?: number
   totalCharges: number
   payments: number
   outstandingBalance: number

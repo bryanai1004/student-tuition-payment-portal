@@ -12,6 +12,8 @@ export type CourseTranscriptLookupEntry = {
   eng_name: string;
   chi_name: string;
   units: number | null;
+  /** `school.courses.category` → `course_category.category_id` (Core/Elective/Clinical hints). */
+  category: string | null;
 };
 
 export type ClinicTranscriptRow = {
@@ -83,7 +85,8 @@ export async function loadCoursesTranscriptLookup(
     `SELECT TRIM(code) AS code,
             eng_name,
             chi_name,
-            units
+            units,
+            NULLIF(TRIM(category), '') AS category
      FROM courses`,
   );
   const map = new Map<string, CourseTranscriptLookupEntry>();
@@ -92,10 +95,14 @@ export async function loadCoursesTranscriptLookup(
     const code = str(row.code);
     if (code === "") continue;
     const unitsRaw = Number(row.units);
+    const catRaw = row.category;
+    const category =
+      catRaw == null || String(catRaw).trim() === "" ? null : String(catRaw).trim();
     map.set(code, {
       eng_name: str(row.eng_name),
       chi_name: str(row.chi_name),
       units: Number.isFinite(unitsRaw) ? unitsRaw : null,
+      category,
     });
   }
   return map;

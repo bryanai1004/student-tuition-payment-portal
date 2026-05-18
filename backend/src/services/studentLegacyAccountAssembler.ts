@@ -251,6 +251,7 @@ export function assembleLegacyStudentAccountPayload(
       clinicalTotal: 0,
       feesTotal,
       otherTotal,
+      examTotal: 0,
       totalCharges,
       payments: paymentsTotal,
       outstandingBalance,

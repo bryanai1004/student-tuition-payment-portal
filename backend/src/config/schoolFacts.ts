@@ -16,7 +16,8 @@ export type AmuSchoolFacts = {
  */
 export const AMU_SCHOOL_FACTS: AmuSchoolFacts = {
   institutionName: "Alhambra Medical University",
-  sourceLabel: "configured AMU institutional facts",
+  sourceLabel:
+    "AMU official documents in backend/knowledge/sources (see SOURCE_INDEX.md)",
   address: null,
   location: null,
   phone: null,

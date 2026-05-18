@@ -3,8 +3,12 @@ import {
   precheckPortalWithdrawalLegacyCourseOnly,
   type PortalWithdrawalPrecheckCode,
 } from "../repositories/studentEnrollmentRepository.js";
+import { COURSE_WITHDRAWAL_POLICY_SUMMARY } from "./courseWithdrawalPolicy.js";
 
-function messageForPrecheck(code: PortalWithdrawalPrecheckCode): string {
+/** Maps server precheck codes to user-facing errors (also used in tests). */
+export function messageForPortalWithdrawalPrecheck(
+  code: PortalWithdrawalPrecheckCode,
+): string {
   switch (code) {
     case "allowed":
       return "";
@@ -54,7 +58,7 @@ export async function assertPortalWithdrawalAllowed(params: {
       csid,
     );
     if (code === "allowed") return { ok: true };
-    return { ok: false, error: messageForPrecheck(code) };
+    return { ok: false, error: messageForPortalWithdrawalPrecheck(code) };
   }
 
   if (legacyCode !== "") {
@@ -65,7 +69,7 @@ export async function assertPortalWithdrawalAllowed(params: {
       year,
     );
     if (code === "allowed") return { ok: true };
-    return { ok: false, error: messageForPrecheck(code) };
+    return { ok: false, error: messageForPortalWithdrawalPrecheck(code) };
   }
 
   return {
@@ -73,3 +77,5 @@ export async function assertPortalWithdrawalAllowed(params: {
     error: "course_section_id or course_code is required for withdrawal.",
   };
 }
+
+export { COURSE_WITHDRAWAL_POLICY_SUMMARY };

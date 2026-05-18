@@ -454,8 +454,8 @@ export const STUDENT_PORTAL_EN = {
     '{earned} completed, {inProgress} in progress, {remaining} still needed of {required} configured quarter units.',
   programProgressBreakdownTitle: 'Requirement breakdown',
   programProgressColCategory: 'Category',
-  programProgressBucketDidactic: 'Didactic units',
-  programProgressBucketLab: 'Laboratory units',
+  programProgressBucketCore: 'Core credits',
+  programProgressBucketElective: 'Elective credits',
   programProgressBucketClinical: 'Clinical internship hours',
   programProgressColRequired: 'Required',
   programProgressColCompleted: 'Completed',
@@ -473,7 +473,7 @@ export const STUDENT_PORTAL_EN = {
   programProgressTooltipRemaining:
     'Still needed: {remaining} quarter units to reach the configured requirement.',
   programProgressFootnote:
-    'Figures follow the portal catalog and your unofficial transcript. In progress reflects active marks and portal registrations with credits. Category rows use the MAHM curriculum map; course codes only in the live portal catalog (not that map) count as didactic until mapped. Official graduation clearance may differ.',
+    'Figures follow the portal catalog and your unofficial transcript. In progress reflects active marks and portal registrations with credits. Core / Elective / Clinical use the MAHM map plus each course’s catalog category (staff-editable). Unlisted codes default to Core unless the category or title indicates Clinical or Elective. The graduation total may include transfer credits from your profile. Official graduation clearance may differ.',
 
   // Enrollment status (registration history table)
   enrollmentStatusActive: 'Active',
@@ -1888,8 +1888,8 @@ const STUDENT_PORTAL_ZH: Record<StudentPortalKey, string> = {
     '已完成 {earned}、進行中 {inProgress}、尚缺 {remaining}（應修 {required} 季制學分）。',
   programProgressBreakdownTitle: '要求項目明細',
   programProgressColCategory: '項目',
-  programProgressBucketDidactic: '講授學分',
-  programProgressBucketLab: '實驗／實習室學分',
+  programProgressBucketCore: '核心學分',
+  programProgressBucketElective: '選修學分',
   programProgressBucketClinical: '臨床實習時數',
   programProgressColRequired: '應修',
   programProgressColCompleted: '已完成',
@@ -1906,7 +1906,7 @@ const STUDENT_PORTAL_ZH: Record<StudentPortalKey, string> = {
     '進行中：目前註冊／修課中且尚未完成成績之 {inProgress} 單位。',
   programProgressTooltipRemaining: '尚缺：距設定要求尚餘 {remaining} 單位。',
   programProgressFootnote:
-    '數據依入口網站課程目錄與非正式成績單計算；「進行中」含成績系統與入口網站之在學中課程學分。分類列依 MAHM 課程對照表；僅出現在線上目錄而未列入對照表之課號，暫計入「主修課程學分」之進行中。正式畢業審核以註冊組為準。',
+    '數據依入口網站課程目錄與非正式成績單計算；「進行中」含成績系統與入口網站之在學中課程學分。核心／選修／臨床分類結合 MAHM 課程對照表與每門課之目錄分類（可由教務編輯）。未列入對照表之課號，除分類或課名顯示為臨床／選修外，預設計入「核心」。畢業總學分可能另含個人檔案之轉學／入學學分。正式畢業審核以註冊組為準。',
 
   enrollmentStatusActive: '進行中',
   enrollmentStatusCompleted: '已完成',

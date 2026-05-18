@@ -88,13 +88,16 @@ export function buildStudentAccountSummary(
   const clinicalTotal = sum(lineItems.filter((i) => i.category === "clinical"));
   const feesTotal = sum(lineItems.filter((i) => i.category === "fees"));
   const otherTotal = sum(lineItems.filter((i) => i.category === "other"));
-  const totalCharges = tuitionTotal + clinicalTotal + feesTotal + otherTotal;
+  const examTotal = sum(lineItems.filter((i) => i.category === "exam"));
+  const totalCharges =
+    tuitionTotal + clinicalTotal + feesTotal + otherTotal + examTotal;
   const outstandingBalance = totalCharges - paymentsTotal;
   return {
     tuitionTotal,
     clinicalTotal,
     feesTotal,
     otherTotal,
+    examTotal,
     totalCharges,
     payments: paymentsTotal,
     outstandingBalance,
