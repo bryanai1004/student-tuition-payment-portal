@@ -1,4 +1,4 @@
-# Student tuition payment portal
+# myAMU
 
 Monorepo for a student-facing tuition and payments web app: **React (Vite)** frontend and **Express (TypeScript)** API, backed by **MySQL**. Optional integrations include **Supabase Storage** (profile photos), **Authorize.net** (Accept.js), **Socket.io**, and **OpenAI** for knowledge-base tooling.
 
@@ -11,8 +11,8 @@ Monorepo for a student-facing tuition and payments web app: **React (Vite)** fro
 
 | Path        | Role |
 |------------|------|
-| `frontend/` | Vite + React SPA (`academic-medical-payments`) |
-| `backend/`  | Express API (`student-portal-api`) |
+| `frontend/` | Vite + React SPA (`myamu-frontend`) |
+| `backend/`  | Express API (`myamu-api`) |
 
 npm **workspaces** are configured at the repo root.
 

@@ -12,7 +12,7 @@ const TERM = 'Fall'
 const YEAR = 2026
 
 export async function runSeed() {
-  const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/student-tuition-portal'
+  const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/myamu'
   await mongoose.connect(uri)
   console.log('Connected to MongoDB')
 
