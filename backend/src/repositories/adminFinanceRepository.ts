@@ -1,5 +1,5 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import type { Pool, PoolConnection } from "mysql2/promise";
+import { type ResultSetHeader, type RowDataPacket, type Pool, type PoolConnection } from "../lib/db.js";
+import { isUniqueViolation } from "../lib/dbErrors.js";
 
 /** Pool or transaction connection for inserts. */
 export type PortalBillingSqlExecutor = Pool | PoolConnection;
@@ -277,33 +277,33 @@ export async function listGlobalFinanceQuarters(
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT term, year FROM (
        SELECT DISTINCT
-         CONVERT(TRIM(COALESCE(term, '')) USING utf8mb4) AS term,
-         CAST(year AS SIGNED) AS year
+         TRIM(COALESCE(term, '')) AS term,
+         CAST(year AS INTEGER) AS year
        FROM portal_enrollments
        UNION
        SELECT DISTINCT
-         CONVERT(TRIM(COALESCE(term, '')) USING utf8mb4) AS term,
-         CAST(year AS SIGNED) AS year
+         TRIM(COALESCE(term, '')) AS term,
+         CAST(year AS INTEGER) AS year
        FROM portal_billing_adjustments
        UNION
        SELECT DISTINCT
-         CONVERT(TRIM(COALESCE(term, '')) USING utf8mb4) AS term,
-         CAST(year AS SIGNED) AS year
+         TRIM(COALESCE(term, '')) AS term,
+         CAST(year AS INTEGER) AS year
        FROM portal_payments
        UNION
        SELECT DISTINCT
-         CONVERT(TRIM(COALESCE(term, '')) USING utf8mb4) AS term,
-         CAST(year AS SIGNED) AS year
+         TRIM(COALESCE(term, '')) AS term,
+         CAST(year AS INTEGER) AS year
        FROM registration
        UNION
        SELECT DISTINCT
-         CONVERT(TRIM(COALESCE(term, '')) USING utf8mb4) AS term,
-         CAST(year AS SIGNED) AS year
+         TRIM(COALESCE(term, '')) AS term,
+         CAST(year AS INTEGER) AS year
        FROM accounting
        UNION
        SELECT DISTINCT
-         CONVERT(TRIM(COALESCE(term_name, '')) USING utf8mb4) AS term,
-         CAST(year AS SIGNED) AS year
+         TRIM(COALESCE(term_name, '')) AS term,
+         CAST(year AS INTEGER) AS year
        FROM academic_terms
      ) q
      WHERE TRIM(term) <> ''`,
@@ -341,8 +341,8 @@ export async function academicTermsPaymentDueDateColumnExists(
   try {
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE()
-         AND TABLE_NAME = 'academic_terms'
+       WHERE table_schema = 'public'
+         AND table_name = 'academic_terms'
          AND COLUMN_NAME = 'payment_due_date'`,
     );
     cachedAcademicTermsPaymentDueDateColumn = Number(rows[0]?.c) > 0;
@@ -557,8 +557,8 @@ async function portalBillingAdjustmentsReversalColumnExists(
   try {
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE()
-         AND TABLE_NAME = 'portal_billing_adjustments'
+       WHERE table_schema = 'public'
+         AND table_name = 'portal_billing_adjustments'
          AND COLUMN_NAME = 'reversal_of_adjustment_id'`,
     );
     cachedPortalBillingReversalColumnExists = Number(rows[0]?.c) > 0;
@@ -608,9 +608,8 @@ export async function insertSystemLateFee(
       ],
     );
   } catch (error) {
-    const code = (error as { code?: string }).code;
     // Secondary safeguard: ignore race duplicates once unique DB constraint exists.
-    if (code === "ER_DUP_ENTRY") {
+    if (isUniqueViolation(error)) {
       return;
     }
     throw error;

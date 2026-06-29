@@ -1,5 +1,4 @@
-import type { RowDataPacket } from "mysql2";
-import { pool } from "../lib/db.js";
+import { pool, type RowDataPacket } from "../lib/db.js";
 import { ensurePortalCoursesForLegacyCatalog } from "./portalCourseRepository.js";
 
 /** API output keys (fixed contract). */
@@ -70,11 +69,11 @@ function invalidateCoursesColumnCache(): void {
 
 async function loadCoursesTableColumns(): Promise<Set<string>> {
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT COLUMN_NAME AS columnName
-     FROM INFORMATION_SCHEMA.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE()
-       AND TABLE_NAME = 'courses'
-     ORDER BY ORDINAL_POSITION`,
+    `SELECT column_name AS columnName
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'courses'
+     ORDER BY ordinal_position`,
   );
   return new Set(rows.map((r) => String(r.columnName)));
 }
@@ -158,8 +157,8 @@ export async function listCoursesFromMysql(): Promise<CourseListItem[]> {
          FROM portal_courses
          GROUP BY course_code
        ) pc
-         ON CONVERT(TRIM(pc.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-            CONVERT(TRIM(c.${quoteIdent(codePhysical)}) USING utf8mb4) COLLATE utf8mb4_unicode_ci`
+         ON TRIM(pc.course_code) =
+            TRIM(c.${quoteIdent(codePhysical)})`
     : "";
 
   const sql = `SELECT ${selections.join(", ")} FROM ${quoteIdent("courses")} c ${joinClause} ${orderClause}`.trim();

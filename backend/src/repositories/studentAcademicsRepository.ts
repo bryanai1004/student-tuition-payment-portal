@@ -1,4 +1,4 @@
-import type { Pool, RowDataPacket } from "mysql2/promise";
+import { type Pool, type RowDataPacket } from "../lib/db.js";
 
 /**
  * Legacy `marks` (live school DB):

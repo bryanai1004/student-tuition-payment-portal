@@ -1,4 +1,4 @@
-import type { Pool } from "mysql2/promise";
+import { type Pool } from "../lib/db.js";
 import bcrypt from "bcryptjs";
 import type { AdminJwtRole } from "../lib/adminAuthToken.js";
 import { issueAdminAccessToken } from "../lib/adminAuthToken.js";

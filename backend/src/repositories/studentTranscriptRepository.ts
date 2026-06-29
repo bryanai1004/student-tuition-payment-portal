@@ -1,3 +1,4 @@
+import { type Pool, type RowDataPacket } from "../lib/db.js";
 /**
  * Read models for **transcript title lookup** (`courses`) and **clinic transcript lines** (`clinic`).
  *
@@ -5,7 +6,6 @@
  * - Catalog `courses` map supports normalized English titles only; it is not registration or marks.
  */
 
-import type { Pool, RowDataPacket } from "mysql2/promise";
 import { MARKS_ORDER_BY_NEWEST } from "./studentAcademicsRepository.js";
 
 export type CourseTranscriptLookupEntry = {

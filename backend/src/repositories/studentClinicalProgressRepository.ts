@@ -1,9 +1,9 @@
+import { type Pool, type RowDataPacket } from "../lib/db.js";
 /**
  * Clinical progress rows for student/admin clinical progress tabs.
  * Source of truth is merged legacy `clinic` + newer `clinical_assignments`.
  */
 
-import type { Pool, RowDataPacket } from "mysql2/promise";
 
 export type StudentClinicalProgressRecord = {
   code: string;

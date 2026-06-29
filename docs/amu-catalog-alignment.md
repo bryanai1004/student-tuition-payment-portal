@@ -54,7 +54,7 @@ From `backend/`:
 npm run db:query -- "SELECT …"
 ```
 
-Loads `backend/.env` and runs a **single** SQL statement (no `mysql` client required).
+Loads `backend/.env` and runs a **single** SQL statement (no database CLI required).
 
 ## Change log (manual)
 

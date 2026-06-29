@@ -1,5 +1,5 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import { pool } from "../lib/db.js";
+import { pool, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
+import { isMissingColumn } from "../lib/dbErrors.js";
 import type { AcademicTermDetail, AcademicTermName, AcademicTermStatus } from "../types/academicTerm.js";
 
 function rowWantsPersistedPaymentPolicy(row: AcademicTermInsertRow): boolean {
@@ -122,8 +122,7 @@ export type AcademicTermSchemaCaps = {
 let cachedSchemaCaps: AcademicTermSchemaCaps | null = null;
 
 function isMissingColumnError(e: unknown): boolean {
-  const err = e as { code?: string; errno?: number };
-  return err.code === "ER_BAD_FIELD_ERROR" || err.errno === 1054;
+  return isMissingColumn(e);
 }
 
 /**
@@ -243,13 +242,13 @@ async function listExistingTables(tableNames: readonly string[]): Promise<Set<st
   if (tableNames.length === 0) return new Set<string>();
   const placeholders = tableNames.map(() => "?").join(", ");
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT TABLE_NAME
-       FROM information_schema.TABLES
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME IN (${placeholders})`,
+    `SELECT table_name
+       FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name IN (${placeholders})`,
     [...tableNames],
   );
-  return new Set(rows.map((r) => String(r.TABLE_NAME ?? "").trim()));
+  return new Set(rows.map((r) => String(r.table_name ?? r.TABLE_NAME ?? "").trim()));
 }
 
 async function countRows(

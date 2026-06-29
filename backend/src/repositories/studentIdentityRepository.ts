@@ -1,4 +1,4 @@
-import type { Pool, RowDataPacket } from "mysql2/promise";
+import { type Pool, type RowDataPacket } from "../lib/db.js";
 
 /**
  * Resolves `students.id` (portal / finance canonical external id) from either

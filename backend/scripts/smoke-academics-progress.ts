@@ -1,5 +1,5 @@
 /**
- * Smoke: load academics + program progress for one student external id (requires MySQL in .env).
+ * Smoke: load academics + program progress for one student external id (requires Postgres in .env).
  * Run from backend: npx tsx scripts/smoke-academics-progress.ts <STUDENT_ID>
  */
 import path from 'node:path'

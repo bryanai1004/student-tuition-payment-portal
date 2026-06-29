@@ -1,5 +1,4 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import type { Pool } from "mysql2/promise";
+import { type ResultSetHeader, type RowDataPacket, type Pool } from "../lib/db.js";
 
 type DbExec = Pick<Pool, "execute">;
 type DbQueryExec = Pick<Pool, "execute" | "query">;

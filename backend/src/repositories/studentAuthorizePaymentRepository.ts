@@ -1,5 +1,4 @@
-import type { PoolConnection, RowDataPacket } from "mysql2/promise";
-import { pool } from "../lib/db.js";
+import { pool, type PoolConnection, type RowDataPacket } from "../lib/db.js";
 
 type RecordAuthorizePaymentInput = {
   studentId: string;
@@ -28,7 +27,7 @@ async function hasAuthorizeTransactionTable(
   const [rows] = await connection.query<RowDataPacket[]>(
     `SELECT COUNT(*) AS c
      FROM information_schema.tables
-     WHERE table_schema = DATABASE()
+     WHERE table_schema = 'public'
        AND table_name = 'portal_payment_transactions'`,
   );
   const count = Number(rows[0]?.c ?? 0);

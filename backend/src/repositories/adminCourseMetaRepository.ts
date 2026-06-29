@@ -1,5 +1,4 @@
-import type { RowDataPacket } from "mysql2";
-import { pool } from "../lib/db.js";
+import { pool, type RowDataPacket } from "../lib/db.js";
 
 function trimOrEmpty(v: unknown): string {
   if (v === undefined || v === null) return "";

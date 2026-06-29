@@ -1,6 +1,5 @@
-import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { CLINICAL_BOOKING_PAYMENT_WINDOW_HOURS } from "../clinicalBookingPolicy.js";
-import { pool } from "../lib/db.js";
+import { pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
 
 export type ClinicalBookingPaymentHoldStatus =
   | "active"
@@ -34,9 +33,9 @@ export type ClinicalBookingPaymentHoldRow = {
 export async function clinicalBookingPaymentHoldsTableExists(): Promise<boolean> {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT 1 AS ok
-       FROM information_schema.TABLES
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = 'clinical_booking_payment_holds'
+       FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = 'clinical_booking_payment_holds'
       LIMIT 1`,
   );
   const exists = rows.length > 0;

@@ -1,7 +1,5 @@
 # Copy to `.dev.vars` for `wrangler dev` (never commit `.dev.vars`).
-# MySQL is provided via Hyperdrive in wrangler.toml — these are optional locally
-# when USE_HYPERDRIVE=1, but set them if you run the worker against Hyperdrive
-# without a local tunnel.
+# Postgres is provided via Hyperdrive in wrangler.toml (Supabase Session pooler).
 
 USE_HYPERDRIVE=1
 NODE_ENV=development

@@ -1,4 +1,4 @@
-import type { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import { type Pool, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
 
 export type CourseFeedbackDbRow = {
   id: number;

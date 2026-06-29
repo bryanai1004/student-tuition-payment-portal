@@ -8,6 +8,14 @@ const srcDir = path.dirname(fileURLToPath(import.meta.url))
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    port: 5175,
+    strictPort: true,
+  },
+  preview: {
+    port: 5175,
+    strictPort: true,
+  },
   resolve: {
     alias: {
       '@': path.join(srcDir, 'src'),

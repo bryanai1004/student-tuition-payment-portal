@@ -1,4 +1,4 @@
-import type { Pool, RowDataPacket } from "mysql2/promise";
+import { type Pool, type RowDataPacket } from "../lib/db.js";
 import type { AdminJwtRole } from "../lib/adminAuthToken.js";
 
 export type AdminUserRow = {

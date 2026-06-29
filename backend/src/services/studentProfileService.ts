@@ -1,5 +1,4 @@
-import type { RowDataPacket } from "mysql2/promise";
-import { pool } from "../lib/db.js";
+import { pool, type RowDataPacket } from "../lib/db.js";
 import type { StudentProfilePayload } from "../types/studentProfile.js";
 
 const MS_PER_DAY = 86400000;

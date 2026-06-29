@@ -1,4 +1,4 @@
-import type { Pool } from "mysql2/promise";
+import { type Pool } from "../lib/db.js";
 import { legacyStudentPasswordMd5Hex } from "../repositories/studentLegacyAccountRepository.js";
 import {
   findLegacyStudentById,

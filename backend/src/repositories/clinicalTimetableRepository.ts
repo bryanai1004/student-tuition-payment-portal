@@ -1,9 +1,4 @@
-import type {
-  PoolConnection,
-  ResultSetHeader,
-  RowDataPacket,
-} from "mysql2/promise";
-import { pool } from "../lib/db.js";
+import { pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
 
 /** Row shape from legacy `clinic_timetable` (see school.sql). */
 export type ClinicTimetableDbRow = {
@@ -177,29 +172,29 @@ export async function listClinicTimetableSlotsForAdmin(options?: {
             ct.\`300Max\` AS cap_300, ct.\`123Max\` AS cap_123,
             MAX(at.id) AS academic_term_id,
             COALESCE(SUM(
-              CASE WHEN LOWER(TRIM(IFNULL(ce.status, ''))) = 'enrolled' THEN 1 ELSE 0 END
+              CASE WHEN LOWER(TRIM(COALESCE(ce.status, ''))) = 'enrolled' THEN 1 ELSE 0 END
             ), 0) AS active_enrolled_count,
             COALESCE(SUM(
               CASE
-                WHEN LOWER(TRIM(IFNULL(ce.status, ''))) = 'enrolled'
+                WHEN LOWER(TRIM(COALESCE(ce.status, ''))) = 'enrolled'
                  AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '100'
                 THEN 1 ELSE 0 END
             ), 0) AS enrolled_bucket_100,
             COALESCE(SUM(
               CASE
-                WHEN LOWER(TRIM(IFNULL(ce.status, ''))) = 'enrolled'
+                WHEN LOWER(TRIM(COALESCE(ce.status, ''))) = 'enrolled'
                  AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '200'
                 THEN 1 ELSE 0 END
             ), 0) AS enrolled_bucket_200,
             COALESCE(SUM(
               CASE
-                WHEN LOWER(TRIM(IFNULL(ce.status, ''))) = 'enrolled'
+                WHEN LOWER(TRIM(COALESCE(ce.status, ''))) = 'enrolled'
                  AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) = '300'
                 THEN 1 ELSE 0 END
             ), 0) AS enrolled_bucket_300,
             COALESCE(SUM(
               CASE
-                WHEN LOWER(TRIM(IFNULL(ce.status, ''))) = 'enrolled'
+                WHEN LOWER(TRIM(COALESCE(ce.status, ''))) = 'enrolled'
                  AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ce.seat_bucket), ''), 'all'))) IN ('all', '123')
                 THEN 1 ELSE 0 END
             ), 0) AS enrolled_bucket_all
@@ -362,9 +357,9 @@ async function tableExistsInConn(
 ): Promise<boolean> {
   const [rows] = await conn.query<RowDataPacket[]>(
     `SELECT 1 AS ok
-       FROM information_schema.TABLES
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
+       FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = ?
       LIMIT 1`,
     [tableName],
   );
@@ -379,8 +374,8 @@ async function columnExistsInConn(
   const [rows] = await conn.query<RowDataPacket[]>(
     `SELECT 1 AS ok
        FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
+      WHERE table_schema = 'public'
+        AND table_name = ?
         AND COLUMN_NAME = ?
       LIMIT 1`,
     [tableName, columnName],
@@ -563,21 +558,21 @@ export async function countClinicTimetableReferences(
         (SELECT COUNT(*)
            FROM clinical_assignments
           WHERE timetable_id = ?
-            AND LOWER(TRIM(IFNULL(status, ''))) NOT IN ('dropped', 'cancelled')
+            AND LOWER(TRIM(COALESCE(status, ''))) NOT IN ('dropped', 'cancelled')
         ) AS active_assignments,
         (SELECT COUNT(*)
            FROM clinical_assignments
           WHERE timetable_id = ?
-            AND LOWER(TRIM(IFNULL(status, ''))) IN ('dropped', 'cancelled')
+            AND LOWER(TRIM(COALESCE(status, ''))) IN ('dropped', 'cancelled')
         ) AS historical_dropped_assignments`,
     [seqNum, seqNum, seqNum, seqNum],
   );
   const r = rows[0] as Record<string, unknown> | undefined;
   const [requestTableRows] = await pool.query<RowDataPacket[]>(
     `SELECT 1 AS ok
-       FROM information_schema.TABLES
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = 'clinical_requests'
+       FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = 'clinical_requests'
       LIMIT 1`,
   );
   const hasClinicalRequestsTable = requestTableRows.length > 0;
@@ -648,16 +643,16 @@ export async function cleanupHistoricalClinicTimetableReferences(
     const [enrollmentRes] = await conn.query<ResultSetHeader>(
       `DELETE FROM clinical_enrollments
         WHERE timetable_id = ?
-          AND LOWER(TRIM(IFNULL(status, ''))) = 'dropped'`,
+          AND LOWER(TRIM(COALESCE(status, ''))) = 'dropped'`,
       [seqNum],
     );
 
     let deletedDecidedRequests = 0;
     const [requestTableRows] = await conn.query<RowDataPacket[]>(
       `SELECT 1 AS ok
-         FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'clinical_requests'
+         FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'clinical_requests'
         LIMIT 1`,
     );
     const hasClinicalRequestsTable = requestTableRows.length > 0;
@@ -665,7 +660,7 @@ export async function cleanupHistoricalClinicTimetableReferences(
       const [requestRes] = await conn.query<ResultSetHeader>(
         `DELETE FROM clinical_requests
           WHERE timetable_id = ?
-            AND LOWER(TRIM(IFNULL(status, ''))) <> 'pending'`,
+            AND LOWER(TRIM(COALESCE(status, ''))) <> 'pending'`,
         [seqNum],
       );
       deletedDecidedRequests = requestRes.affectedRows;
@@ -675,7 +670,7 @@ export async function cleanupHistoricalClinicTimetableReferences(
       `UPDATE clinical_assignments
           SET timetable_id = NULL
         WHERE timetable_id = ?
-          AND LOWER(TRIM(IFNULL(status, ''))) IN ('dropped', 'cancelled')`,
+          AND LOWER(TRIM(COALESCE(status, ''))) IN ('dropped', 'cancelled')`,
       [seqNum],
     );
 

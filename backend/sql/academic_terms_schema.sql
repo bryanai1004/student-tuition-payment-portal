@@ -1,5 +1,5 @@
 -- Canonical academic terms (master data). Does not replace `course_sections.term` / `year` in this phase.
--- Apply on RDS/MySQL when enabling structured registration terms.
+-- Legacy MySQL DDL (archived). Apply equivalent schema via supabase/migrations/ for Postgres.
 
 CREATE TABLE IF NOT EXISTS academic_terms (
   id VARCHAR(16) NOT NULL,

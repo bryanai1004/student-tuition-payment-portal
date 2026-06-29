@@ -14,10 +14,7 @@ import { randomInt } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { RowDataPacket } from "mysql2/promise";
-import XLSX from "xlsx";
-
-import { closePool, pool } from "../src/lib/db.js";
+import { closePool, pool, type RowDataPacket } from "../src/lib/db.js";
 import { legacyStudentPasswordMd5Hex } from "../src/repositories/studentLegacyAccountRepository.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

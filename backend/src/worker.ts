@@ -63,6 +63,6 @@ export default {
     ctx: ExecutionContext,
   ): Promise<Response> {
     await ensureWorkerInitialized(env, ctx);
-    return expressHandler.fetch(request, env, ctx);
+    return expressHandler.fetch(request);
   },
 };

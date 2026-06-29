@@ -21,13 +21,14 @@ routes = [
 NODE_ENV = "production"
 USE_HYPERDRIVE = "1"
 
-# Create with:
-#   npx wrangler hyperdrive create myamu-mysql \
-#     --connection-string="mysql://USER:PASSWORD@HOST:3306/school"
-# Then paste the returned id below.
+# Hyperdrive → Supabase Postgres (Session pooler, aws-1-us-east-1)
+# Create/update:
+#   npx wrangler hyperdrive create myamu-supabase \
+#     --connection-string="postgresql://postgres.<ref>:PASSWORD@aws-1-us-east-1.pooler.supabase.com:5432/postgres" \
+#     --sslmode=require
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "20f6041e55724e0489cc08b30bdd8377"
+id = "f9cdb09006c045dd9de2b43f724278fb"
 
 # Secrets (set via CLI, not committed):
 #   npx wrangler secret put STUDENT_AUTH_SECRET

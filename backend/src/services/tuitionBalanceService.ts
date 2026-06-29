@@ -1,4 +1,4 @@
-import type { Pool } from "mysql2/promise";
+import { type Pool } from "../lib/db.js";
 import { resolveCanonicalStudentExternalId } from "../repositories/studentIdentityRepository.js";
 import { getAccountingLedgerPayload } from "./studentLedgerService.js";
 import {

@@ -1,8 +1,8 @@
--- Minimal bootstrap for myAMU registration + scheduling on AWS RDS database `school`.
+-- Legacy MySQL bootstrap for registration + scheduling (archived — former AWS RDS `school` DB).
 -- Creates `academic_terms` and `course_sections` (names/columns aligned with backend repositories).
--- Safe to re-run: idempotent upserts on natural keys.
+-- For Postgres/Supabase use supabase/migrations/ instead; do not run this file against production.
 --
--- Prerequisites: MySQL 8.0+ (CHECK constraints). User needs CREATE + INSERT on `school`.
+-- Prerequisites (historical): MySQL 8.0+ (CHECK constraints).
 
 USE school;
 

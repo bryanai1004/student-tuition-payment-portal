@@ -8,6 +8,7 @@
 
 import { DEMO_STUDENT_ID } from "../config/constants.js";
 import { pool } from "../lib/db.js";
+import { isMissingTable } from "../lib/dbErrors.js";
 import {
   getLegacyStudentDisplayName,
   listMarksForStudent,
@@ -259,8 +260,7 @@ export async function getStudentAcademicsPayload(
     const submittedAtByKey = await getFeedbackSubmittedAtMapForStudent(trimmed);
     return mergeEnrollmentFeedbackIntoPayload(payload, submittedAtByKey);
   } catch (e) {
-    const code = (e as { code?: string }).code;
-    if (code === "ER_NO_SUCH_TABLE") {
+    if (isMissingTable(e)) {
       console.warn(
         "[academics] course_feedback missing; enrollment feedback flags omitted",
       );

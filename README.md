@@ -1,11 +1,11 @@
 # myAMU
 
-Monorepo for a student-facing tuition and payments web app: **React (Vite)** frontend and **Express (TypeScript)** API, backed by **MySQL**. Optional integrations include **Supabase Storage** (profile photos), **Authorize.net** (Accept.js), **Socket.io**, and **OpenAI** for knowledge-base tooling.
+Monorepo for a student-facing tuition and payments web app: **React (Vite)** frontend and **Express (TypeScript)** API, backed by **Supabase** (PostgreSQL, Auth, Storage). Optional integrations include **Authorize.net** (Accept.js), **Socket.io**, and **OpenAI** for knowledge-base tooling.
 
 ## Requirements
 
 - **Node.js 20.x** (see `engines` in root `package.json`)
-- **MySQL** reachable from the machine running the API (local or AWS RDS, etc.)
+- **Supabase project** with Postgres reachable from the machine running the API ([dashboard](https://supabase.com/dashboard/project/okeiftbrwhfehflpxogs/database/schemas))
 
 ## Repository layout
 
@@ -13,6 +13,7 @@ Monorepo for a student-facing tuition and payments web app: **React (Vite)** fro
 |------------|------|
 | `frontend/` | Vite + React SPA (`myamu-frontend`) |
 | `backend/`  | Express API (`myamu-api`) |
+| `supabase/` | Supabase CLI config and Postgres migrations |
 
 npm **workspaces** are configured at the repo root.
 
@@ -26,12 +27,12 @@ npm **workspaces** are configured at the repo root.
 
 2. **Environment files**
 
-   - Backend: copy `backend/.env.example` to `backend/.env` and set at least the MySQL variables (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`). The API loads `backend/.env` automatically.
+   - Backend: copy `backend/.env.example` to `backend/.env` and set Supabase variables (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`) plus Postgres pooler credentials (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`). The API loads `backend/.env` automatically.
    - Frontend: copy `frontend/.env.example` to `frontend/.env.development` (or `.env`) and set `VITE_API_BASE_URL` to your API base URL with **no** trailing slash and **no** `/api` suffix (for example `http://127.0.0.1:3001`).
 
 3. **Database**
 
-   After MySQL is available and credentials in `backend/.env` are correct, create portal billing tables and dev seed data (see comment in `backend/.env.example`):
+   Schema and data live in Supabase Postgres. Apply migrations with the Supabase CLI when needed (`supabase db push`). For local portal billing bootstrap:
 
    ```bash
    npm run db:bootstrap-portal -w backend
@@ -86,12 +87,13 @@ Full lists and comments live in:
 
 **Backend — commonly required**
 
-- MySQL: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+- Supabase: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`
+- Postgres (Session pooler): `DB_HOST`, `DB_PORT` (`5432`), `DB_USER`, `DB_PASSWORD`, `DB_NAME` (`postgres`)
 - `PORT` — optional; defaults to `3001`
 
 **Backend — features**
 
-- Supabase (private photo bucket, server-side only): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET`
+- Supabase Storage: `SUPABASE_STORAGE_BUCKET` (default `student-photos`)
 - Authorize.net: `AUTHORIZE_API_LOGIN_ID`, `AUTHORIZE_TRANSACTION_KEY`, `AUTHORIZE_ENV`
 - Student AI tokens (production): `STUDENT_AUTH_SECRET`; optional `STUDENT_AUTH_TOKEN_TTL_SECONDS`
 - Extra CORS origins: `CORS_ORIGINS` or `CORS_ORIGIN` (comma-separated)
@@ -128,7 +130,7 @@ The production API is deployed to **Cloudflare Workers** with **Wrangler**, not 
 | Public URL | `https://myamu-api.wanpanel.ai` |
 | Config | `backend/wrangler.toml` |
 | Entry | `backend/src/worker.ts` (Express via `httpServerHandler`) |
-| Database | **Hyperdrive** → MySQL (AWS RDS or other host) |
+| Database | **Hyperdrive** → Supabase Postgres (Session pooler) |
 
 ### First-time setup
 
@@ -138,12 +140,13 @@ The production API is deployed to **Cloudflare Workers** with **Wrangler**, not 
    npm install
    ```
 
-2. **Create a Hyperdrive config** pointing at your production MySQL:
+2. **Create a Hyperdrive config** pointing at Supabase Postgres:
 
    ```bash
    cd backend
-   npx wrangler hyperdrive create myamu-mysql \
-     --connection-string="mysql://USER:PASSWORD@HOST:3306/school"
+   npx wrangler hyperdrive create myamu-supabase \
+     --connection-string="postgresql://postgres.okeiftbrwhfehflpxogs:PASSWORD@aws-1-us-east-1.pooler.supabase.com:5432/postgres" \
+     --sslmode=require
    ```
 
    Copy the returned id into `backend/wrangler.toml` → `[[hyperdrive]].id`.
@@ -154,6 +157,7 @@ The production API is deployed to **Cloudflare Workers** with **Wrangler**, not 
    npx wrangler secret put STUDENT_AUTH_SECRET
    npx wrangler secret put SUPABASE_URL
    npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+   npx wrangler secret put SUPABASE_ANON_KEY
    # Authorize.net, OpenAI, SMTP as needed
    ```
 

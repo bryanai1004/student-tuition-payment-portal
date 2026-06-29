@@ -1,12 +1,6 @@
-import { pool } from "../lib/db.js";
+import { pool, type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
 import { getAcademicTermById } from "../repositories/academicTermRepository.js";
 import { upsertMarkGrade } from "../repositories/adminMarksRepository.js";
-import type {
-  Pool,
-  PoolConnection,
-  ResultSetHeader,
-  RowDataPacket,
-} from "mysql2/promise";
 
 /** Same letter → numeric mapping as admin roster UI; server is source of truth for `grade2`. */
 const GRADE_TO_NUMERIC: Record<string, number | null> = {

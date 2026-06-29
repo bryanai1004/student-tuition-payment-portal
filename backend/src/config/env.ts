@@ -74,6 +74,56 @@ function parseDbPort(raw: string | undefined, fallback: number): number {
   return n;
 }
 
+function parseDbSsl(raw: string | undefined, fallback: boolean): boolean {
+  if (raw == null || raw.trim() === "") return fallback;
+  return parseBoolean(raw, fallback);
+}
+
+type DbEnvConfig = {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+  ssl: boolean;
+};
+
+function parseDatabaseUrl(url: string): DbEnvConfig {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("Invalid DATABASE_URL — must be a postgresql:// connection string.");
+  }
+  if (parsed.protocol !== "postgresql:" && parsed.protocol !== "postgres:") {
+    throw new Error(`Invalid DATABASE_URL protocol: ${parsed.protocol}`);
+  }
+  const database = parsed.pathname.replace(/^\//, "");
+  return {
+    host: parsed.hostname,
+    port: parseDbPort(parsed.port || undefined, 5432),
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+    database: database === "" ? "postgres" : database,
+    ssl: parseDbSsl(process.env.DB_SSL, true),
+  };
+}
+
+function resolveDbConfig(): DbEnvConfig {
+  const databaseUrl = optional("DATABASE_URL");
+  if (databaseUrl) {
+    return parseDatabaseUrl(databaseUrl);
+  }
+  return {
+    host: requiredUnlessHyperdrive("DB_HOST", "hyperdrive"),
+    port: parseDbPort(process.env.DB_PORT, 5432),
+    user: requiredUnlessHyperdrive("DB_USER", "hyperdrive"),
+    password: process.env.DB_PASSWORD ?? "",
+    database: requiredUnlessHyperdrive("DB_NAME", "postgres"),
+    ssl: parseDbSsl(process.env.DB_SSL, !useHyperdrive()),
+  };
+}
+
 /**
  * Extra browser origins to allow for CORS (comma-separated), merged with the built-in allowlist
  * in `app.ts` (production frontend + local Vite). If unset, only that built-in list applies.
@@ -221,13 +271,7 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: parsePort(process.env.PORT, 3001),
   corsOrigins: parseCorsOrigins(),
-  db: {
-    host: requiredUnlessHyperdrive("DB_HOST", "hyperdrive"),
-    port: parseDbPort(process.env.DB_PORT, 3306),
-    user: requiredUnlessHyperdrive("DB_USER", "hyperdrive"),
-    password: process.env.DB_PASSWORD ?? "",
-    database: requiredUnlessHyperdrive("DB_NAME", "school"),
-  },
+  db: resolveDbConfig(),
   supabase: {
     url: optional("SUPABASE_URL"),
     serviceRoleKey: optional("SUPABASE_SERVICE_ROLE_KEY"),

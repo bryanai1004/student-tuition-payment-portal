@@ -1,3 +1,4 @@
+import { type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
 /**
  * Legacy **financial registration** and accounting (`registration`, `accounting`, `students` profile slices).
  *
@@ -7,12 +8,6 @@
  */
 
 import { createHash } from "node:crypto";
-import type {
-  Pool,
-  PoolConnection,
-  ResultSetHeader,
-  RowDataPacket,
-} from "mysql2/promise";
 
 /** Pool or a single connection (for transactions). */
 export type LegacyMysqlClient = Pool | PoolConnection;

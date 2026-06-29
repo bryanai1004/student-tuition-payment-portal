@@ -9,9 +9,7 @@
  */
 
 import { DEMO_STUDENT_ID } from "../config/constants.js";
-import { pool } from "../lib/db.js";
-import type { Pool } from "mysql2/promise";
-import type { RowDataPacket } from "mysql2";
+import { pool, type Pool, type RowDataPacket } from "../lib/db.js";
 import { listMarksForStudent } from "../repositories/studentAcademicsRepository.js";
 import {
   findLatestLegacyTermYear,

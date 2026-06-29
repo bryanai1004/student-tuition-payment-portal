@@ -1,9 +1,4 @@
-import type {
-  Pool,
-  PoolConnection,
-  ResultSetHeader,
-  RowDataPacket,
-} from "mysql2/promise";
+import { type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
 import {
   DOCUMENT_REQUIREMENT_TYPES,
   isDocumentRequirementType,
@@ -183,7 +178,7 @@ export async function ensurePortalStudentRowFromLegacyStudents(
   await db.query<ResultSetHeader>(
     `INSERT INTO portal_students (student_external_id, full_name)
      VALUES (?, ?)
-     ON DUPLICATE KEY UPDATE student_external_id = student_external_id`,
+     ON CONFLICT (student_external_id) DO UPDATE SET student_external_id = EXCLUDED.student_external_id`,
     [studentExternalId, fullName],
   );
   return true;
@@ -191,7 +186,7 @@ export async function ensurePortalStudentRowFromLegacyStudents(
 
 /**
  * Inserts missing current-state rows for all requirement types (assigned, no scores).
- * Rows that already exist are left unchanged (ON DUPLICATE KEY UPDATE id=id).
+ * Rows that already exist are left unchanged (ON CONFLICT DO NOTHING).
  */
 export async function seedMissingPortalDocumentRequirements(
   db: StudentDocumentsDbClient,
@@ -218,7 +213,7 @@ export async function seedMissingPortalDocumentRequirements(
       last_reassigned_at,
       reassigned_by
     ) VALUES ${placeholders.join(", ")}
-    ON DUPLICATE KEY UPDATE id = id`,
+    ON CONFLICT (student_external_id, academic_term_id, requirement_type) DO NOTHING`,
     values,
   );
 }
@@ -294,15 +289,15 @@ export async function upsertStudentDocumentRequirement(
       last_reassigned_at,
       reassigned_by
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      status = VALUES(status),
-      score_correct = VALUES(score_correct),
-      total_questions = VALUES(total_questions),
-      is_passed = VALUES(is_passed),
-      submitted_at = VALUES(submitted_at),
-      assigned_by = COALESCE(VALUES(assigned_by), assigned_by),
-      last_reassigned_at = VALUES(last_reassigned_at),
-      reassigned_by = VALUES(reassigned_by)`,
+    ON CONFLICT (student_external_id, academic_term_id, requirement_type) DO UPDATE SET
+      status = EXCLUDED.status,
+      score_correct = EXCLUDED.score_correct,
+      total_questions = EXCLUDED.total_questions,
+      is_passed = EXCLUDED.is_passed,
+      submitted_at = EXCLUDED.submitted_at,
+      assigned_by = COALESCE(EXCLUDED.assigned_by, portal_document_requirements.assigned_by),
+      last_reassigned_at = EXCLUDED.last_reassigned_at,
+      reassigned_by = EXCLUDED.reassigned_by)`,
     [
       input.studentExternalId,
       input.academicTermId,

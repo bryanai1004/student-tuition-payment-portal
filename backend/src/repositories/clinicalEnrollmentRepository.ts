@@ -1,5 +1,5 @@
-import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
-import { pool } from "../lib/db.js";
+import { pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
+import { isUniqueViolation } from "../lib/dbErrors.js";
 import {
   cancelActiveClinicalBookingPaymentHoldsForEnrollment,
   clinicalBookingPaymentHoldsTableExists,
@@ -11,12 +11,7 @@ import {
 } from "../services/clinicalScheduleService.js";
 
 function isMysqlDupEntry(e: unknown): boolean {
-  return (
-    typeof e === "object" &&
-    e !== null &&
-    "code" in e &&
-    (e as { code: string }).code === "ER_DUP_ENTRY"
-  );
+  return isUniqueViolation(e);
 }
 
 function normalizeEnrollmentTerm(term: string): string {
@@ -910,7 +905,7 @@ export async function markClinicalAssignmentsDroppedForStudentSlot(
         SET status = 'Dropped'
       WHERE TRIM(student_id) = TRIM(?)
         AND timetable_id = ?
-        AND TRIM(IFNULL(term, '')) = ?
+        AND TRIM(COALESCE(term, '')) = ?
         AND year = ?
         AND LOWER(TRIM(status)) NOT IN ('dropped', 'cancelled')`,
     [studentId.trim(), timetableId, te, year],

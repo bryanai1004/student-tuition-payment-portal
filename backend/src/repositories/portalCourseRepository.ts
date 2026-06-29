@@ -1,10 +1,5 @@
-import type {
-  Pool,
-  PoolConnection,
-  ResultSetHeader,
-  RowDataPacket,
-} from "mysql2/promise";
-import { pool } from "../lib/db.js";
+import { pool, type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
+import { isUniqueViolation } from "../lib/dbErrors.js";
 
 type MysqlQueryable = Pool | PoolConnection;
 
@@ -37,12 +32,7 @@ function normalizeCourseCodeKey(courseCode: string): string {
 }
 
 function isMysqlDupEntry(e: unknown): boolean {
-  return (
-    typeof e === "object" &&
-    e !== null &&
-    "code" in e &&
-    (e as { code: string }).code === "ER_DUP_ENTRY"
-  );
+  return isUniqueViolation(e);
 }
 
 function inferPortalTypeFromLegacy(engName: string): PortalCourseType {
@@ -152,7 +142,7 @@ async function getDeterministicLegacyPortalCourseSeedByCode(
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT sequenceNumber, TRIM(code) AS course_code, eng_name, units
      FROM courses
-     WHERE CONVERT(TRIM(code) USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?
+     WHERE TRIM(code) = ?
      ORDER BY sequenceNumber ASC
      LIMIT 1`,
     [code],
@@ -168,7 +158,7 @@ async function findPortalCourseIdsByCode(
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT course_id
      FROM portal_courses
-     WHERE CONVERT(TRIM(course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?
+     WHERE TRIM(course_code) = ?
      LIMIT 2`,
     [courseCode.trim()],
   );

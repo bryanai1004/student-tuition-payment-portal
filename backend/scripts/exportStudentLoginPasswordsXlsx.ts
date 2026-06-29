@@ -8,8 +8,8 @@ import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import mysql from "mysql2/promise";
 import * as XLSX from "xlsx";
+import { closePool, pool, type RowDataPacket } from "../src/lib/db.js";
 import { defaultStudentPassword } from "../src/lib/defaultStudentPassword.js";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -23,17 +23,8 @@ type ExportRow = {
 };
 
 async function main(): Promise<void> {
-  const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT ?? 3306),
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME ?? "school",
-    connectionLimit: 3,
-  });
-
   try {
-    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT TRIM(s.id) AS id, TRIM(s.name) AS name
        FROM students s
        INNER JOIN password_stu p ON TRIM(p.id) = TRIM(s.id)
@@ -74,7 +65,7 @@ async function main(): Promise<void> {
 
     console.log(`Exported ${data.length} rows → ${outPath}`);
   } finally {
-    await pool.end();
+    await closePool();
   }
 }
 

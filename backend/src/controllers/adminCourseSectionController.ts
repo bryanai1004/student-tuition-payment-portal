@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { env } from "../config/env.js";
+import { isUniqueViolation } from "../lib/dbErrors.js";
 import { getAcademicTermById } from "../repositories/academicTermRepository.js";
 import { listAdminEnrollmentRowsForSection } from "../repositories/studentEnrollmentRepository.js";
 import { buildFeedbackCsvForSection } from "../services/adminExportFeedbackCsvService.js";
@@ -44,10 +45,7 @@ function optionalStrOrNull(v: unknown): string | null | undefined {
 }
 
 function isMysqlDuplicateKey(e: unknown): boolean {
-  if (e == null || typeof e !== "object") return false;
-  const code = (e as { code?: unknown }).code;
-  const errno = (e as { errno?: unknown }).errno;
-  return code === "ER_DUP_ENTRY" || errno === 1062;
+  return isUniqueViolation(e);
 }
 
 /**

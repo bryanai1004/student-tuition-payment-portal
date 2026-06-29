@@ -31,6 +31,31 @@ export function getSupabaseAdminClient(): SupabaseClient {
   return adminClient;
 }
 
+/** Lightweight Postgres reachability check via the Supabase Data API. */
+export async function testSupabaseConnection(): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    throw new Error(
+      "Missing Supabase configuration. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+    );
+  }
+
+  const client = getSupabaseAdminClient();
+  const { error } = await client.from("admin_users").select("id").limit(1);
+  if (error) {
+    throw new Error(`Supabase connection failed: ${error.message}`);
+  }
+}
+
+export function supabaseProjectHost(): string | null {
+  const url = env.supabase.url;
+  if (!url) return null;
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
 /** Used for server-side password sign-in (anon/publishable key). */
 export function getSupabaseAnonClient(): SupabaseClient | null {
   const url = env.supabase.url;

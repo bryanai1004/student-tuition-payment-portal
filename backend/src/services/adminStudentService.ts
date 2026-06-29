@@ -1,4 +1,5 @@
 import { pool } from "../lib/db.js";
+import { isUniqueViolation } from "../lib/dbErrors.js";
 import { defaultStudentPassword } from "../lib/defaultStudentPassword.js";
 import {
   supabaseStudentAuthEnabled,
@@ -1118,7 +1119,7 @@ export async function createAdminStudent(
   } catch (e) {
     await connection.rollback();
     const err = e as NodeJS.ErrnoException & { code?: string };
-    if (err.code === "ER_DUP_ENTRY") {
+    if (isUniqueViolation(e)) {
       return {
         ok: false,
         status: 409,

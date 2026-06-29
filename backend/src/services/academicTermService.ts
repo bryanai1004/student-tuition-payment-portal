@@ -21,6 +21,7 @@ import {
   type AcademicTermDeleteDependencies,
   type AcademicTermInsertRow,
 } from "../repositories/academicTermRepository.js";
+import { isUniqueViolation } from "../lib/dbErrors.js";
 
 const TERM_NAMES: AcademicTermName[] = [
   "Winter",
@@ -175,8 +176,7 @@ export async function createAcademicTerm(
   try {
     return await insertAcademicTerm(row);
   } catch (e) {
-    const err = e as { code?: string };
-    if (err.code === "ER_DUP_ENTRY") {
+    if (isUniqueViolation(e)) {
       throw new Error("Duplicate year/quarter or sequence_no");
     }
     throw e;
@@ -282,8 +282,7 @@ export async function updateAcademicTerm(
   try {
     return await updateAcademicTermRow(currentId, row);
   } catch (e) {
-    const err = e as { code?: string };
-    if (err.code === "ER_DUP_ENTRY") {
+    if (isUniqueViolation(e)) {
       throw new Error("Duplicate year/quarter or sequence_no");
     }
     throw e;

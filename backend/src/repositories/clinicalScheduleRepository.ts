@@ -1,9 +1,4 @@
-import type {
-  PoolConnection,
-  ResultSetHeader,
-  RowDataPacket,
-} from "mysql2/promise";
-import { pool } from "../lib/db.js";
+import { pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
 
 export type ClinicalAssignmentDbRow = {
   id: number;
@@ -128,17 +123,17 @@ export async function listStudentClinicalAssignments(
             ct.slot AS tt_slot, ct.instructor AS tt_instructor, ct.term AS tt_term, ct.year AS tt_year
        FROM clinical_assignments ca
        LEFT JOIN clinic_timetable ct ON ca.timetable_id = ct.seqNum
-      WHERE TRIM(ca.student_id) COLLATE utf8mb4_unicode_ci = TRIM(?) COLLATE utf8mb4_unicode_ci
+      WHERE TRIM(ca.student_id) = TRIM(?)
        AND (
          ca.timetable_id IS NULL
          OR EXISTS (
            SELECT 1
              FROM clinical_enrollments ce
-            WHERE TRIM(ce.student_id) COLLATE utf8mb4_unicode_ci = TRIM(ca.student_id) COLLATE utf8mb4_unicode_ci
+            WHERE TRIM(ce.student_id) = TRIM(ca.student_id)
               AND ce.timetable_id = ca.timetable_id
-              AND TRIM(ce.term) COLLATE utf8mb4_unicode_ci = TRIM(IFNULL(ca.term, '')) COLLATE utf8mb4_unicode_ci
+              AND TRIM(ce.term) = TRIM(COALESCE(ca.term, ''))
               AND ce.year = ca.\`year\`
-              AND LOWER(TRIM(ce.status)) COLLATE utf8mb4_unicode_ci = 'enrolled' COLLATE utf8mb4_unicode_ci
+              AND LOWER(TRIM(ce.status)) = 'enrolled'
          )
        )
       ORDER BY COALESCE(ca.\`year\`, YEAR(ca.session_date)) DESC,

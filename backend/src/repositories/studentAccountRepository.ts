@@ -1,4 +1,4 @@
-import type { Pool, RowDataPacket } from "mysql2/promise";
+import { type Pool, type RowDataPacket } from "../lib/db.js";
 import type {
   AccountContext,
   BillingAdjustmentRecord,
@@ -91,9 +91,9 @@ async function hasPortalBillingAdjustmentsAdjustmentSourceColumn(
     portalBillingAdjustmentsAdjustmentSourceDetect = pool
       .query<RowDataPacket[]>(
         `SELECT 1 AS ok
-         FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'portal_billing_adjustments'
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'portal_billing_adjustments'
            AND COLUMN_NAME = 'adjustment_source'
          LIMIT 1`,
       )
@@ -119,9 +119,9 @@ async function hasPortalBillingAdjustmentsReversalOfColumn(
     portalBillingAdjustmentsReversalOfDetect = pool
       .query<RowDataPacket[]>(
         `SELECT 1 AS ok
-         FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'portal_billing_adjustments'
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'portal_billing_adjustments'
            AND COLUMN_NAME = 'reversal_of_adjustment_id'
          LIMIT 1`,
       )

@@ -1,5 +1,4 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import { pool } from "../lib/db.js";
+import { pool, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
 
 /** API shape for one `course_sections` row (stable for future admin CRUD). */
 export type CourseSectionDetail = {
@@ -152,8 +151,8 @@ const SECTION_SELECT = `
     cs.notes
   FROM course_sections cs
   LEFT JOIN portal_courses prereq_pc
-    ON CONVERT(TRIM(prereq_pc.course_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-       CONVERT(TRIM(cs.prerequisite_course_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+    ON TRIM(prereq_pc.course_id) =
+       TRIM(cs.prerequisite_course_id)
 `;
 
 const UPDATABLE_COLUMNS = [
@@ -276,11 +275,11 @@ export async function listCourseSectionsWithEnrollmentAggregates(
       agg.enrolled_students_json
     FROM course_sections cs
     LEFT JOIN portal_courses prereq_pc
-      ON CONVERT(TRIM(prereq_pc.course_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-         CONVERT(TRIM(cs.prerequisite_course_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      ON TRIM(prereq_pc.course_id) =
+         TRIM(cs.prerequisite_course_id)
     LEFT JOIN courses crs
-      ON CONVERT(TRIM(crs.code) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-         CONVERT(TRIM(cs.course_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      ON TRIM(crs.code) =
+         TRIM(cs.course_code)
     LEFT JOIN (
       SELECT
         csx.id AS section_row_id,
@@ -297,32 +296,32 @@ export async function listCourseSectionsWithEnrollmentAggregates(
           (e.course_section_id IS NOT NULL AND e.course_section_id = csx.id)
           OR (
             e.course_section_id IS NULL
-            AND TRIM(e.term) COLLATE utf8mb4_unicode_ci =
-                TRIM(csx.term) COLLATE utf8mb4_unicode_ci
+            AND TRIM(e.term) =
+                TRIM(csx.term)
             AND e.year = csx.year
             AND EXISTS (
               SELECT 1 FROM portal_courses pc
               WHERE pc.course_id = e.course_id
-                AND TRIM(pc.course_code) COLLATE utf8mb4_unicode_ci =
-                    TRIM(csx.course_code) COLLATE utf8mb4_unicode_ci
+                AND TRIM(pc.course_code) =
+                    TRIM(csx.course_code)
             )
             AND csx.id = (
               SELECT MIN(cs2.id)
               FROM course_sections cs2
-              WHERE TRIM(cs2.course_code) COLLATE utf8mb4_unicode_ci =
-                    TRIM(csx.course_code) COLLATE utf8mb4_unicode_ci
-                AND TRIM(cs2.term) COLLATE utf8mb4_unicode_ci =
-                    TRIM(csx.term) COLLATE utf8mb4_unicode_ci
+              WHERE TRIM(cs2.course_code) =
+                    TRIM(csx.course_code)
+                AND TRIM(cs2.term) =
+                    TRIM(csx.term)
                 AND cs2.year = csx.year
             )
           )
         )
         AND (e.status IS NULL OR LOWER(TRIM(e.status)) = 'active')
       LEFT JOIN portal_students ps
-        ON CONVERT(ps.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-           CONVERT(e.student_external_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-      WHERE TRIM(csx.term) COLLATE utf8mb4_unicode_ci =
-            CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+        ON ps.student_external_id =
+           e.student_external_id
+      WHERE TRIM(csx.term) =
+            ?
         AND csx.year = ?
         ${courseClauseAgg}
       GROUP BY csx.id
@@ -377,8 +376,8 @@ export async function listPortalEnrollmentRollupsByCourseForTermYear(
     FROM portal_enrollments e
     INNER JOIN portal_courses pc ON pc.course_id = e.course_id
     LEFT JOIN portal_students ps ON ps.student_external_id = e.student_external_id
-    WHERE e.term COLLATE utf8mb4_unicode_ci =
-          CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
+    WHERE e.term =
+          ?
       AND e.year = ?
       AND (e.status IS NULL OR e.status = 'active')
     GROUP BY pc.course_code
@@ -439,8 +438,8 @@ export async function listCoursePrerequisiteCandidatesByCourseForTermYear(
       pc.title AS prerequisite_course_title
     FROM course_sections cs
     LEFT JOIN portal_courses pc
-      ON CONVERT(TRIM(pc.course_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-         CONVERT(TRIM(cs.prerequisite_course_id) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      ON TRIM(pc.course_id) =
+         TRIM(cs.prerequisite_course_id)
     WHERE cs.term = ? AND cs.year = ?
     ORDER BY
       cs.course_code ASC,

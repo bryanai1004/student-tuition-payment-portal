@@ -1,5 +1,6 @@
 import { DEMO_STUDENT_ID } from "../config/constants.js";
 import { pool } from "../lib/db.js";
+import { isUniqueViolation } from "../lib/dbErrors.js";
 import {
   createCourseFeedback,
   findCourseFeedbackByStudentCourseTerm,
@@ -170,8 +171,7 @@ export async function submitCourseFeedback(
     });
     return { ok: true };
   } catch (e) {
-    const err = e as { code?: string };
-    if (err.code === "ER_DUP_ENTRY") {
+    if (isUniqueViolation(e)) {
       return {
         ok: false,
         status: 409,

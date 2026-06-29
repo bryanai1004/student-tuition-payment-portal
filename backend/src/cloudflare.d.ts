@@ -17,3 +17,8 @@ interface Hyperdrive {
   database: string;
   port: number;
 }
+
+interface ExecutionContext {
+  waitUntil(promise: Promise<unknown>): void;
+  passThroughOnException(): void;
+}

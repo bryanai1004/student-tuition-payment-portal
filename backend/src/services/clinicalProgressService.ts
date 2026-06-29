@@ -1,9 +1,9 @@
+import { type Pool, type RowDataPacket } from "../lib/db.js";
 /**
  * ClinicalProgress = clinic ladder + completed hours vs `requirements.clinic_hours`.
  * Not an academic course attempt (marks/clinic grade rows); not transcript UI rows; do not merge into didactic unit totals.
  */
 
-import type { Pool, RowDataPacket } from "mysql2/promise";
 import type { ClinicalProgress } from "../domain/studentDomainModels.js";
 
 /** When `requirements.clinic_hours` is missing, null, or non-positive, avoid implying 0 required / "ready". */

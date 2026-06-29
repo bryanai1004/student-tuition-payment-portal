@@ -7,10 +7,10 @@
  * 2. skip when no name
  *
  * Requires: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
- * Optional: DB_* to read students from MySQL (recommended — matches production roster)
+ * Optional: DB_* / DATABASE_URL to read students from Supabase Postgres
  */
 import "dotenv/config";
-import mysql from "mysql2/promise";
+import { pool, type RowDataPacket } from "../src/lib/db.js";
 import { defaultStudentPassword } from "../src/lib/defaultStudentPassword.js";
 import {
   studentIdToAuthEmail,
@@ -20,29 +20,17 @@ import {
 
 type StudentRow = { id: string; name: string | null };
 
-async function loadStudentsFromMysql(): Promise<StudentRow[]> {
-  const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT ?? 3306),
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME ?? "school",
-    connectionLimit: 3,
-  });
-  try {
-    const [rows] = await pool.query<mysql.RowDataPacket[]>(
-      `SELECT TRIM(s.id) AS id, TRIM(s.name) AS name
-       FROM students s
-       INNER JOIN password_stu p ON TRIM(p.id) = TRIM(s.id)
-       ORDER BY s.id ASC`,
-    );
-    return rows.map((r) => ({
-      id: String(r.id),
-      name: r.name == null ? null : String(r.name),
-    }));
-  } finally {
-    await pool.end();
-  }
+async function loadStudentsFromPostgres(): Promise<StudentRow[]> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT TRIM(s.id) AS id, TRIM(s.name) AS name
+     FROM students s
+     INNER JOIN password_stu p ON TRIM(p.id) = TRIM(s.id)
+     ORDER BY s.id ASC`,
+  );
+  return rows.map((r) => ({
+    id: String(r.id),
+    name: r.name == null ? null : String(r.name),
+  }));
 }
 
 async function main(): Promise<void> {
@@ -56,7 +44,7 @@ async function main(): Promise<void> {
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : null;
 
-  const students = await loadStudentsFromMysql();
+  const students = await loadStudentsFromPostgres();
   const slice =
     limit != null && Number.isFinite(limit) && limit > 0
       ? students.slice(0, limit)

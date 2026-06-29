@@ -1,5 +1,4 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import { pool } from "../lib/db.js";
+import { pool, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
 import type { CourseBinApiItem, CourseBinUpsertInput } from "../types/courseBin.js";
 
 function ts(v: unknown): string {
@@ -82,17 +81,17 @@ export async function upsertCourseBinItem(
       eng_name,
       chi_name
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      session = VALUES(session),
-      type = VALUES(type),
-      units = VALUES(units),
-      registered_display = VALUES(registered_display),
-      time_display = VALUES(time_display),
-      days_display = VALUES(days_display),
-      instructor = VALUES(instructor),
-      location = VALUES(location),
-      eng_name = VALUES(eng_name),
-      chi_name = VALUES(chi_name),
+    ON CONFLICT (student_id, course_code, section) DO UPDATE SET
+      session = EXCLUDED.session,
+      type = EXCLUDED.type,
+      units = EXCLUDED.units,
+      registered_display = EXCLUDED.registered_display,
+      time_display = EXCLUDED.time_display,
+      days_display = EXCLUDED.days_display,
+      instructor = EXCLUDED.instructor,
+      location = EXCLUDED.location,
+      eng_name = EXCLUDED.eng_name,
+      chi_name = EXCLUDED.chi_name,
       updated_at = CURRENT_TIMESTAMP`,
     [
       studentId,

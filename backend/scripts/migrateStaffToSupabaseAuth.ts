@@ -1,12 +1,11 @@
 #!/usr/bin/env npx tsx
 /**
- * Wipe legacy admin accounts and seed the new staff roster in MySQL + Supabase Auth.
+ * Wipe legacy admin accounts and seed the new staff roster in Postgres + Supabase Auth.
  *
- * Requires: DB_*, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
+ * Requires: DB_* / DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
  */
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import mysql from "mysql2/promise";
 import {
   deleteNonStudentSupabaseAuthUsers,
 } from "../src/lib/supabaseAuthCommon.js";
@@ -15,29 +14,28 @@ import {
   upsertStaffSupabaseAuthUser,
   supabaseStaffAuthEnabled,
 } from "../src/lib/staffSupabaseAuth.js";
+import { closePool, pool, type Pool, type RowDataPacket } from "../src/lib/db.js";
 
-async function ensureAdminUsersColumns(pool: mysql.Pool): Promise<void> {
-  const [usernameCol] = await pool.query<mysql.RowDataPacket[]>(
-    `SHOW COLUMNS FROM admin_users LIKE 'username'`,
+async function ensureAdminUsersColumns(db: Pool): Promise<void> {
+  const [rows] = await db.query<RowDataPacket[]>(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'admin_users'
+       AND column_name = 'username'`,
   );
-  if (usernameCol.length === 0) {
-    await pool.execute(
-      `ALTER TABLE admin_users
-         ADD COLUMN username varchar(64) NULL AFTER email,
-         ADD COLUMN display_name varchar(255) NULL AFTER username`,
-    );
-    await pool.execute(
-      `ALTER TABLE admin_users
-         ADD UNIQUE KEY uq_admin_users_username (username)`,
+  if (rows.length === 0) {
+    throw new Error(
+      "admin_users.username is missing — apply supabase/migrations for admin_users first.",
     );
   }
 }
 
-async function resetAdminUsers(pool: mysql.Pool): Promise<void> {
-  await pool.execute(`DELETE FROM admin_users`);
+async function resetAdminUsers(db: Pool): Promise<void> {
+  await db.execute(`DELETE FROM admin_users`);
   for (const row of STAFF_SEED_ROWS) {
     const passwordHash = await bcrypt.hash(row.password, 10);
-    await pool.execute(
+    await db.execute(
       `INSERT INTO admin_users (email, username, display_name, password_hash, role)
        VALUES (?, ?, ?, ?, ?)`,
       [
@@ -58,15 +56,6 @@ async function main(): Promise<void> {
     );
   }
 
-  const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT ?? 3306),
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME ?? "school",
-    connectionLimit: 3,
-  });
-
   try {
     console.log("Ensuring admin_users columns…");
     await ensureAdminUsersColumns(pool);
@@ -75,7 +64,7 @@ async function main(): Promise<void> {
     const deleted = await deleteNonStudentSupabaseAuthUsers();
     console.log(`Deleted ${deleted} non-student auth user(s).`);
 
-    console.log("Resetting admin_users in MySQL…");
+    console.log("Resetting admin_users in Postgres…");
     await resetAdminUsers(pool);
     console.log(`Inserted ${STAFF_SEED_ROWS.length} admin_users row(s).`);
 
@@ -87,7 +76,7 @@ async function main(): Promise<void> {
 
     console.log("Staff migration complete.");
   } finally {
-    await pool.end();
+    await closePool();
   }
 }
 
