@@ -1696,8 +1696,8 @@ export type AuthorizeNetChargeRequest = {
   paymentPlan?: 'full' | 'installment'
   installmentCount?: 1 | 2 | 3
   opaqueData: AuthorizeNetOpaqueData
-  /** First 6–8 digits of the card; must match server-side BIN rules. */
-  cardBinPrefix: string
+  /** First 6–8 digits of the card; omit for Apple Pay (server uses a default BIN for fees). */
+  cardBinPrefix?: string
   /** Name as printed on the card. */
   cardholderName: string
   /** US billing ZIP (5 digits or ZIP+4) for AVS. */

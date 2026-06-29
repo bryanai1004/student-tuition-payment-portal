@@ -55,6 +55,7 @@ import {
   type AdminModuleKey,
 } from './lib/adminAccess'
 import './styles/portal.css'
+import './styles/apple-pay.css'
 
 function RequireAuth() {
   const { isAuthenticated } = useAccount()

@@ -1,0 +1,71 @@
+/* Native Apple Pay button appearance (Safari / iOS). */
+.portal-finance-apple-pay {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.portal-finance-apple-pay__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: #000;
+  cursor: pointer;
+}
+
+.portal-finance-apple-pay__button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.portal-finance-apple-pay__apple-button {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: 44px;
+  -webkit-appearance: -apple-pay-button;
+  -apple-pay-button-type: pay;
+  -apple-pay-button-style: black;
+}
+
+@supports not (-webkit-appearance: -apple-pay-button) {
+  .portal-finance-apple-pay__apple-button {
+    -webkit-appearance: none;
+    appearance: none;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 165 40'%3E%3Crect width='165' height='40' rx='8' fill='%23000'/%3E%3Ctext x='50%25' y='52%25' fill='white' font-family='-apple-system,sans-serif' font-size='15' text-anchor='middle'%3E Pay%3C/text%3E%3C/svg%3E");
+  }
+}
+
+.portal-finance-apple-pay__busy {
+  position: absolute;
+  color: #fff;
+  font-size: 0.875rem;
+}
+
+.portal-finance-apple-pay__note {
+  margin: 0;
+  text-align: center;
+}
+
+.portal-finance-checkout-form__divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.25rem 0 1rem;
+  color: var(--portal-muted, #666);
+  font-size: 0.8125rem;
+}
+
+.portal-finance-checkout-form__divider::before,
+.portal-finance-checkout-form__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--portal-border, #ddd);
+}

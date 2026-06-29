@@ -453,7 +453,6 @@ export function parseAuthorizeChargeBody(
   const parsedInstallmentCount = parseInstallmentCount(o.installmentCount);
   const installmentCount = parsedInstallmentCount ?? 3;
   const opaque = o.opaqueData;
-  const cardBinPrefix = normalizeCardBinPrefix(o.cardBinPrefix ?? o.cardBinSix);
   if (term === "") {
     return { ok: false, error: "term is required." };
   }
@@ -493,11 +492,20 @@ export function parseAuthorizeChargeBody(
       error: "opaqueData must include dataDescriptor and dataValue.",
     };
   }
-  if (cardBinPrefix == null) {
-    return {
-      ok: false,
-      error: "cardBinPrefix must be the first 6–8 digits of the card number.",
-    };
+  const isApplePay = /apple/i.test(descriptor);
+  let cardBinPrefix: string;
+  if (isApplePay) {
+    cardBinPrefix =
+      normalizeCardBinPrefix(o.cardBinPrefix ?? o.cardBinSix) ?? "424242";
+  } else {
+    const bin = normalizeCardBinPrefix(o.cardBinPrefix ?? o.cardBinSix);
+    if (bin == null) {
+      return {
+        ok: false,
+        error: "cardBinPrefix must be the first 6–8 digits of the card number.",
+      };
+    }
+    cardBinPrefix = bin;
   }
   const billing = parsePaymentBillingDetails(o);
   if (!billing.ok) {

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { postApplePayValidateMerchantHandler } from "../controllers/applePayController.js";
 import {
   getAdminStudentAcademicRecords,
   getAdminStudent,
@@ -173,6 +174,10 @@ apiRouter.get("/health/db", getHealthDb);
 
 apiRouter.post("/auth/login", postStudentLogin);
 apiRouter.post("/payments/authorize/charge", postAuthorizeNetChargeHandler);
+apiRouter.post(
+  "/payments/apple-pay/validate-merchant",
+  postApplePayValidateMerchantHandler,
+);
 apiRouter.post("/payments/authorize/tuition-charge", postAuthorizeNetTuitionChargeHandler);
 apiRouter.post(
   "/payments/authorize/clinic-fee-charge",
