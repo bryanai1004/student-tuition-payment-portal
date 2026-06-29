@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
-import { issueStudentAccessToken } from "../lib/studentAuthToken.js";
 import { pool } from "../lib/db.js";
-import { authenticateLegacyStudent } from "../services/studentLegacyAuthService.js";
+import { authenticateStudentLogin } from "../services/studentAuthService.js";
 
 function readLoginBody(req: Request): { studentId: string; password: string } {
   const body = req.body as Record<string, unknown> | null | undefined;
@@ -32,29 +31,27 @@ export async function postStudentLogin(
   }
 
   try {
-    const result = await authenticateLegacyStudent(pool, studentId, password);
+    const result = await authenticateStudentLogin(pool, studentId, password);
     if (!result) {
-      // TEMP(verify rollout): single runtime path — `students` row + `password_stu` MD5 hex only (see service logs).
-      console.info("[auth] TEMP student login response: failed", {
+      console.info("[auth] student login response: failed", {
         studentId: idTrim,
         verifiedVia: null,
       });
-      console.debug("[auth] invalid credentials", { studentId: idTrim });
       res.status(401).json({ error: "Invalid student ID or password" });
       return;
     }
-    // TEMP(verify rollout): success only after `password_stu` MD5-hex check in authenticateLegacyStudent.
-    console.info("[auth] TEMP student login response: ok", {
+
+    console.info("[auth] student login response: ok", {
       studentId: idTrim,
-      verifiedVia: "password_stu_md5_hex",
+      verifiedVia: result.verifiedVia,
     });
     res.status(200).json({
       studentId: result.studentId,
       displayName: result.displayName,
-      accessToken: issueStudentAccessToken(result.studentId),
+      accessToken: result.accessToken,
     });
   } catch (e) {
-    console.error("[auth] login database error:", e);
+    console.error("[auth] login failed:", e);
     res.status(500).json({ error: "Login failed" });
   }
 }

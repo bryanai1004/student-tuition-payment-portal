@@ -1,10 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { env } from "../config/env.js";
+import { getSupabaseAdminClient } from "../lib/supabaseAdmin.js";
 
 const STUDENT_PHOTO_SIGNED_URL_TTL_SECONDS = 3600;
-
-let supabaseClient: SupabaseClient | null = null;
 
 function requireSupabaseStorageConfig(): {
   url: string;
@@ -29,12 +28,7 @@ function requireSupabaseStorageConfig(): {
 }
 
 function getSupabaseClient(): SupabaseClient {
-  if (supabaseClient) return supabaseClient;
-  const cfg = requireSupabaseStorageConfig();
-  supabaseClient = createClient(cfg.url, cfg.serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  return supabaseClient;
+  return getSupabaseAdminClient();
 }
 
 function extFromContentType(contentType: string): "jpg" | "png" | "webp" {

@@ -33,6 +33,7 @@ id = "20f6041e55724e0489cc08b30bdd8377"
 #   npx wrangler secret put STUDENT_AUTH_SECRET
 #   npx wrangler secret put SUPABASE_URL
 #   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#   npx wrangler secret put SUPABASE_ANON_KEY
 #   npx wrangler secret put AUTHORIZE_API_LOGIN_ID
 #   npx wrangler secret put AUTHORIZE_TRANSACTION_KEY
 #   npx wrangler secret put OPENAI_API_KEY

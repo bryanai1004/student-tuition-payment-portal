@@ -231,6 +231,10 @@ export const env = {
   supabase: {
     url: optional("SUPABASE_URL"),
     serviceRoleKey: optional("SUPABASE_SERVICE_ROLE_KEY"),
+    /** Publishable/anon key — required for Supabase Auth student sign-in on the API. */
+    anonKey:
+      optional("SUPABASE_ANON_KEY") ??
+      optional("SUPABASE_PUBLISHABLE_KEY"),
     storageBucket: optional("SUPABASE_STORAGE_BUCKET") ?? "student-photos",
   },
   smtp: {

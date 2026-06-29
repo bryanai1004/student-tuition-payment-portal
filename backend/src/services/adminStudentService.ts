@@ -1,6 +1,10 @@
 import { pool } from "../lib/db.js";
 import { defaultStudentPassword } from "../lib/defaultStudentPassword.js";
 import {
+  supabaseStudentAuthEnabled,
+  upsertStudentSupabaseAuthUser,
+} from "../lib/studentSupabaseAuth.js";
+import {
   createLegacyStudentLoaRow,
   createLegacyStudentMasterRow,
   createLegacyStudentPasswordRow,
@@ -1104,6 +1108,10 @@ export async function createAdminStudent(
       studentId,
       initialPassword,
     );
+
+    if (supabaseStudentAuthEnabled()) {
+      await upsertStudentSupabaseAuthUser(studentId, initialPassword);
+    }
 
     await connection.commit();
     return { ok: true, studentId };

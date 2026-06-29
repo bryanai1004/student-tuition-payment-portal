@@ -24,6 +24,7 @@
     "pw:repair-amu-2026": "tsx scripts/audit-amu-2026-password-migration.ts --repair",
     "job:clinical-hold-cleanup": "tsx scripts/runClinicalPaymentHoldCleanup.ts",
     "admin:create": "tsx scripts/create-admin.ts",
+    "auth:migrate-students": "tsx scripts/migrateStudentsToSupabaseAuth.ts",
     "smoke:academics": "tsx scripts/smoke-academics-progress.ts",
     "smoke:withdrawal": "tsx scripts/smoke-portal-withdrawal.ts",
     "dev:worker": "wrangler dev",
