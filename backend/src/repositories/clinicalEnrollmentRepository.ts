@@ -1,5 +1,6 @@
 import { pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
 import { isUniqueViolation } from "../lib/dbErrors.js";
+import { sortTermYearPairsDescending } from "../lib/pgSql.js";
 import {
   cancelActiveClinicalBookingPaymentHoldsForEnrollment,
   clinicalBookingPaymentHoldsTableExists,
@@ -530,21 +531,15 @@ export async function listClinicalFinanceQuarterHintsForStudent(
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT DISTINCT TRIM(term) AS term, year
        FROM clinical_enrollments
-      WHERE TRIM(student_id) = TRIM(?)
-      ORDER BY year DESC,
-        CASE UPPER(TRIM(term))
-          WHEN 'FALL' THEN 4
-          WHEN 'SUMMER' THEN 3
-          WHEN 'SPRING' THEN 2
-          WHEN 'WINTER' THEN 1
-          ELSE 0
-        END DESC`,
+      WHERE TRIM(student_id) = TRIM(?)`,
     [sid],
   );
-  return rows.map((r) => ({
-    term: String(r.term ?? "").trim(),
-    year: Number(r.year),
-  }));
+  return sortTermYearPairsDescending(
+    rows.map((r) => ({
+      term: String(r.term ?? "").trim(),
+      year: Number(r.year),
+    })),
+  );
 }
 
 export async function listStudentClinicalEnrollments(

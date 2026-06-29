@@ -1,4 +1,5 @@
 import { type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
+import { sortTermYearPairsDescending } from "../lib/pgSql.js";
 /**
  * Legacy **financial registration** and accounting (`registration`, `accounting`, `students` profile slices).
  *
@@ -97,15 +98,15 @@ export async function listLegacyRegistrationTermsForStudent(
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT DISTINCT TRIM(term) AS term, year
      FROM registration
-     WHERE id = ?
-     ORDER BY year DESC,
-      ${legacyQuarterOrderSql("term")} DESC`,
+     WHERE id = ?`,
     [studentId],
   );
-  return rows.map((r) => ({
-    term: normalizeTerm(r.term),
-    year: Number(r.year),
-  }));
+  return sortTermYearPairsDescending(
+    rows.map((r) => ({
+      term: normalizeTerm(r.term),
+      year: Number(r.year),
+    })),
+  );
 }
 
 /**

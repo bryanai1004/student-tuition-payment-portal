@@ -196,7 +196,7 @@ export async function seedMissingPortalDocumentRequirements(
   const values: unknown[] = [];
   const placeholders: string[] = [];
   for (const rt of DOCUMENT_REQUIREMENT_TYPES) {
-    placeholders.push("(?, ?, ?, 'assigned', NULL, NULL, 0, NULL, NULL, NULL, NULL)");
+    placeholders.push("(?, ?, ?, 'assigned', NULL, NULL, false, NULL, NULL, NULL, NULL)");
     values.push(studentExternalId, academicTermId, rt);
   }
   await db.query<ResultSetHeader>(
@@ -305,7 +305,7 @@ export async function upsertStudentDocumentRequirement(
       input.status,
       input.scoreCorrect,
       input.totalQuestions,
-      input.isPassed ? 1 : 0,
+      input.isPassed,
       input.submittedAt,
       input.assignedBy,
       input.lastReassignedAt,
@@ -353,7 +353,7 @@ export async function createStudentDocumentRequirementAttempt(
       jsonArg,
       input.scoreCorrect,
       input.totalQuestions,
-      input.isPassed ? 1 : 0,
+      input.isPassed,
     ],
   );
 
@@ -402,7 +402,7 @@ export async function resetStudentDocumentRequirement(
      SET status = 'assigned',
          score_correct = NULL,
          total_questions = NULL,
-         is_passed = 0,
+         is_passed = false,
          submitted_at = NULL,
          last_reassigned_at = CURRENT_TIMESTAMP,
          reassigned_by = ?
@@ -425,7 +425,7 @@ export async function resetAllStudentDocumentRequirementsForTerm(
      SET status = 'assigned',
          score_correct = NULL,
          total_questions = NULL,
-         is_passed = 0,
+         is_passed = false,
          submitted_at = NULL,
          last_reassigned_at = CURRENT_TIMESTAMP,
          reassigned_by = ?

@@ -1,4 +1,5 @@
 import { type Pool, type RowDataPacket } from "../lib/db.js";
+import { sortTermYearPairsDescending } from "../lib/pgSql.js";
 import type {
   AccountContext,
   BillingAdjustmentRecord,
@@ -148,25 +149,21 @@ export async function findLatestTermYearForStudent(
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT DISTINCT term, year
      FROM portal_enrollments
-     WHERE student_external_id = ?
-     ORDER BY year DESC,
-       CASE UPPER(TRIM(term))
-         WHEN 'FALL' THEN 4
-         WHEN 'SUMMER' THEN 3
-         WHEN 'SPRING' THEN 2
-         WHEN 'WINTER' THEN 1
-         ELSE 0
-       END DESC
-     LIMIT 1`,
+     WHERE student_external_id = ?`,
     [studentExternalId],
   );
 
-  if (rows.length === 0) {
+  const sorted = sortTermYearPairsDescending(
+    rows.map((r) => ({
+      term: String(r.term),
+      year: Number(r.year),
+    })),
+  );
+  if (sorted.length === 0) {
     return null;
   }
 
-  const r = rows[0]!;
-  return { term: String(r.term), year: Number(r.year) };
+  return sorted[0]!;
 }
 
 /**
@@ -180,21 +177,15 @@ export async function listPortalScheduleTermsForStudent(
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT DISTINCT term, year
      FROM portal_enrollments
-     WHERE student_external_id = ?
-     ORDER BY year DESC,
-       CASE UPPER(TRIM(term))
-         WHEN 'FALL' THEN 4
-         WHEN 'SUMMER' THEN 3
-         WHEN 'SPRING' THEN 2
-         WHEN 'WINTER' THEN 1
-         ELSE 0
-       END DESC`,
+     WHERE student_external_id = ?`,
     [studentExternalId],
   );
-  return rows.map((r) => ({
-    term: String(r.term),
-    year: Number(r.year),
-  }));
+  return sortTermYearPairsDescending(
+    rows.map((r) => ({
+      term: String(r.term),
+      year: Number(r.year),
+    })),
+  );
 }
 
 /**
@@ -222,21 +213,15 @@ export async function listPortalFinanceActivityTermsForStudent(
        FROM portal_payments
        WHERE student_external_id = ?
      ) u
-     WHERE TRIM(term) <> ''
-     ORDER BY year DESC,
-       CASE UPPER(TRIM(term))
-         WHEN 'FALL' THEN 4
-         WHEN 'SUMMER' THEN 3
-         WHEN 'SPRING' THEN 2
-         WHEN 'WINTER' THEN 1
-         ELSE 0
-       END DESC`,
+     WHERE TRIM(term) <> ''`,
     [sid, sid, sid],
   );
-  return rows.map((r) => ({
-    term: String(r.term),
-    year: Number(r.year),
-  }));
+  return sortTermYearPairsDescending(
+    rows.map((r) => ({
+      term: String(r.term),
+      year: Number(r.year),
+    })),
+  );
 }
 
 /**

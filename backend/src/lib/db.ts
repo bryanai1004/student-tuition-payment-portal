@@ -151,6 +151,9 @@ function normalizeSql(sql: string): string {
     /\bDATE_ADD\s*\(\s*UTC_TIMESTAMP\s*\(\s*\)\s*,\s*INTERVAL\s+(\d+)\s+HOUR\s*\)/gi,
     "((NOW() AT TIME ZONE 'UTC') + ($1 || ' hours')::interval)",
   );
+  out = out.replace(/\bJSON_ARRAYAGG\s*\(/gi, "json_agg(");
+  out = out.replace(/\bJSON_OBJECT\s*\(/gi, "json_build_object(");
+  out = out.replace(/\bCAST\s*\(\s*\?\s+AS\s+JSON\s*\)/gi, "(?::jsonb)");
   out = quoteMixedCaseIdentifiers(out);
   return out;
 }

@@ -35,6 +35,32 @@ export function portalQuarterOrderSql(termColumnRef: string): string {
   END`;
 }
 
+/** Calendar quarter rank (Fall > Summer > Spring > Winter). */
+export function portalQuarterOrderRank(term: string): number {
+  switch (term.trim().toUpperCase()) {
+    case "FALL":
+      return 4;
+    case "SUMMER":
+      return 3;
+    case "SPRING":
+      return 2;
+    case "WINTER":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+/** Sort term/year pairs newest-first (Postgres rejects ORDER BY CASE with SELECT DISTINCT). */
+export function sortTermYearPairsDescending<T extends { term: string; year: number }>(
+  rows: T[],
+): T[] {
+  return [...rows].sort((a, b) => {
+    if (b.year !== a.year) return b.year - a.year;
+    return portalQuarterOrderRank(b.term) - portalQuarterOrderRank(a.term);
+  });
+}
+
 /** Strip MySQL CONVERT(… USING utf8mb4) and COLLATE utf8mb4_unicode_ci from SQL fragments. */
 export function mysqlUtf8ToPostgres(sql: string): string {
   let out = sql;
