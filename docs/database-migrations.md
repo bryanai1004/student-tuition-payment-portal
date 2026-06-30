@@ -41,12 +41,11 @@ Repository migration **filenames must match** the `version` + `name` in that tab
 | `20260629234519` | `fix_portal_id_sequences` |
 | `20260630164017` | `student_course_bin` |
 | `20260630164451` | `backfill_portal_enrollment_course_section_id_v2` |
+| `20260630180000` | `course_placeholder_equivalencies` |
 
 ### Pending (in repo, not yet on production)
 
-| Version | Name |
-|---------|------|
-| `20260630180000` | `course_placeholder_equivalencies` |
+_None — keep this section updated when new migrations land before `db push`._
 
 After review: `supabase db push` from repo root.
 

@@ -28,9 +28,10 @@ const PRODUCTION_LEDGER = [
   ["20260629234519", "fix_portal_id_sequences"],
   ["20260630164017", "student_course_bin"],
   ["20260630164451", "backfill_portal_enrollment_course_section_id_v2"],
+  ["20260630180000", "course_placeholder_equivalencies"],
 ];
 
-const PENDING = [["20260630180000", "course_placeholder_equivalencies"]];
+const PENDING: Array<[string, string]> = [];
 
 function parseFilename(file) {
   const m = /^(\d+)_(.+)\.sql$/.exec(file);
