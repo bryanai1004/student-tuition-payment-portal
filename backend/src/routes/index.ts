@@ -100,6 +100,11 @@ import {
   postStudentMyPhotoHandler,
   uploadStudentMyPhotoMiddleware,
 } from "../controllers/studentPhotoController.js";
+import {
+  getStudentLoginEmailHandler,
+  postStudentLoginEmailSendCodeHandler,
+  postStudentLoginEmailVerifyHandler,
+} from "../controllers/studentLoginEmailController.js";
 import { postStudentLogin } from "../controllers/studentAuthController.js";
 import {
   getAdminAuthMe,
@@ -260,6 +265,9 @@ studentPortalRouter.get(
   getStudentClinicalExamRequestsHandler,
 );
 studentPortalRouter.put("/profile", putStudentProfile);
+studentPortalRouter.get("/login-email", getStudentLoginEmailHandler);
+studentPortalRouter.post("/login-email/send-code", postStudentLoginEmailSendCodeHandler);
+studentPortalRouter.post("/login-email/verify", postStudentLoginEmailVerifyHandler);
 studentPortalRouter.get("/me/photo-url", getStudentMyPhotoUrlHandler);
 studentPortalRouter.post(
   "/me/photo",

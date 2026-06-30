@@ -1294,6 +1294,79 @@ export async function uploadMyStudentPhoto(
   return parseStudentSelfPhotoPayload(data)
 }
 
+export type StudentLoginEmailStatus = {
+  verified: boolean
+  emailMasked: string | null
+  verifiedAt: string | null
+}
+
+function parseStudentLoginEmailStatus(data: unknown): StudentLoginEmailStatus {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected login email response')
+  }
+  const row = data as Record<string, unknown>
+  return {
+    verified: row.verified === true,
+    emailMasked:
+      typeof row.emailMasked === 'string' && row.emailMasked.trim() !== ''
+        ? row.emailMasked.trim()
+        : null,
+    verifiedAt:
+      typeof row.verifiedAt === 'string' && row.verifiedAt.trim() !== ''
+        ? row.verifiedAt.trim()
+        : null,
+  }
+}
+
+/** GET /api/student/login-email — verified login email for OTP sign-in. */
+export async function fetchStudentLoginEmailStatus(
+  options?: { signal?: AbortSignal },
+): Promise<StudentLoginEmailStatus> {
+  const data = await fetchApiJson('/api/student/login-email', {
+    signal: options?.signal,
+  })
+  return parseStudentLoginEmailStatus(data)
+}
+
+/** POST /api/student/login-email/send-code */
+export async function sendStudentLoginEmailCode(
+  email: string,
+  options?: { signal?: AbortSignal },
+): Promise<{ ok: true; expiresInSeconds: number }> {
+  const data = await fetchApiJson('/api/student/login-email/send-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim() }),
+    signal: options?.signal,
+  })
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected send-code response')
+  }
+  const row = data as Record<string, unknown>
+  return {
+    ok: true,
+    expiresInSeconds:
+      typeof row.expiresInSeconds === 'number' && Number.isFinite(row.expiresInSeconds)
+        ? row.expiresInSeconds
+        : 600,
+  }
+}
+
+/** POST /api/student/login-email/verify */
+export async function verifyStudentLoginEmailCode(
+  email: string,
+  code: string,
+  options?: { signal?: AbortSignal },
+): Promise<StudentLoginEmailStatus> {
+  const data = await fetchApiJson('/api/student/login-email/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim(), code: code.trim() }),
+    signal: options?.signal,
+  })
+  return parseStudentLoginEmailStatus(data)
+}
+
 export type AdminDivision = 'Chinese' | 'English'
 
 export type PreviewNextStudentIdResponse = {

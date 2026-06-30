@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEventHandler } from 'react'
 import { BackToDashboardLink } from '../components/BackToDashboardLink'
+import { StudentLoginEmailPanel } from '../components/StudentLoginEmailPanel'
 import { useAccount } from '../context/AccountContext'
 import { useStudentPortalT } from '../LanguageContext'
 import {
@@ -771,6 +772,10 @@ export function ProfilePage() {
           ) : null}
         </section>
       ) : null}
+
+      <StudentLoginEmailPanel
+        ready={!profileSectionLoading && !profileError && profile != null}
+      />
     </main>
   )
 }
