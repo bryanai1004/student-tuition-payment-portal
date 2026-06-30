@@ -1,4 +1,5 @@
 import { pool, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
+import { SQL_PORTAL_ENROLLMENT_LEGACY_SECTION_ID } from "../lib/portalEnrollmentSectionSql.js";
 
 /** API shape for one `course_sections` row (stable for future admin CRUD). */
 export type CourseSectionDetail = {
@@ -305,15 +306,7 @@ export async function listCourseSectionsWithEnrollmentAggregates(
                 AND TRIM(pc.course_code) =
                     TRIM(csx.course_code)
             )
-            AND csx.id = (
-              SELECT MIN(cs2.id)
-              FROM course_sections cs2
-              WHERE TRIM(cs2.course_code) =
-                    TRIM(csx.course_code)
-                AND TRIM(cs2.term) =
-                    TRIM(csx.term)
-                AND cs2.year = csx.year
-            )
+            AND csx.id = ${SQL_PORTAL_ENROLLMENT_LEGACY_SECTION_ID}
           )
         )
         AND (e.status IS NULL OR LOWER(TRIM(e.status)) = 'active')

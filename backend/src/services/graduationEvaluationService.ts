@@ -1,8 +1,15 @@
-import { getGraduationRequirementsForProgram } from "../config/graduationRequirements.js";
+import type { GraduationRequirements } from "../config/graduationRequirements.js";
 import type { StudentAcademicCourseRecord } from "../types/studentAcademics.js";
 import type { StudentProfilePayload } from "../types/studentProfile.js";
-import { getStudentAcademicsPayload } from "./studentAcademicsService.js";
 import { termSortOrder } from "./studentAcademicCourseRecords.js";
+import { getGraduationRequirementsForProgramAsync } from "./programCatalogService.js";
+import {
+  getCourseEquivalencyIndex,
+  normalizeCourseCode,
+  type CourseEquivalencyIndex,
+} from "./courseEquivalencyService.js";
+import { computeCumulativeGpaFromAttempts } from "./studentGpaService.js";
+import { loadUnifiedStudentAcademicContext } from "./studentUnifiedAcademicRecordsService.js";
 import { getLegacyStudentProfile } from "./studentProfileService.js";
 
 type GraduationEvaluationRecord = {
@@ -42,17 +49,8 @@ export type GraduationEvaluationSummary = Pick<
   "earnedCredits" | "requiredCredits" | "eligible" | "missingCredits"
 >;
 
-function normalizeCourseCode(courseCode: string): string {
-  return courseCode.replace(/[\s-]+/g, "").trim().toUpperCase();
-}
-
 function roundTwo(value: number): number {
   return Math.round(value * 100) / 100;
-}
-
-function normalizedLetterGrade(grade: string | null | undefined): string | null {
-  const value = grade?.trim();
-  return value ? value.toUpperCase() : null;
 }
 
 function isCompletedMarksAttempt(
@@ -72,11 +70,12 @@ function compareAttemptsDesc(a: GraduationAttempt, b: GraduationAttempt): number
 
 function pickLatestCompletedAttempts(
   records: StudentAcademicCourseRecord[],
+  equiv: CourseEquivalencyIndex,
 ): Map<string, GraduationAttempt> {
   const completedAttempts = records.filter(isCompletedMarksAttempt).sort(compareAttemptsDesc);
   const byCourseCode = new Map<string, GraduationAttempt>();
   for (const attempt of completedAttempts) {
-    const courseCode = normalizeCourseCode(attempt.courseCode);
+    const courseCode = equiv.resolveCanonical(normalizeCourseCode(attempt.courseCode));
     if (!byCourseCode.has(courseCode)) {
       byCourseCode.set(courseCode, attempt);
     }
@@ -98,39 +97,16 @@ function countEarnedCredits(attempts: Iterable<GraduationAttempt>): number {
   return roundTwo(total);
 }
 
-function computeCumulativeGpa(attempts: Iterable<GraduationAttempt>): number | null {
-  const excludedGrades = new Set(["P", "W", "AUD", "T"]);
-  let gradePoints = 0;
-  let gpaEligibleUnits = 0;
-
-  for (const attempt of attempts) {
-    const grade = normalizedLetterGrade(attempt.grade);
-    const credits = attempt.credits;
-    const numericGrade = attempt.numericGrade;
-    if (
-      credits == null ||
-      !Number.isFinite(credits) ||
-      numericGrade == null ||
-      !Number.isFinite(numericGrade)
-    ) {
-      continue;
-    }
-    if (grade != null && excludedGrades.has(grade)) continue;
-    gradePoints += numericGrade * credits;
-    gpaEligibleUnits += credits;
-  }
-
-  if (gpaEligibleUnits <= 0) return null;
-  return roundTwo(gradePoints / gpaEligibleUnits);
-}
-
-function countWithdrawals(records: StudentAcademicCourseRecord[]): number {
+function countWithdrawals(
+  records: StudentAcademicCourseRecord[],
+  equiv: CourseEquivalencyIndex,
+): number {
   const seen = new Set<string>();
   let count = 0;
   for (const record of records) {
     if (record.status !== "withdrawn") continue;
     const key = [
-      normalizeCourseCode(record.courseCode),
+      equiv.resolveCanonical(normalizeCourseCode(record.courseCode)),
       record.term.trim().toLowerCase(),
       String(record.year),
       record.source,
@@ -144,9 +120,13 @@ function countWithdrawals(records: StudentAcademicCourseRecord[]): number {
 
 function evaluateGraduationFromRecord(
   studentRecord: GraduationEvaluationRecord,
+  requirements: GraduationRequirements,
+  equiv: CourseEquivalencyIndex,
 ): GraduationEvaluationResult {
-  const requirements = getGraduationRequirementsForProgram(studentRecord.profile?.program);
-  const latestCompletedAttempts = pickLatestCompletedAttempts(studentRecord.courseRecords);
+  const latestCompletedAttempts = pickLatestCompletedAttempts(
+    studentRecord.courseRecords,
+    equiv,
+  );
   const completedCourseCodes = new Set(latestCompletedAttempts.keys());
   const transferCredits = safeNonNegativeNumber(studentRecord.profile?.credits);
   const transcriptCredits = countEarnedCredits(latestCompletedAttempts.values());
@@ -154,12 +134,13 @@ function evaluateGraduationFromRecord(
   const requiredCredits = requirements.totalCreditsRequired;
   const missingCredits = Math.max(roundTwo(requiredCredits - totalCredits), 0);
   const missingCourses = requirements.requiredCourses.filter(
-    (courseCode) => !completedCourseCodes.has(normalizeCourseCode(courseCode)),
+    (courseCode) =>
+      !completedCourseCodes.has(equiv.resolveCanonical(normalizeCourseCode(courseCode))),
   );
   const completedRequiredCourses = requirements.requiredCourses.filter((courseCode) =>
-    completedCourseCodes.has(normalizeCourseCode(courseCode)),
+    completedCourseCodes.has(equiv.resolveCanonical(normalizeCourseCode(courseCode))),
   );
-  const cumulativeGpa = computeCumulativeGpa(latestCompletedAttempts.values());
+  const cumulativeGpa = computeCumulativeGpaFromAttempts(latestCompletedAttempts.values());
   const requiredGpa = requirements.minimumGpa;
   const missingGpa =
     requiredGpa != null && cumulativeGpa != null && cumulativeGpa < requiredGpa
@@ -167,7 +148,7 @@ function evaluateGraduationFromRecord(
       : requiredGpa != null && cumulativeGpa == null
         ? requiredGpa
         : null;
-  const withdrawalCount = countWithdrawals(studentRecord.courseRecords);
+  const withdrawalCount = countWithdrawals(studentRecord.courseRecords, equiv);
 
   const meetsCredits = missingCredits <= 0;
   const meetsCourses = missingCourses.length === 0;
@@ -261,15 +242,22 @@ export async function evaluateGraduation(
   studentId: string,
 ): Promise<GraduationEvaluationResult> {
   const trimmedStudentId = studentId.trim();
-  const [profile, academics] = await Promise.all([
+  const [profile, ctx, equiv] = await Promise.all([
     getLegacyStudentProfile(trimmedStudentId),
-    getStudentAcademicsPayload(trimmedStudentId),
+    loadUnifiedStudentAcademicContext(trimmedStudentId),
+    getCourseEquivalencyIndex(),
   ]);
+  const program = profile?.program ?? null;
+  const requirements = await getGraduationRequirementsForProgramAsync(program);
 
-  const evaluation = evaluateGraduationFromRecord({
-    profile,
-    courseRecords: academics.courseRecords,
-  });
+  const evaluation = evaluateGraduationFromRecord(
+    {
+      profile,
+      courseRecords: ctx?.courseRecords ?? [],
+    },
+    requirements,
+    equiv,
+  );
 
   console.debug("[graduation-evaluation] computed", {
     studentId: trimmedStudentId,

@@ -111,6 +111,11 @@ export function ClassPlanPanel({
           ? t('checkoutSuccessAlreadyEnrolled')
           : t('checkoutSuccessAddedCount').replace('{n}', String(res.insertedCount))
       showToast(msg)
+      removeFromCourseBin(
+        optionsFor.course_code,
+        optionsFor.section,
+        optionsFor.schedule_track,
+      )
       setOptionsFor(null)
     } finally {
       setEnrollBusy(false)
@@ -121,6 +126,7 @@ export function ClassPlanPanel({
     optionsFor,
     registrationTermId,
     reloadStudentAccount,
+    removeFromCourseBin,
     showToast,
     t,
     termMissing,

@@ -57,7 +57,6 @@ import {
   type AdminModuleKey,
 } from './lib/adminAccess'
 import './styles/portal.css'
-import './styles/apple-pay.css'
 
 function RequireAuth() {
   const { isAuthenticated } = useAccount()
@@ -69,9 +68,6 @@ function RequireAuth() {
 
 function RequireAdminAuth() {
   const { isAuthenticated, isHydrated } = useAdminAuth()
-  if (process.env.NODE_ENV === 'development') {
-    return <Outlet />
-  }
   if (!isHydrated) {
     return null
   }
@@ -82,11 +78,8 @@ function RequireAdminAuth() {
 }
 
 function RequireAdminModule({ module }: { module: AdminModuleKey }) {
-  const { isAuthenticated, isHydrated, role } = useAdminAuth()
-  if (process.env.NODE_ENV === 'development' && !isAuthenticated) {
-    return <Outlet />
-  }
-  if (process.env.NODE_ENV !== 'development' && !isHydrated) {
+  const { isHydrated, role } = useAdminAuth()
+  if (!isHydrated) {
     return null
   }
   if (!role) {
@@ -99,11 +92,8 @@ function RequireAdminModule({ module }: { module: AdminModuleKey }) {
 }
 
 function AdminIndexRedirect() {
-  const { isAuthenticated, isHydrated, role } = useAdminAuth()
-  if (process.env.NODE_ENV === 'development' && !isAuthenticated) {
-    return <Navigate to="/admin/students" replace />
-  }
-  if (process.env.NODE_ENV !== 'development' && !isHydrated) {
+  const { isHydrated, role } = useAdminAuth()
+  if (!isHydrated) {
     return null
   }
   if (!role) {

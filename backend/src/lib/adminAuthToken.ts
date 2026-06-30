@@ -213,6 +213,38 @@ export function verifyAdminAccessTokenFromCookieHeader(
   return verifyAdminAccessTokenString(token);
 }
 
+type AdminAuthRequestLike = {
+  headers: {
+    authorization?: string;
+    cookie?: string;
+  };
+  cookies?: Record<string, unknown>;
+};
+
+/**
+ * Resolve admin JWT from Bearer header, cookie-parser `req.cookies`, or raw `Cookie` header.
+ * Workers may not populate `req.cookies`; the header fallback keeps auth working cross-runtime.
+ */
+export function resolveAuthenticatedAdminFromRequest(
+  req: AdminAuthRequestLike,
+): AuthenticatedAdmin | null {
+  const fromAuth = verifyAdminAccessToken(req.headers.authorization);
+  if (fromAuth != null) return fromAuth;
+
+  const rawCookie = req.cookies?.[ADMIN_ACCESS_COOKIE_NAME];
+  if (typeof rawCookie === "string" && rawCookie.trim() !== "") {
+    const fromParsed = verifyAdminAccessTokenString(rawCookie.trim());
+    if (fromParsed != null) return fromParsed;
+  }
+
+  const cookieHeader = req.headers.cookie;
+  if (typeof cookieHeader === "string" && cookieHeader.trim() !== "") {
+    return verifyAdminAccessTokenFromCookieHeader(cookieHeader);
+  }
+
+  return null;
+}
+
 export function readTokenTtlSecondsPublic(): number {
   return readTokenTtlSeconds();
 }

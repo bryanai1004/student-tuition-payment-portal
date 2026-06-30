@@ -12,6 +12,7 @@ import {
 import { CourseBinProvider } from './CourseBinContext'
 import { RegistrationNav } from './RegistrationNav'
 import { RegistrationSectionNav } from './RegistrationSectionNav'
+import { useAccount } from '../../context/AccountContext'
 import {
   mergeTermOptions,
   readRegistrationTermIdFromSearch,
@@ -59,6 +60,7 @@ function academicTermStubForDeepLink(termId: string): AcademicTerm {
 export function RegistrationLayout() {
   const t = useStudentPortalT()
   const locale = useOptionalPortalLocale()
+  const { currentStudentId } = useAccount()
   const { pathname } = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const isClinicalSection = pathname.startsWith('/registration/clinical')
@@ -206,11 +208,16 @@ export function RegistrationLayout() {
     selectedTermId.trim() !== '' ? `?term=${encodeURIComponent(selectedTermId.trim())}` : ''
 
   const courseBinKey = selectedTermId.trim() !== '' ? selectedTermId.trim() : 'none'
+  const courseBinStudentKey = currentStudentId?.trim() ?? ''
 
   const today = formatPortalToday(locale)
 
   return (
-    <CourseBinProvider key={courseBinKey} registrationTermId={selectedTermId.trim()}>
+    <CourseBinProvider
+      key={`${courseBinKey}:${courseBinStudentKey}`}
+      registrationTermId={selectedTermId.trim()}
+      studentId={courseBinStudentKey}
+    >
       <div className="portal-registration-module">
         <header className="portal-module-header">
           <BackToDashboardLink />

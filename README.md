@@ -13,7 +13,9 @@ Monorepo for a student-facing tuition and payments web app: **React (Vite)** fro
 |------------|------|
 | `frontend/` | Vite + React SPA (`myamu-frontend`) |
 | `backend/`  | Express API (`myamu-api`) |
-| `supabase/` | Supabase CLI config and Postgres migrations |
+| `supabase/` | Supabase CLI config and **Postgres migrations** (single DDL source) |
+| `archived/mysql-legacy/` | MySQL-era migrations (read-only, do not apply) |
+| `docs/database-migrations.md` | Migration policy, production ledger, staging guidance |
 
 npm **workspaces** are configured at the repo root.
 
@@ -32,11 +34,21 @@ npm **workspaces** are configured at the repo root.
 
 3. **Database**
 
-   Schema and data live in Supabase Postgres. Apply migrations with the Supabase CLI when needed (`supabase db push`). For local portal billing bootstrap:
+   Schema and data live in Supabase Postgres. **All schema changes** go in `supabase/migrations/` — see [docs/database-migrations.md](docs/database-migrations.md).
+
+   Apply pending migrations:
+
+   ```bash
+   supabase db push
+   ```
+
+   For local portal billing bootstrap only (requires existing legacy tables):
 
    ```bash
    npm run db:bootstrap-portal -w backend
    ```
+
+   Do **not** run SQL under `archived/mysql-legacy/` on Postgres.
 
 4. **Run app in development** (frontend + API together):
 
@@ -183,7 +195,7 @@ npm run dev:worker -w backend
 
 ### Notes
 
-- **Socket.IO realtime** is not available on Workers (`upgrade` unsupported). Enrollment change events are skipped gracefully; the rest of the API works normally.
+- **Enrollment realtime (Admin)** uses **Supabase Realtime Broadcast** in production (Cloudflare Workers). The API posts to `/realtime/v1/api/broadcast` with the service role key; the frontend subscribes on channel `admin-global` when `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set at build time. **Socket.IO** remains available for local Node dev (`npm run dev`) when Supabase env vars are absent on the frontend.
 - **Admin login** uses `bcryptjs` on Workers (compatible with existing bcrypt password hashes).
 - Remove or disable the old **cloudflared tunnel** route for `myamu-api.wanpanel.ai` once the Worker is live — two origins on the same hostname cause conflicts (HTTP 530 / 1033).
 

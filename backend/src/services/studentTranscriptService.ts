@@ -1,44 +1,14 @@
 /**
- * TranscriptRecord = display-ready academic history (normalized titles, sorted). Derived from attempt-shaped rows;
- * not the system source of truth for registration or degree progress.
- *
- * Sources: `marks` + `clinic` (clinic lines for transcript narrative only — not didactic earned units here).
- * Do not compute degree audit or merge clinical hours into academic units in this service.
+ * Transcript preview — same unified marks + portal + clinic merge as GET /academics.
  */
 
 import { DEMO_STUDENT_ID } from "../config/constants.js";
-import { pool } from "../lib/db.js";
-import { findLatestLegacyTermYear } from "../repositories/studentLegacyAccountRepository.js";
-import {
-  listClinicRowsForStudent,
-  loadCoursesTranscriptLookup,
-  type ClinicTranscriptRow,
-} from "../repositories/studentTranscriptRepository.js";
-import {
-  listMarksForStudent,
-  type MarksRow,
-} from "../repositories/studentAcademicsRepository.js";
 import type { StudentTranscriptPreviewResponse } from "../types/studentTranscript.js";
 import {
   academicCourseRecordToTranscriptPreviewRow,
-  buildAcademicCourseRecordsFromClinicWithLookupAndActiveTerm,
-  buildAcademicCourseRecordsFromMarksWithLookup,
   buildAvailableTermsFromCourseRecords,
-  resolveRegistrationAnchoredAcademicTerm,
-  sortTranscriptPreviewRecords,
 } from "./studentAcademicCourseRecords.js";
-
-function resolveStudentName(
-  studentId: string,
-  marksRows: MarksRow[],
-  clinicRows: ClinicTranscriptRow[],
-): string {
-  const fromMarks = marksRows[0]?.name.trim() ?? "";
-  if (fromMarks.length > 0) return fromMarks;
-  const fromClinic = clinicRows[0]?.name.trim() ?? "";
-  if (fromClinic.length > 0) return fromClinic;
-  return studentId;
-}
+import { loadUnifiedStudentAcademicContext } from "./studentUnifiedAcademicRecordsService.js";
 
 export async function getStudentTranscriptPreviewPayload(
   studentId: string,
@@ -62,39 +32,22 @@ export async function getStudentTranscriptPreviewPayload(
     };
   }
 
-  const [marksRows, clinicRows, courseLookup, latestReg] = await Promise.all([
-    listMarksForStudent(pool, trimmed),
-    listClinicRowsForStudent(pool, trimmed),
-    loadCoursesTranscriptLookup(pool),
-    findLatestLegacyTermYear(pool, trimmed),
-  ]);
+  const ctx = await loadUnifiedStudentAcademicContext(trimmed);
+  if (ctx == null) {
+    return {
+      studentId: trimmed,
+      studentName: trimmed,
+      availableTerms: [],
+      transcript: [],
+    };
+  }
 
-  const activeTerm = resolveRegistrationAnchoredAcademicTerm(
-    latestReg,
-    marksRows,
-  );
-  const fromMarks = buildAcademicCourseRecordsFromMarksWithLookup(
-    trimmed,
-    marksRows,
-    courseLookup,
-    activeTerm,
-  );
-  const fromClinic = buildAcademicCourseRecordsFromClinicWithLookupAndActiveTerm(
-    trimmed,
-    clinicRows,
-    courseLookup,
-    activeTerm,
-  );
-
-  const merged = [...fromMarks, ...fromClinic];
-  sortTranscriptPreviewRecords(merged);
-
-  const transcript = merged.map(academicCourseRecordToTranscriptPreviewRow);
+  const transcript = ctx.courseRecords.map(academicCourseRecordToTranscriptPreviewRow);
 
   return {
     studentId: trimmed,
-    studentName: resolveStudentName(trimmed, marksRows, clinicRows),
-    availableTerms: buildAvailableTermsFromCourseRecords(merged),
+    studentName: ctx.studentName,
+    availableTerms: buildAvailableTermsFromCourseRecords(ctx.courseRecords),
     transcript,
   };
 }

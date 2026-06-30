@@ -25,6 +25,10 @@ import type {
 import type { StudentTranscriptRow } from "../types/studentTranscript.js";
 import type { ScheduleRow } from "../types/studentAccount.js";
 import type { PortalEnrollmentAcademicRow } from "../repositories/studentEnrollmentRepository.js";
+import {
+  normalizeCourseCode,
+  type CourseEquivalencyIndex,
+} from "./courseEquivalencyService.js";
 
 const MIN_TERM_YEAR = 1900;
 const MAX_TERM_YEAR = 2100;
@@ -174,6 +178,27 @@ export function marksRowAcademicallyClosed(m: MarksRow): boolean {
 }
 
 /**
+ * Portal enrollment treated as active for timetable / active-term resolution.
+ * Aligns with {@link SQL_ACTIVE_PORTAL_ENROLLMENT_E} in `studentEnrollmentRepository`:
+ * null/enrolled/registered map to active; normalized legacy statuses may appear as `unknown`.
+ */
+export function isPortalEnrollmentStatusActive(
+  status: string | null | undefined,
+): boolean {
+  if (status == null) return true;
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "") return true;
+  if (
+    normalized === "withdrawn" ||
+    normalized === "completed" ||
+    normalized === "dropped"
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Academic “current” quarter: the legacy registration term only while it is not fully concluded on
  * `marks`. If there are no rows yet for that term, the term is still treated as active (schedule may
  * be empty). If every row for that term is closed, returns null (e.g. graduated / term complete).
@@ -205,11 +230,11 @@ export function resolveRegistrationAnchoredAcademicTerm(
 }
 
 /**
- * Same as {@link resolveRegistrationAnchoredAcademicTerm}, but if every `marks` row for the term is
- * academically closed while the student still has at least one **active** portal enrollment in that
- * term, keep the term active (timetable/dashboard use portal enrollments).
+ * Student-facing **active enrollment term** (在读学期): registration anchor while marks are open,
+ * or — when every marks row for that term is closed — while portal still has active enrollments.
+ * Use for Academics, Account timetable, and AI context (not registration-open or dashboard-posted terms).
  */
-export function resolveRegistrationAnchoredAcademicTermConsideringPortal(
+export function resolveActiveEnrollmentTerm(
   registrationTerm: { term: string; year: number } | null,
   marks: MarksRow[],
   portalEnrollments: Pick<PortalEnrollmentAcademicRow, "term" | "year" | "status">[],
@@ -229,11 +254,22 @@ export function resolveRegistrationAnchoredAcademicTermConsideringPortal(
     (p) =>
       p.year === year &&
       termsMatch(p.term, registrationTerm.term) &&
-      p.status === "active",
+      isPortalEnrollmentStatusActive(p.status),
   );
   return hasActivePortal
     ? { term: registrationTerm.term, year: registrationTerm.year }
     : null;
+}
+
+/**
+ * @deprecated Prefer {@link resolveActiveEnrollmentTerm} — same behavior.
+ */
+export function resolveRegistrationAnchoredAcademicTermConsideringPortal(
+  registrationTerm: { term: string; year: number } | null,
+  marks: MarksRow[],
+  portalEnrollments: Pick<PortalEnrollmentAcademicRow, "term" | "year" | "status">[],
+): { term: string; year: number } | null {
+  return resolveActiveEnrollmentTerm(registrationTerm, marks, portalEnrollments);
 }
 
 export function normalizeEnglishTitle(
@@ -625,15 +661,17 @@ export function legacyCompletedBlocksPortalRow(
   courseCode: string,
   term: string,
   year: number,
+  equiv?: CourseEquivalencyIndex | null,
 ): boolean {
-  const c = courseCode.trim().toLowerCase();
-  return legacyRecords.some(
-    (r) =>
-      r.year === year &&
-      termsMatch(r.term, term) &&
-      r.courseCode.trim().toLowerCase() === c &&
-      r.status === "completed",
-  );
+  const portalNorm = normalizeCourseCode(courseCode);
+  return legacyRecords.some((r) => {
+    if (r.year !== year || !termsMatch(r.term, term) || r.status !== "completed") {
+      return false;
+    }
+    const legacyNorm = normalizeCourseCode(r.courseCode);
+    if (legacyNorm === portalNorm) return true;
+    return equiv?.areEquivalent(legacyNorm, portalNorm) ?? false;
+  });
 }
 
 /** Legacy account `scheduleRows` from normalized academic records (marks-sourced rows). */

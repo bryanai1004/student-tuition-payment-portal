@@ -6,12 +6,15 @@ export { formatMoney } from './formatMoney'
 
 export const CARD_CONVENIENCE_RATE = 0.03
 
-/** Normalized backend origin (no trailing slash). Never includes `/api` — paths pass `/api/...` into `api()`. */
+/**
+ * Normalized backend origin (no trailing slash). Never includes `/api` — paths pass `/api/...` into `api()`.
+ * Leave `VITE_API_BASE_URL` empty in local dev: Vite proxies `/api` to the backend so admin cookies stay same-origin.
+ */
 export const API_BASE = String(import.meta.env.VITE_API_BASE_URL ?? '')
   .trim()
   .replace(/\/$/, '')
 
-if (!API_BASE) {
+if (!API_BASE && !import.meta.env.DEV) {
   throw new Error('VITE_API_BASE_URL is not defined')
 }
 
@@ -1745,7 +1748,7 @@ export type AuthorizeNetChargeRequest = {
   paymentPlan?: 'full' | 'installment'
   installmentCount?: 1 | 2 | 3
   opaqueData: AuthorizeNetOpaqueData
-  /** First 6–8 digits of the card; omit for Apple Pay (server uses a default BIN for fees). */
+  /** First 6–8 digits of the card. */
   cardBinPrefix?: string
   /** Name as printed on the card. */
   cardholderName: string
@@ -2794,6 +2797,58 @@ export async function fetchStudentAcademics(
   const path = `/api/students/${encodeURIComponent(studentId)}/academics`
   const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
   return parseStudentAcademicsResponse(data)
+}
+
+/** GET /api/students/:studentId/gpa */
+export type StudentGpaResponse = {
+  studentId: string
+  cumulativeGpa: number | null
+  latestTermGpa: number | null
+  latestTerm: string | null
+  latestYear: number | null
+  completedCredits: number
+  attemptedCreditsIncludingInProgress: number
+  notes: string[]
+}
+
+function parseStudentGpaResponse(data: unknown): StudentGpaResponse {
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected GPA response')
+  }
+  const o = data as Record<string, unknown>
+  if (typeof o.studentId !== 'string') {
+    throw new Error('Unexpected GPA response')
+  }
+  const numOrNull = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null
+  return {
+    studentId: o.studentId,
+    cumulativeGpa: numOrNull(o.cumulativeGpa),
+    latestTermGpa: numOrNull(o.latestTermGpa),
+    latestTerm: typeof o.latestTerm === 'string' ? o.latestTerm : null,
+    latestYear: numOrNull(o.latestYear),
+    completedCredits:
+      typeof o.completedCredits === 'number' && Number.isFinite(o.completedCredits)
+        ? o.completedCredits
+        : 0,
+    attemptedCreditsIncludingInProgress:
+      typeof o.attemptedCreditsIncludingInProgress === 'number' &&
+      Number.isFinite(o.attemptedCreditsIncludingInProgress)
+        ? o.attemptedCreditsIncludingInProgress
+        : 0,
+    notes: Array.isArray(o.notes)
+      ? o.notes.filter((n): n is string => typeof n === 'string')
+      : [],
+  }
+}
+
+export async function fetchStudentGpa(
+  studentId: string,
+  options?: { signal?: AbortSignal },
+): Promise<StudentGpaResponse> {
+  const path = `/api/students/${encodeURIComponent(studentId)}/gpa`
+  const data = (await fetchApiJson(path, { signal: options?.signal })) as unknown
+  return parseStudentGpaResponse(data)
 }
 
 /** GET /api/students/:studentId/program-progress */
@@ -5631,6 +5686,155 @@ export async function postStudentEnroll(
     }
     throw e
   }
+}
+
+export type CourseBinApiItem = {
+  id: number
+  student_id: string
+  academic_term_id: string
+  course_code: string
+  section: string
+  schedule_track: 'EN' | 'CN'
+  session: string | null
+  type: string | null
+  units: string | null
+  registered_display: string | null
+  time_display: string | null
+  days_display: string | null
+  instructor: string | null
+  location: string | null
+  eng_name: string | null
+  chi_name: string | null
+  prerequisite_course_id: string | null
+  prerequisite_course_code: string | null
+  prerequisite_course_title: string | null
+  schedule_weekday: string | null
+  schedule_start_time: string | null
+  schedule_end_time: string | null
+  created_at: string
+  updated_at: string
+}
+
+function parseCourseBinApiItem(v: unknown): CourseBinApiItem | null {
+  if (v == null || typeof v !== 'object') return null
+  const o = v as Record<string, unknown>
+  if (typeof o.id !== 'number' || !Number.isFinite(o.id)) return null
+  if (typeof o.course_code !== 'string' || typeof o.section !== 'string') return null
+  const trackRaw = o.schedule_track
+  const schedule_track =
+    trackRaw === 'CN' || (typeof trackRaw === 'string' && trackRaw.trim().toUpperCase() === 'CN')
+      ? 'CN'
+      : 'EN'
+  return {
+    id: o.id,
+    student_id: typeof o.student_id === 'string' ? o.student_id : '',
+    academic_term_id: typeof o.academic_term_id === 'string' ? o.academic_term_id : '',
+    course_code: o.course_code,
+    section: o.section,
+    schedule_track,
+    session: typeof o.session === 'string' ? o.session : null,
+    type: typeof o.type === 'string' ? o.type : null,
+    units: typeof o.units === 'string' ? o.units : null,
+    registered_display:
+      typeof o.registered_display === 'string' ? o.registered_display : null,
+    time_display: typeof o.time_display === 'string' ? o.time_display : null,
+    days_display: typeof o.days_display === 'string' ? o.days_display : null,
+    instructor: typeof o.instructor === 'string' ? o.instructor : null,
+    location: typeof o.location === 'string' ? o.location : null,
+    eng_name: typeof o.eng_name === 'string' ? o.eng_name : null,
+    chi_name: typeof o.chi_name === 'string' ? o.chi_name : null,
+    prerequisite_course_id:
+      typeof o.prerequisite_course_id === 'string' ? o.prerequisite_course_id : null,
+    prerequisite_course_code:
+      typeof o.prerequisite_course_code === 'string' ? o.prerequisite_course_code : null,
+    prerequisite_course_title:
+      typeof o.prerequisite_course_title === 'string' ? o.prerequisite_course_title : null,
+    schedule_weekday: typeof o.schedule_weekday === 'string' ? o.schedule_weekday : null,
+    schedule_start_time:
+      typeof o.schedule_start_time === 'string' ? o.schedule_start_time : null,
+    schedule_end_time:
+      typeof o.schedule_end_time === 'string' ? o.schedule_end_time : null,
+    created_at: typeof o.created_at === 'string' ? o.created_at : '',
+    updated_at: typeof o.updated_at === 'string' ? o.updated_at : '',
+  }
+}
+
+/** GET /api/course-bin/:studentId?academic_term_id= */
+export async function fetchStudentCourseBin(
+  studentId: string,
+  academicTermId: string,
+  options?: { signal?: AbortSignal },
+): Promise<CourseBinApiItem[]> {
+  const sid = studentId.trim()
+  const tid = academicTermId.trim()
+  const qs = new URLSearchParams()
+  qs.set('academic_term_id', tid)
+  const data = (await fetchApiJson(
+    `/api/course-bin/${encodeURIComponent(sid)}?${qs.toString()}`,
+    { signal: options?.signal },
+  )) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected course bin response')
+  }
+  const items = (data as { items?: unknown }).items
+  if (!Array.isArray(items)) {
+    throw new Error('Unexpected course bin response')
+  }
+  const parsed: CourseBinApiItem[] = []
+  for (const row of items) {
+    const item = parseCourseBinApiItem(row)
+    if (item != null) parsed.push(item)
+  }
+  return parsed
+}
+
+/** POST /api/course-bin/:studentId */
+export async function upsertStudentCourseBinItem(
+  studentId: string,
+  body: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
+): Promise<CourseBinApiItem> {
+  const sid = studentId.trim()
+  const data = (await fetchApiJson(`/api/course-bin/${encodeURIComponent(sid)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })) as unknown
+  const item = parseCourseBinApiItem(data)
+  if (item == null) {
+    throw new Error('Unexpected course bin save response')
+  }
+  return item
+}
+
+/** DELETE /api/course-bin/:studentId/:itemId */
+export async function deleteStudentCourseBinItem(
+  studentId: string,
+  itemId: number,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const sid = studentId.trim()
+  await apiFetch(`/api/course-bin/${encodeURIComponent(sid)}/${encodeURIComponent(String(itemId))}`, {
+    method: 'DELETE',
+    signal: options?.signal,
+  })
+}
+
+/** DELETE /api/course-bin/:studentId?academic_term_id= — clear term basket. */
+export async function clearStudentCourseBinForTerm(
+  studentId: string,
+  academicTermId: string,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const sid = studentId.trim()
+  const tid = academicTermId.trim()
+  const qs = new URLSearchParams()
+  qs.set('academic_term_id', tid)
+  await apiFetch(
+    `/api/course-bin/${encodeURIComponent(sid)}?${qs.toString()}`,
+    { method: 'DELETE', signal: options?.signal },
+  )
 }
 
 /** GET /api/student/enrolled-sections — section rows + meta (active portal enrollment count vs matched timetable rows). */

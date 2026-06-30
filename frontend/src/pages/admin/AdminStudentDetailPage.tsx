@@ -32,7 +32,7 @@ import {
 import { useStudentPortalT } from '../../LanguageContext'
 import { ProgramProgressPanel } from '../../components/academics/ProgramProgressPanel'
 import { groupRowsByTermYear } from '../../lib/academicsTranscriptDisplay'
-import { socket, type EnrollmentChangedEvent } from '../../lib/socket'
+import { subscribeEnrollmentChanged, type EnrollmentChangedEvent } from '../../lib/realtime'
 
 function dashText(value: string | null | undefined): string {
   const s = value?.trim() ?? ''
@@ -346,11 +346,7 @@ export function AdminStudentDetailPage() {
       if ((event.studentId ?? '').trim() !== currentStudentId) return
       setAcademicRecordsReloadKey((k) => k + 1)
     }
-    socket.connect()
-    socket.on('enrollment.changed', handleEnrollmentChanged)
-    return () => {
-      socket.off('enrollment.changed', handleEnrollmentChanged)
-    }
+    return subscribeEnrollmentChanged(handleEnrollmentChanged)
   }, [studentId])
 
   useEffect(() => {

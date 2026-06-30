@@ -1,5 +1,5 @@
 -- Batch 02: Clinical scheduling, enrollments, and billing cross-links.
--- Prerequisite: 20260629210000_fk_preflight_cleanup.sql
+-- Prerequisite: 20260629191733_fk_preflight_cleanup.sql
 
 ALTER TABLE clinical_enrollments
   ADD CONSTRAINT fk_clinical_enrollments_student

@@ -3,6 +3,10 @@ import { getStudentAcademicsPayload } from "./studentAcademicsService.js";
 import type { StudentAcademicsResponse } from "../types/studentAcademics.js";
 import { getLegacyStudentProfile } from "./studentProfileService.js";
 import { evaluateStudentGraduation } from "./graduationEvaluationService.js";
+import {
+  getCourseEquivalencyIndex,
+  type CourseEquivalencyIndex,
+} from "./courseEquivalencyService.js";
 
 export type EligibilityResolvedCourse = {
   code: string;
@@ -290,7 +294,10 @@ export function evaluateCourseEligibility(args: {
   prerequisites: PrerequisiteRuleSet | null;
   studentCompletedCourses: Array<{ code: string; passed: boolean }>;
   studentEnrollments: Array<{ code: string; status: string }>;
+  equivalency?: CourseEquivalencyIndex | null;
 }): CourseEligibilityResult {
+  const equiv = args.equivalency ?? null;
+
   if (args.prerequisites == null) {
     return {
       eligible: "unknown",
@@ -300,16 +307,22 @@ export function evaluateCourseEligibility(args: {
     };
   }
 
-  const completedPassed = new Set(
-    args.studentCompletedCourses
-      .filter((item) => item.passed)
-      .map((item) => normalizeCode(item.code)),
-  );
-  const inProgress = new Set(
-    args.studentEnrollments
-      .filter((item) => normalizeText(item.status) === "active")
-      .map((item) => normalizeCode(item.code)),
-  );
+  const completedPassed = args.studentCompletedCourses
+    .filter((item) => item.passed)
+    .map((item) => normalizeCode(item.code));
+  const inProgress = args.studentEnrollments
+    .filter((item) => normalizeText(item.status) === "active")
+    .map((item) => normalizeCode(item.code));
+
+  const hasCompletedEquivalent = (required: string): boolean =>
+    completedPassed.some(
+      (code) => equiv?.satisfiesRequirement(code, required) ?? code === required,
+    );
+
+  const hasInProgressEquivalent = (required: string): boolean =>
+    inProgress.some(
+      (code) => equiv?.satisfiesRequirement(code, required) ?? code === required,
+    );
 
   const required = args.prerequisites.prerequisites.map(normalizeCode).filter(Boolean);
   if (required.length === 0) {
@@ -325,11 +338,11 @@ export function evaluateCourseEligibility(args: {
   const missing: string[] = [];
   const blocking: string[] = [];
   for (const req of required) {
-    if (completedPassed.has(req)) {
+    if (hasCompletedEquivalent(req)) {
       matched.push(req);
       continue;
     }
-    if (inProgress.has(req)) {
+    if (hasInProgressEquivalent(req)) {
       missing.push(req);
       blocking.push(`${req} is still in progress and not yet completed.`);
       continue;
@@ -404,9 +417,10 @@ export async function evaluateEligibilityQuestion(
 ): Promise<CourseEligibilityAnswer | null> {
   if (!hasEligibilityIntent(question)) return null;
 
-  const [academics, courses] = await Promise.all([
+  const [academics, courses, equiv] = await Promise.all([
     getStudentAcademicsPayload(studentId),
     listCoursesFromMysql(),
+    getCourseEquivalencyIndex(),
   ]);
   const resolved = resolveTargetCourse(question, courses);
   if (resolved.resolved == null) {
@@ -433,6 +447,7 @@ export async function evaluateEligibilityQuestion(
     prerequisites: rules,
     studentCompletedCourses: studentInputs.completedCourses,
     studentEnrollments: studentInputs.enrollments,
+    equivalency: equiv,
   });
 
   return {

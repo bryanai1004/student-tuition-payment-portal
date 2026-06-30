@@ -1,6 +1,7 @@
 import {
+  deleteCourseBinForStudentTerm,
   deleteCourseBinItem as deleteCourseBinItemRepo,
-  listCourseBinByStudentId,
+  listCourseBinByStudentAndTerm,
   upsertCourseBinItem,
 } from "../repositories/courseBinRepository.js";
 import type { CourseBinApiItem, CourseBinUpsertInput } from "../types/courseBin.js";
@@ -9,13 +10,19 @@ function normalizeStudentId(raw: string): string {
   return raw.trim();
 }
 
-export async function getCourseBinForStudent(
+function normalizeAcademicTermId(raw: string): string {
+  return raw.trim();
+}
+
+export async function getCourseBinForStudentTerm(
   studentIdRaw: string,
-): Promise<{ studentId: string; items: CourseBinApiItem[] } | null> {
+  academicTermIdRaw: string,
+): Promise<{ studentId: string; academicTermId: string; items: CourseBinApiItem[] } | null> {
   const studentId = normalizeStudentId(studentIdRaw);
-  if (!studentId) return null;
-  const items = await listCourseBinByStudentId(studentId);
-  return { studentId, items };
+  const academicTermId = normalizeAcademicTermId(academicTermIdRaw);
+  if (studentId === "" || academicTermId === "") return null;
+  const items = await listCourseBinByStudentAndTerm(studentId, academicTermId);
+  return { studentId, academicTermId, items };
 }
 
 export async function addOrUpdateCourseBinItem(
@@ -23,7 +30,7 @@ export async function addOrUpdateCourseBinItem(
   input: CourseBinUpsertInput,
 ): Promise<{ studentId: string; item: CourseBinApiItem } | null> {
   const studentId = normalizeStudentId(studentIdRaw);
-  if (!studentId) return null;
+  if (studentId === "" || input.academic_term_id.trim() === "") return null;
   const item = await upsertCourseBinItem(studentId, input);
   return { studentId, item };
 }
@@ -33,7 +40,18 @@ export async function removeCourseBinItem(
   itemId: number,
 ): Promise<{ studentId: string; removed: boolean } | null> {
   const studentId = normalizeStudentId(studentIdRaw);
-  if (!studentId) return null;
+  if (studentId === "") return null;
   const removed = await deleteCourseBinItemRepo(studentId, itemId);
   return { studentId, removed };
+}
+
+export async function clearCourseBinForStudentTerm(
+  studentIdRaw: string,
+  academicTermIdRaw: string,
+): Promise<{ studentId: string; academicTermId: string; removedCount: number } | null> {
+  const studentId = normalizeStudentId(studentIdRaw);
+  const academicTermId = normalizeAcademicTermId(academicTermIdRaw);
+  if (studentId === "" || academicTermId === "") return null;
+  const removedCount = await deleteCourseBinForStudentTerm(studentId, academicTermId);
+  return { studentId, academicTermId, removedCount };
 }

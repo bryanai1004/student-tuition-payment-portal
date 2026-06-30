@@ -235,21 +235,14 @@ export function parseStoreCheckoutBody(
       error: "opaqueData must include dataDescriptor and dataValue.",
     };
   }
-  const isApplePay = /apple/i.test(descriptor);
-  let cardBinPrefix: string;
-  if (isApplePay) {
-    cardBinPrefix =
-      normalizeCardBinPrefix(o.cardBinPrefix ?? o.cardBinSix) ?? "424242";
-  } else {
-    const bin = normalizeCardBinPrefix(o.cardBinPrefix ?? o.cardBinSix);
-    if (bin == null) {
-      return {
-        ok: false,
-        error: "cardBinPrefix must be the first 6–8 digits of the card number.",
-      };
-    }
-    cardBinPrefix = bin;
+  const bin = normalizeCardBinPrefix(o.cardBinPrefix ?? o.cardBinSix);
+  if (bin == null) {
+    return {
+      ok: false,
+      error: "cardBinPrefix must be the first 6–8 digits of the card number.",
+    };
   }
+  const cardBinPrefix = bin;
   const billing = parsePaymentBillingDetails(o);
   if (!billing.ok) return billing;
   return {
@@ -272,7 +265,7 @@ export async function processStoreCheckout(input: {
 }): Promise<StoreCheckoutResult> {
   if (!(await portalStoreTablesExist(pool))) {
     throw new Error(
-      "Fee store is not available yet. Apply supabase/migrations/20260629220000_portal_store_orders.sql (or restart the API after migrations).",
+      "Fee store is not available yet. Run `supabase db push` from the repo root (migration 20260629233852_portal_store_orders.sql).",
     );
   }
   const parsedTerm = resolveTermFromBody(input.body.term, input.body.year);

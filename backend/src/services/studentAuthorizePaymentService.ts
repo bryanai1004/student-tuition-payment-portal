@@ -495,21 +495,14 @@ export function parseAuthorizeChargeBody(
       error: "opaqueData must include dataDescriptor and dataValue.",
     };
   }
-  const isApplePay = /apple/i.test(descriptor);
-  let cardBinPrefix: string;
-  if (isApplePay) {
-    cardBinPrefix =
-      normalizeCardBinPrefix(o.cardBinPrefix ?? o.cardBinSix) ?? "424242";
-  } else {
-    const bin = normalizeCardBinPrefix(o.cardBinPrefix ?? o.cardBinSix);
-    if (bin == null) {
-      return {
-        ok: false,
-        error: "cardBinPrefix must be the first 6–8 digits of the card number.",
-      };
-    }
-    cardBinPrefix = bin;
+  const bin = normalizeCardBinPrefix(o.cardBinPrefix ?? o.cardBinSix);
+  if (bin == null) {
+    return {
+      ok: false,
+      error: "cardBinPrefix must be the first 6–8 digits of the card number.",
+    };
   }
+  const cardBinPrefix = bin;
   const billing = parsePaymentBillingDetails(o);
   if (!billing.ok) {
     return billing;

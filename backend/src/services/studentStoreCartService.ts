@@ -109,7 +109,7 @@ async function buildCartPayload(
 
 function storeUnavailableError(): Error {
   return new Error(
-    "Fee store is not available yet. Apply supabase/migrations/20260629220000_portal_store_orders.sql (or restart the API after migrations).",
+    "Fee store is not available yet. Run `supabase db push` from the repo root (migration 20260629233852_portal_store_orders.sql).",
   );
 }
 

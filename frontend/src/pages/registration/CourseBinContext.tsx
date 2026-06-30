@@ -4,27 +4,31 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
+import {
+  clearCourseBinOnServer,
+  loadCourseBinFromServer,
+  removeCourseBinItemFromServer,
+  saveCourseBinItemToServer,
+  syncLocalCourseBinToServer,
+} from './courseBinSync'
 
 const STORAGE_KEY_PREFIX = 'portal.registration.courseBin:v1:'
 
 export type CourseBinItem = {
+  /** Server row id when synced; absent for offline-only drafts. */
+  id?: number
   course_code: string
   eng_name: string
   chi_name: string
-  /**
-   * Legacy cached Course Bin rows may predate prerequisite support and omit these fields.
-   * We keep them optional at the type level for backward compatibility, then normalize
-   * loaded items to explicit `null` values inside the provider.
-   */
   prerequisite_course_id?: string | null
   prerequisite_course_code?: string | null
   prerequisite_course_title?: string | null
   units: string
   section: string
-  /** Disambiguates same section code on EN vs CN offered timetables; omitted/legacy = EN. */
   schedule_track?: 'EN' | 'CN'
   session: string
   type: string
@@ -33,7 +37,6 @@ export type CourseBinItem = {
   days: string
   instructor: string
   location: string
-  /** From registrar row when added via Offered Timetable; improves My Timetable placement. */
   schedule_weekday?: string | null
   schedule_start_time?: string | null
   schedule_end_time?: string | null
@@ -41,13 +44,15 @@ export type CourseBinItem = {
 
 type CourseBinContextValue = {
   items: CourseBinItem[]
+  /** True while the initial server hydrate for the current student/term is in flight. */
+  hydrating: boolean
   addToCourseBin: (item: CourseBinItem) => void
   removeFromCourseBin: (
     courseCode: string,
     section: string,
     scheduleTrack?: 'EN' | 'CN',
   ) => void
-  clearCourseBin: () => void
+  clearCourseBin: () => Promise<void>
 }
 
 const CourseBinContext = createContext<CourseBinContextValue | null>(null)
@@ -65,7 +70,6 @@ export function courseBinSectionKey(
   return `${courseCode.trim().toLowerCase()}|${section.trim().toLowerCase()}|${tr}`
 }
 
-/** Same key shape as {@link courseBinSectionKey} for offered / enrolled API sections (`section_code`). */
 export function courseBinKeyFromSectionFields(args: {
   course_code: string
   section_code: string
@@ -98,6 +102,12 @@ function isCourseBinItemRecord(v: unknown): v is CourseBinItem {
   const o = v as Record<string, unknown>
   const isOptionalNullableString = (value: unknown): boolean =>
     value === undefined || value === null || typeof value === 'string'
+  if (
+    o.id !== undefined &&
+    (typeof o.id !== 'number' || !Number.isFinite(o.id))
+  ) {
+    return false
+  }
   if (
     o.schedule_track !== undefined &&
     o.schedule_track !== 'EN' &&
@@ -145,8 +155,6 @@ function loadItemsFromStorage(registrationTermId: string): CourseBinItem[] {
     if (raw == null || raw.trim() === '') return []
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    // Lightweight in-place migration: older cached items may be missing
-    // prerequisite metadata entirely, so normalize them to explicit nulls.
     return parsed.filter(isCourseBinItemRecord).map(normalizeCourseBinItem)
   } catch {
     return []
@@ -163,73 +171,202 @@ function saveItemsToStorage(registrationTermId: string, items: CourseBinItem[]):
   }
 }
 
-type CourseBinProviderProps = {
-  children: ReactNode
-  /** Active registration term id from `?term=`; empty when none selected. */
-  registrationTermId: string
+function findItemByKey(
+  items: CourseBinItem[],
+  key: string,
+): CourseBinItem | undefined {
+  return items.find(
+    (x) => courseBinSectionKey(x.course_code, x.section, x.schedule_track) === key,
+  )
 }
 
-export function CourseBinProvider({ children, registrationTermId }: CourseBinProviderProps) {
+type CourseBinProviderProps = {
+  children: ReactNode
+  registrationTermId: string
+  /** Logged-in student id; empty when signed out (localStorage draft only). */
+  studentId: string
+}
+
+export function CourseBinProvider({
+  children,
+  registrationTermId,
+  studentId,
+}: CourseBinProviderProps) {
   const term = registrationTermId.trim()
-  const [items, setItems] = useState<CourseBinItem[]>(() => loadItemsFromStorage(term))
+  const sid = studentId.trim()
+  const [items, setItems] = useState<CourseBinItem[]>(() =>
+    term === '' ? [] : loadItemsFromStorage(term),
+  )
+  const [hydrating, setHydrating] = useState(false)
+  const hydrateGenRef = useRef(0)
+
+  const persistCache = useCallback(
+    (next: CourseBinItem[]) => {
+      if (term === '') return
+      saveItemsToStorage(term, next)
+    },
+    [term],
+  )
 
   useEffect(() => {
-    setItems(loadItemsFromStorage(term))
-  }, [term])
+    if (term === '') {
+      setItems([])
+      setHydrating(false)
+      return
+    }
 
-  useEffect(() => {
-    if (term === '') return
-    saveItemsToStorage(term, items)
-  }, [term, items])
+    const cached = loadItemsFromStorage(term)
+    setItems(cached)
 
-  const addToCourseBin = useCallback((item: CourseBinItem) => {
-    const normalizedItem = normalizeCourseBinItem(item)
-    const code = normalizedItem.course_code.trim()
-    if (code === '') return
+    if (sid === '') {
+      setHydrating(false)
+      return
+    }
 
-    setItems((prev) => {
+    const gen = ++hydrateGenRef.current
+    setHydrating(true)
+    const ac = new AbortController()
+
+    void (async () => {
+      try {
+        let serverItems = await loadCourseBinFromServer(sid, term, {
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted || hydrateGenRef.current !== gen) return
+
+        if (serverItems.length === 0 && cached.length > 0) {
+          serverItems = await syncLocalCourseBinToServer(sid, term, cached)
+          if (ac.signal.aborted || hydrateGenRef.current !== gen) return
+        }
+
+        setItems(serverItems)
+        persistCache(serverItems)
+      } catch (e) {
+        if (ac.signal.aborted || hydrateGenRef.current !== gen) return
+        console.warn('[course-bin] hydrate failed; using local cache', e)
+        setItems(cached)
+      } finally {
+        if (!ac.signal.aborted && hydrateGenRef.current === gen) {
+          setHydrating(false)
+        }
+      }
+    })()
+
+    return () => ac.abort()
+  }, [term, sid, persistCache])
+
+  const addToCourseBin = useCallback(
+    (item: CourseBinItem) => {
+      const normalizedItem = normalizeCourseBinItem(item)
+      const code = normalizedItem.course_code.trim()
+      if (code === '') return
+
       const key = courseBinSectionKey(
         normalizedItem.course_code,
         normalizedItem.section,
         normalizedItem.schedule_track,
       )
-      if (
-        prev.some(
-          (x) =>
-            courseBinSectionKey(x.course_code, x.section, x.schedule_track) ===
-            key,
-        )
-      ) {
-        return prev
-      }
-      return [...prev, normalizedItem]
-    })
-  }, [])
+
+      setItems((prev) => {
+        if (
+          prev.some(
+            (x) =>
+              courseBinSectionKey(x.course_code, x.section, x.schedule_track) === key,
+          )
+        ) {
+          return prev
+        }
+        const next = [...prev, normalizedItem]
+        persistCache(next)
+        return next
+      })
+
+      if (term === '' || sid === '') return
+
+      void (async () => {
+        try {
+          const saved = await saveCourseBinItemToServer(sid, normalizedItem, term)
+          setItems((prev) => {
+            const withoutDup = prev.filter(
+              (x) =>
+                courseBinSectionKey(x.course_code, x.section, x.schedule_track) !== key,
+            )
+            const next = [...withoutDup, saved]
+            persistCache(next)
+            return next
+          })
+        } catch (e) {
+          console.error('[course-bin] add failed; rolling back', e)
+          setItems((prev) => {
+            const next = prev.filter(
+              (x) =>
+                courseBinSectionKey(x.course_code, x.section, x.schedule_track) !== key,
+            )
+            persistCache(next)
+            return next
+          })
+        }
+      })()
+    },
+    [persistCache, sid, term],
+  )
 
   const removeFromCourseBin = useCallback(
     (courseCode: string, section: string, scheduleTrack?: 'EN' | 'CN') => {
       const key = courseBinSectionKey(courseCode, section, scheduleTrack)
-      setItems((prev) =>
-        prev.filter(
+      let removedItem: CourseBinItem | undefined
+
+      setItems((prev) => {
+        removedItem = findItemByKey(prev, key)
+        const next = prev.filter(
           (x) => courseBinSectionKey(x.course_code, x.section, x.schedule_track) !== key,
-        ),
-      )
+        )
+        persistCache(next)
+        return next
+      })
+
+      if (term === '' || sid === '' || removedItem?.id == null) return
+
+      const itemId = removedItem.id
+      void (async () => {
+        try {
+          await removeCourseBinItemFromServer(sid, itemId)
+        } catch (e) {
+          console.error('[course-bin] remove failed; restoring item', e)
+          setItems((prev) => {
+            if (findItemByKey(prev, key) != null) return prev
+            const next = [...prev, { ...removedItem!, id: itemId }]
+            persistCache(next)
+            return next
+          })
+        }
+      })()
     },
-    [],
+    [persistCache, sid, term],
   )
 
-  const clearCourseBin = useCallback(() => {
+  const clearCourseBin = useCallback(async () => {
     setItems([])
-  }, [])
+    if (term !== '') {
+      persistCache([])
+    }
+    if (term === '' || sid === '') return
+    try {
+      await clearCourseBinOnServer(sid, term)
+    } catch (e) {
+      console.error('[course-bin] clear failed', e)
+    }
+  }, [persistCache, sid, term])
 
   const value = useMemo(
     () => ({
       items,
+      hydrating,
       addToCourseBin,
       removeFromCourseBin,
       clearCourseBin,
     }),
-    [items, addToCourseBin, removeFromCourseBin, clearCourseBin],
+    [items, hydrating, addToCourseBin, removeFromCourseBin, clearCourseBin],
   )
 
   return <CourseBinContext.Provider value={value}>{children}</CourseBinContext.Provider>

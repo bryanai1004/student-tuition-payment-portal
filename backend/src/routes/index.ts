@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { postApplePayValidateMerchantHandler } from "../controllers/applePayController.js";
 import {
   getAdminStudentAcademicRecords,
   getAdminStudent,
@@ -51,6 +50,7 @@ import {
 } from "../controllers/adminCatalogCourseController.js";
 import { getAdminCoursesOpenForRegistration } from "../controllers/adminOpenRegistrationCoursesController.js";
 import {
+  deleteCourseBinForTermHandler,
   deleteCourseBinItemHandler,
   getCourseBin,
   postCourseBin,
@@ -78,6 +78,7 @@ import {
   putStoreCartLineHandler,
 } from "../controllers/studentStoreController.js";
 import { getStudentAcademics } from "../controllers/studentAcademicsController.js";
+import { getStudentGpa } from "../controllers/studentGpaController.js";
 import { getStudentProgramProgress } from "../controllers/studentProgramProgressController.js";
 import {
   getAdminStudentCourseFeedback,
@@ -104,6 +105,13 @@ import {
   postAdminAuthLogin,
   postAdminAuthLogout,
 } from "../controllers/adminAuthController.js";
+import { requireAdminAuth } from "../middleware/requireAdminAuth.js";
+import {
+  requireStudentAuth,
+  requireStudentAuthMatchBody,
+  requireStudentAuthMatchParam,
+  requireStudentAuthMatchQuery,
+} from "../middleware/requireStudentAuth.js";
 import {
   getAdminEmailProfiles,
   postAdminBulkEmail,
@@ -181,47 +189,85 @@ apiRouter.get("/health", getHealth);
 apiRouter.get("/health/db", getHealthDb);
 
 apiRouter.post("/auth/login", postStudentLogin);
-apiRouter.post("/payments/authorize/charge", postAuthorizeNetChargeHandler);
-apiRouter.post(
-  "/payments/apple-pay/validate-merchant",
-  postApplePayValidateMerchantHandler,
+
+const studentPaymentsRouter = Router();
+studentPaymentsRouter.use(requireStudentAuth);
+studentPaymentsRouter.post("/authorize/charge", postAuthorizeNetChargeHandler);
+studentPaymentsRouter.post(
+  "/authorize/tuition-charge",
+  postAuthorizeNetTuitionChargeHandler,
 );
-apiRouter.post("/payments/authorize/tuition-charge", postAuthorizeNetTuitionChargeHandler);
-apiRouter.post(
-  "/payments/authorize/clinic-fee-charge",
+studentPaymentsRouter.post(
+  "/authorize/clinic-fee-charge",
   postAuthorizeNetClinicFeeChargeHandler,
 );
-apiRouter.get(
-  "/payments/authorize/current-term-summary",
+studentPaymentsRouter.get(
+  "/authorize/current-term-summary",
   getAuthorizeCurrentTermSummaryHandler,
 );
-apiRouter.get("/payments/authorize/tuition-summary", getAuthorizeTuitionSummaryHandler);
-apiRouter.get(
-  "/payments/authorize/clinic-fee-summary",
+studentPaymentsRouter.get(
+  "/authorize/tuition-summary",
+  getAuthorizeTuitionSummaryHandler,
+);
+studentPaymentsRouter.get(
+  "/authorize/clinic-fee-summary",
   getAuthorizeClinicFeeSummaryHandler,
 );
-apiRouter.get("/store/catalog", getStoreCatalogHandler);
-apiRouter.get("/store/cart", getStoreCartHandler);
-apiRouter.put("/store/cart/lines", putStoreCartLineHandler);
-apiRouter.post("/store/cart/commit-to-ledger", postStoreCartCommitHandler);
-apiRouter.delete("/store/cart/lines", deleteStoreCartLineHandler);
-apiRouter.post("/store/checkout", postStoreCheckoutHandler);
+apiRouter.use("/payments", studentPaymentsRouter);
 
-apiRouter.post("/student/enroll", postStudentEnroll);
-apiRouter.post("/student/withdraw", postStudentWithdraw);
-apiRouter.get("/student/enrolled-sections", getStudentEnrolledSections);
-apiRouter.get("/student/clinical-progress", getStudentClinicalProgressHandler);
-apiRouter.post("/student/clinical/exam-request", postStudentClinicalExamRequestHandler);
-apiRouter.get("/student/clinical/exam-requests", getStudentClinicalExamRequestsHandler);
-apiRouter.put("/student/profile", putStudentProfile);
-apiRouter.get("/student/me/photo-url", getStudentMyPhotoUrlHandler);
-apiRouter.post(
-  "/student/me/photo",
+apiRouter.get("/store/catalog", getStoreCatalogHandler);
+
+const studentStoreRouter = Router();
+studentStoreRouter.use(requireStudentAuth);
+studentStoreRouter.get("/cart", getStoreCartHandler);
+studentStoreRouter.put("/cart/lines", putStoreCartLineHandler);
+studentStoreRouter.post("/cart/commit-to-ledger", postStoreCartCommitHandler);
+studentStoreRouter.delete("/cart/lines", deleteStoreCartLineHandler);
+studentStoreRouter.post("/checkout", postStoreCheckoutHandler);
+apiRouter.use("/store", studentStoreRouter);
+
+const studentPortalRouter = Router();
+studentPortalRouter.use(requireStudentAuth);
+studentPortalRouter.post(
+  "/enroll",
+  requireStudentAuthMatchBody("studentId"),
+  postStudentEnroll,
+);
+studentPortalRouter.post(
+  "/withdraw",
+  requireStudentAuthMatchBody("studentId"),
+  postStudentWithdraw,
+);
+studentPortalRouter.get(
+  "/enrolled-sections",
+  requireStudentAuthMatchQuery("studentId"),
+  getStudentEnrolledSections,
+);
+studentPortalRouter.get(
+  "/clinical-progress",
+  requireStudentAuthMatchQuery("studentId"),
+  getStudentClinicalProgressHandler,
+);
+studentPortalRouter.post(
+  "/clinical/exam-request",
+  requireStudentAuthMatchQuery("studentId"),
+  postStudentClinicalExamRequestHandler,
+);
+studentPortalRouter.get(
+  "/clinical/exam-requests",
+  requireStudentAuthMatchQuery("studentId"),
+  getStudentClinicalExamRequestsHandler,
+);
+studentPortalRouter.put("/profile", putStudentProfile);
+studentPortalRouter.get("/me/photo-url", getStudentMyPhotoUrlHandler);
+studentPortalRouter.post(
+  "/me/photo",
   uploadStudentMyPhotoMiddleware,
   postStudentMyPhotoHandler,
 );
+apiRouter.use("/student", studentPortalRouter);
 
-apiRouter.post("/ai/ask", postAiAsk);
+apiRouter.post("/ai/ask", requireStudentAuth, postAiAsk);
 
 apiRouter.get("/courses", getCourses);
 apiRouter.get("/courses/:code/sections", getCourseSections);
@@ -234,21 +280,21 @@ apiRouter.get("/academic-terms", getAcademicTerms);
 /** Clinical slots for read-only offered timetable (legacy `clinic_timetable` + enrollment counts). */
 apiRouter.get("/clinical/offered-timetable", getClinicalOfferedTimetableHandler);
 
-/** Course bin (per student); requires `student_course_bin` table when used. */
-apiRouter.get("/course-bin/:studentId", getCourseBin);
-apiRouter.post("/course-bin/:studentId", postCourseBin);
-apiRouter.delete(
-  "/course-bin/:studentId/:itemId",
-  deleteCourseBinItemHandler,
-);
+/** Course bin (per student + academic term); persisted in `student_course_bin`. */
+const courseBinRouter = Router({ mergeParams: true });
+courseBinRouter.use(requireStudentAuth, requireStudentAuthMatchParam("studentId"));
+courseBinRouter.get("/", getCourseBin);
+courseBinRouter.post("/", postCourseBin);
+courseBinRouter.delete("/", deleteCourseBinForTermHandler);
+courseBinRouter.delete("/:itemId", deleteCourseBinItemHandler);
+apiRouter.use("/course-bin/:studentId", courseBinRouter);
 
-/** Admin section CRUD. Auth routes stay mounted; global admin auth middleware temporarily disabled. */
+/** Admin section CRUD. Login/logout/me are public; all other routes require admin auth. */
 const adminRouter = Router();
 adminRouter.post("/auth/login", postAdminAuthLogin);
 adminRouter.post("/auth/logout", postAdminAuthLogout);
 adminRouter.get("/auth/me", getAdminAuthMe);
-// TODO: re-enable backend admin auth after cookie verification is fixed.
-// adminRouter.use(requireAdminAuth);
+adminRouter.use(requireAdminAuth);
 adminRouter.get("/students", getAdminStudents);
 adminRouter.get("/students/next-id", getNextAdminStudentId);
 adminRouter.post("/students", postAdminStudent);
@@ -400,68 +446,48 @@ adminRouter.post(
 );
 apiRouter.use("/admin", adminRouter);
 
-apiRouter.get(
-  "/students/:studentId/documents",
-  getStudentDocumentRequirementsHandler,
-);
-apiRouter.post(
-  "/students/:studentId/documents/agreement/submit",
+const studentResourceRouter = Router({ mergeParams: true });
+studentResourceRouter.use(requireStudentAuth, requireStudentAuthMatchParam("studentId"));
+studentResourceRouter.get("/documents", getStudentDocumentRequirementsHandler);
+studentResourceRouter.post(
+  "/documents/agreement/submit",
   postStudentAgreementSubmitHandler,
 );
-apiRouter.post(
-  "/students/:studentId/documents/quizzes/:quizId/submit",
+studentResourceRouter.post(
+  "/documents/quizzes/:quizId/submit",
   postStudentQuizSubmitHandler,
 );
-apiRouter.get("/students/:studentId/profile", getStudentProfile);
-apiRouter.get("/students/:studentId/academics", getStudentAcademics);
-apiRouter.get("/students/:studentId/program-progress", getStudentProgramProgress);
-apiRouter.get(
-  "/students/:studentId/course-feedback",
-  getStudentCourseFeedback,
-);
-apiRouter.post(
-  "/students/:studentId/course-feedback",
-  postStudentCourseFeedback,
-);
-apiRouter.get(
-  "/students/:studentId/transcript-preview",
-  getStudentTranscriptPreview,
-);
-apiRouter.get("/students/:studentId/account", getStudentAccount);
-apiRouter.get(
-  "/students/:studentId/clinical-schedule",
-  getStudentClinicalScheduleHandler,
-);
-apiRouter.get(
-  "/students/:studentId/clinical-enrollments/open",
+studentResourceRouter.get("/profile", getStudentProfile);
+studentResourceRouter.get("/academics", getStudentAcademics);
+studentResourceRouter.get("/gpa", getStudentGpa);
+studentResourceRouter.get("/program-progress", getStudentProgramProgress);
+studentResourceRouter.get("/course-feedback", getStudentCourseFeedback);
+studentResourceRouter.post("/course-feedback", postStudentCourseFeedback);
+studentResourceRouter.get("/transcript-preview", getStudentTranscriptPreview);
+studentResourceRouter.get("/account", getStudentAccount);
+studentResourceRouter.get("/clinical-schedule", getStudentClinicalScheduleHandler);
+studentResourceRouter.get(
+  "/clinical-enrollments/open",
   getStudentOpenClinicalEnrollmentSlotsHandler,
 );
-apiRouter.get(
-  "/students/:studentId/clinical-enrollments",
+studentResourceRouter.get(
+  "/clinical-enrollments",
   getStudentClinicalEnrollmentsHandler,
 );
-apiRouter.post(
-  "/students/:studentId/clinical-enrollments",
+studentResourceRouter.post(
+  "/clinical-enrollments",
   postStudentClinicalEnrollmentHandler,
 );
-apiRouter.delete(
-  "/students/:studentId/clinical-enrollments/:enrollmentId",
+studentResourceRouter.delete(
+  "/clinical-enrollments/:enrollmentId",
   deleteStudentClinicalEnrollmentHandler,
 );
-apiRouter.post(
-  "/students/:studentId/clinical-requests",
-  postStudentClinicalRequestHandler,
-);
-apiRouter.get(
-  "/students/:studentId/clinical-requests",
-  getStudentClinicalRequestsHandler,
-);
-apiRouter.get("/students/:studentId/activity", getStudentActivity);
-apiRouter.get(
-  "/students/:studentId/accounting/quarters",
-  getAccountingQuarters,
-);
-apiRouter.get("/students/:studentId/accounting/ledger", getAccountingLedger);
+studentResourceRouter.post("/clinical-requests", postStudentClinicalRequestHandler);
+studentResourceRouter.get("/clinical-requests", getStudentClinicalRequestsHandler);
+studentResourceRouter.get("/activity", getStudentActivity);
+studentResourceRouter.get("/accounting/quarters", getAccountingQuarters);
+studentResourceRouter.get("/accounting/ledger", getAccountingLedger);
+apiRouter.use("/students/:studentId", studentResourceRouter);
 
 apiRouter.get("/demo/account", getDemoAccount);
 apiRouter.get("/demo/activity", getDemoActivity);

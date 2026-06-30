@@ -2,8 +2,7 @@ import type { Request, Response } from "express";
 import {
   ADMIN_ACCESS_COOKIE_NAME,
   readTokenTtlSecondsPublic,
-  verifyAdminAccessToken,
-  verifyAdminAccessTokenString,
+  resolveAuthenticatedAdminFromRequest,
 } from "../lib/adminAuthToken.js";
 import { pool } from "../lib/db.js";
 import { authenticateAdminLogin } from "../services/adminAuthService.js";
@@ -95,16 +94,7 @@ export async function postAdminAuthLogout(_req: Request, res: Response): Promise
  * GET /api/admin/auth/me
  */
 export async function getAdminAuthMe(req: Request, res: Response): Promise<void> {
-  const fromAuth = verifyAdminAccessToken(req.headers.authorization);
-  const user =
-    fromAuth ??
-    (() => {
-      const raw = req.cookies?.[ADMIN_ACCESS_COOKIE_NAME];
-      if (typeof raw === "string" && raw.trim() !== "") {
-        return verifyAdminAccessTokenString(raw.trim());
-      }
-      return null;
-    })();
+  const user = resolveAuthenticatedAdminFromRequest(req);
 
   if (user == null) {
     res.status(200).json({ ok: false });

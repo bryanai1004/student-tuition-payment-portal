@@ -4,7 +4,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStudentPortalT } from '@/LanguageContext'
 import { useAccount } from '@/context/AccountContext'
 import { PaymentCardForm } from '@/components/finance/PaymentCardForm'
-import { ApplePayButton } from '@/components/finance/ApplePayButton'
 import { PaymentSummaryCard, type PaymentBreakdownLine } from '@/components/finance/PaymentSummaryCard'
 import { portalTermLabel } from '@/lib/accountDisplay'
 import { dispatchAcceptData, loadAcceptJs } from '@/lib/authorizeNet'
@@ -29,12 +28,6 @@ import {
   normalizeBillingZip,
   normalizeCardholderName,
 } from '@/lib/paymentBillingFields'
-import {
-  applePayDisplayName,
-  canShowApplePayButton,
-  requestApplePayPayment,
-} from '@/lib/applePaySession'
-import { isApplePayDemoMode } from '@/lib/applePayConfig'
 
 function normalizeAmountInput(v: string): string {
   const trimmed = v.trim()
@@ -109,8 +102,6 @@ export function FinancesPaymentPage() {
   const [scriptReady, setScriptReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [applePaySubmitting, setApplePaySubmitting] = useState(false)
-  const [applePayAvailable, setApplePayAvailable] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -220,10 +211,6 @@ export function FinancesPaymentPage() {
   }, [account.student.name])
   const displayTerm = termLabel || portalTermLabel(account) || t('selectedTerm')
   const termCode = termCodeFromQuarter(term, year)
-
-  useEffect(() => {
-    setApplePayAvailable(canShowApplePayButton())
-  }, [])
 
   useEffect(() => {
     if (!installmentEligible && paymentPlan !== 'full') {
@@ -354,85 +341,9 @@ export function FinancesPaymentPage() {
     }, 900)
   }
 
-  const handleApplePayPay = async () => {
-    if (submitting || applePaySubmitting || loading) return
-
-    const amountError = validateChargeAmount()
-    if (amountError != null) {
-      setError(amountError)
-      return
-    }
-
-    setApplePaySubmitting(true)
-    setError(null)
-    try {
-      const applePayFee = computeCreditCardProcessingFee(amountNum, 'credit')
-      const applePayTotal = totalWithProcessingFee(amountNum, 'credit')
-      const lineItems = paymentBreakdownLines.map((line) => ({
-        label: line.label,
-        amount: line.amount.toFixed(2),
-      }))
-      if (applePayFee > 0) {
-        lineItems.push({
-          label: t('creditCardProcessingFeeLabel'),
-          amount: applePayFee.toFixed(2),
-        })
-      }
-
-      const { opaqueData, cardholderName: walletName, billingZip: walletZip } =
-        await requestApplePayPayment({
-          lineItems,
-          total: {
-            label: applePayDisplayName(),
-            amount: applePayTotal.toFixed(2),
-          },
-        })
-
-      if (isApplePayDemoMode()) {
-        navigateAfterSuccessfulPayment({
-          amount: applePayTotal.toFixed(2),
-          providerTransactionId: `DEMO-${Date.now()}`,
-        })
-        return
-      }
-
-      const resolvedName = normalizeCardholderName(
-        walletName.trim() !== '' ? walletName : studentName,
-      )
-      if (!isValidCardholderName(resolvedName)) {
-        throw new Error(t('cardholderNameInvalid'))
-      }
-      const resolvedZip = normalizeBillingZip(walletZip.trim() !== '' ? walletZip : billingZip)
-      if (resolvedZip == null) {
-        throw new Error(t('billingZipInvalid'))
-      }
-
-      const result = await postAuthorizeNetTuitionCharge(
-        {
-          term: termCode,
-          amount: amountNum.toFixed(2),
-          chargeType: selectedChargeType,
-          paymentPlan: selectedChargeType === 'tuition' ? paymentPlan : 'full',
-          installmentCount:
-            selectedChargeType === 'tuition' && paymentPlan === 'installment' ? installmentCount : 1,
-          opaqueData,
-          cardholderName: resolvedName,
-          billingZip: resolvedZip,
-          ledgerAdjustmentIds,
-        },
-        { authToken: authToken?.trim() || undefined },
-      )
-      navigateAfterSuccessfulPayment(result)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t('paymentCouldNotBeProcessed'))
-    } finally {
-      setApplePaySubmitting(false)
-    }
-  }
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (submitting || applePaySubmitting || loading) return
+    if (submitting || loading) return
 
     const apiLoginId = String(import.meta.env.VITE_AUTHORIZE_API_LOGIN_ID ?? '').trim()
     const clientKey = String(import.meta.env.VITE_AUTHORIZE_CLIENT_KEY ?? '').trim()
@@ -653,24 +564,6 @@ export function FinancesPaymentPage() {
               />
             </div>
             <div className="portal-finance-checkout-layout__col">
-              {applePayAvailable ? (
-                <>
-                  <section
-                    className="portal-card portal-finance-checkout-card"
-                    aria-label={t('applePayPayWith')}
-                  >
-                    <ApplePayButton
-                      demo={isApplePayDemoMode()}
-                      busy={applePaySubmitting}
-                      disabled={submitting || loading || selectedChargeDue <= 0}
-                      onClick={() => void handleApplePayPay()}
-                    />
-                  </section>
-                  <div className="portal-finance-checkout-form__divider" aria-hidden="true">
-                    {t('applePayOrCardDivider')}
-                  </div>
-                </>
-              ) : null}
               <PaymentCardForm
                 amount={amount}
                 cardholderName={cardholderName}
@@ -682,7 +575,7 @@ export function FinancesPaymentPage() {
                 lockedAmountNote={lockedAmountNote}
                 disclosureNote={t('creditCardProcessingFeeDisclosure')}
                 submitLabel={submitLabel}
-                busy={submitting || applePaySubmitting}
+                busy={submitting}
                 scriptReady={scriptReady}
                 error={error}
                 onAmountChange={(next) => setAmount(normalizeAmountInput(next))}

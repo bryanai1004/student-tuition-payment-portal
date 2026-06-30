@@ -12,7 +12,7 @@ export function CourseBinCheckoutPage() {
   const registrationTermId = useRegistrationTermSearchParam()
   const { currentStudentId, isAuthenticated, reload: reloadStudentAccount } =
     useAccount()
-  const { items } = useCourseBin()
+  const { items, clearCourseBin } = useCourseBin()
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,6 +48,7 @@ export function CourseBinCheckoutPage() {
           ? t('checkoutSuccessAlreadyEnrolled')
           : t('checkoutSuccessAddedCount').replace('{n}', String(res.insertedCount))
       setSuccess(msg)
+      await clearCourseBin()
       reloadStudentAccount()
       window.dispatchEvent(new Event(PORTAL_STUDENT_ENROLLMENT_CHANGED))
       const termSearch =
@@ -71,6 +72,7 @@ export function CourseBinCheckoutPage() {
     currentStudentId,
     items,
     navigate,
+    clearCourseBin,
     registrationTermId,
     reloadStudentAccount,
     termMissing,

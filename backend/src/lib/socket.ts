@@ -121,6 +121,10 @@ export function initSocket(server: HttpServer): Server {
   return io;
 }
 
+export function isSocketIoInitialized(): boolean {
+  return io != null;
+}
+
 export function getIO(): Server {
   if (io == null) {
     throw new Error("Socket.IO has not been initialized");

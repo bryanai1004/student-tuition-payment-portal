@@ -1,4 +1,9 @@
 import { pool, type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "../lib/db.js";
+import {
+  SQL_PORTAL_ENROLLMENT_CS_DIRECT_JOIN,
+  SQL_PORTAL_ENROLLMENT_CS_LEG_JOIN,
+  SQL_PORTAL_ENROLLMENT_LEGACY_SECTION_ID,
+} from "../lib/portalEnrollmentSectionSql.js";
 import { listMarksForStudent } from "./studentAcademicsRepository.js";
 import {
   type CourseSectionDetail,
@@ -408,8 +413,7 @@ export type StudentEnrolledSectionsQueryResult = {
  * Scheduled section rows for a student's **active** `portal_enrollments` in one calendar term/year.
  *
  * When `portal_enrollments.course_section_id` is set, the timetable row is that exact section.
- * Legacy rows with `course_section_id` NULL still resolve via `portal_courses.course_code` and a single
- * deterministic `course_sections` pick (`MIN(id)`) per enrollment row.
+ * Legacy rows with `course_section_id` NULL resolve via {@link SQL_PORTAL_ENROLLMENT_LEGACY_SECTION_ID}.
  */
 export async function listStudentEnrolledSectionsForTerm(
   studentExternalId: string,
@@ -455,28 +459,8 @@ export async function listStudentEnrolledSectionsForTerm(
     INNER JOIN portal_courses pc
       ON pc.course_id =
          e.course_id
-    LEFT JOIN course_sections cs_direct
-      ON e.course_section_id IS NOT NULL
-      AND cs_direct.id = e.course_section_id
-      AND cs_direct.term =
-          e.term
-      AND cs_direct.year = e.year
-    LEFT JOIN course_sections cs_leg
-      ON e.course_section_id IS NULL
-      AND TRIM(cs_leg.course_code) =
-          TRIM(pc.course_code)
-      AND TRIM(cs_leg.term) =
-          TRIM(e.term)
-      AND cs_leg.year = e.year
-      AND cs_leg.id = (
-        SELECT MIN(cs2.id)
-        FROM course_sections cs2
-        WHERE TRIM(cs2.course_code) =
-              TRIM(pc.course_code)
-          AND TRIM(cs2.term) =
-              TRIM(e.term)
-          AND cs2.year = e.year
-      )
+${SQL_PORTAL_ENROLLMENT_CS_DIRECT_JOIN}
+${SQL_PORTAL_ENROLLMENT_CS_LEG_JOIN}
     LEFT JOIN courses cat
       ON TRIM(cat.code) =
          TRIM(COALESCE(cs_direct.course_code, cs_leg.course_code))
@@ -640,15 +624,7 @@ export async function listAdminEnrollmentRowsForSection(
           e.course_section_id = ?
           OR (
             e.course_section_id IS NULL
-            AND ? = (
-              SELECT MIN(cs2.id)
-              FROM course_sections cs2
-              WHERE TRIM(cs2.course_code) =
-                    TRIM(pc.course_code)
-                AND TRIM(cs2.term) =
-                    TRIM(e.term)
-                AND cs2.year = e.year
-            )
+            AND ? = ${SQL_PORTAL_ENROLLMENT_LEGACY_SECTION_ID}
           )
         )`
       : "";
@@ -867,28 +843,8 @@ export async function listPortalEnrollmentHistoryForStudentTerm(
     INNER JOIN portal_courses pc
       ON pc.course_id =
          e.course_id
-    LEFT JOIN course_sections cs_direct
-      ON e.course_section_id IS NOT NULL
-      AND cs_direct.id = e.course_section_id
-      AND TRIM(cs_direct.term) =
-          TRIM(e.term)
-      AND cs_direct.year = e.year
-    LEFT JOIN course_sections cs_leg
-      ON e.course_section_id IS NULL
-      AND TRIM(cs_leg.course_code) =
-          TRIM(pc.course_code)
-      AND TRIM(cs_leg.term) =
-          TRIM(e.term)
-      AND cs_leg.year = e.year
-      AND cs_leg.id = (
-        SELECT MIN(cs2.id)
-        FROM course_sections cs2
-        WHERE TRIM(cs2.course_code) =
-              TRIM(pc.course_code)
-          AND TRIM(cs2.term) =
-              TRIM(e.term)
-          AND cs2.year = e.year
-      )
+${SQL_PORTAL_ENROLLMENT_CS_DIRECT_JOIN}
+${SQL_PORTAL_ENROLLMENT_CS_LEG_JOIN}
     WHERE TRIM(e.student_external_id) =
           TRIM(?)
       AND TRIM(e.term) =
@@ -951,7 +907,7 @@ export async function findLatestPortalEnrollmentTermYear(
 
 /**
  * All `portal_enrollments` for a student with catalog title/units and timetable fields from
- * `course_sections`: exact `course_section_id` when present, else legacy `MIN(id)` pick per row.
+ * `course_sections`: exact `course_section_id` when present, else {@link SQL_PORTAL_ENROLLMENT_LEGACY_SECTION_ID}.
  */
 export async function listPortalEnrollmentRowsForStudentAcademics(
   studentExternalId: string,
@@ -964,7 +920,7 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
     SELECT
       e.id AS portal_enrollment_id,
       e.id AS registration_id,
-      e.course_section_id AS course_section_id,
+      COALESCE(e.course_section_id, cs_direct.id, cs_leg.id) AS course_section_id,
       TRIM(pc.course_code) AS course_code,
       TRIM(pc.title) AS course_title_raw,
       COALESCE(
@@ -986,6 +942,11 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
       pc.units,
       NULLIF(TRIM(e.section_code), '') AS enrollment_section_code,
       NULLIF(TRIM(e.schedule_track), '') AS enrollment_schedule_track,
+      COALESCE(
+        NULLIF(TRIM(e.section_code), ''),
+        NULLIF(TRIM(cs_direct.section_code), ''),
+        NULLIF(TRIM(cs_leg.section_code), '')
+      ) AS resolved_section_code,
       COALESCE(cs_direct.weekday, cs_leg.weekday) AS weekday,
       COALESCE(cs_direct.start_time, cs_leg.start_time) AS start_time,
       COALESCE(cs_direct.end_time, cs_leg.end_time) AS end_time,
@@ -1014,37 +975,8 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
     INNER JOIN portal_courses pc
       ON pc.course_id =
          e.course_id
-    LEFT JOIN course_sections cs_direct
-      ON e.course_section_id IS NOT NULL
-      AND cs_direct.id = e.course_section_id
-      AND TRIM(cs_direct.term) =
-          TRIM(e.term)
-      AND cs_direct.year = e.year
-    LEFT JOIN course_sections cs_leg
-      ON e.course_section_id IS NULL
-      AND TRIM(cs_leg.course_code) =
-          TRIM(pc.course_code)
-      AND TRIM(cs_leg.term) =
-          TRIM(e.term)
-      AND cs_leg.year = e.year
-      AND cs_leg.id = (
-        SELECT cs2.id
-        FROM course_sections cs2
-        WHERE TRIM(cs2.course_code) =
-              TRIM(pc.course_code)
-          AND TRIM(cs2.term) =
-              TRIM(e.term)
-          AND cs2.year = e.year
-        ORDER BY
-          (
-            cs2.weekday IS NULL
-            OR LENGTH(TRIM(COALESCE(cs2.weekday, ''))) = 0
-            OR cs2.start_time IS NULL
-            OR cs2.end_time IS NULL
-          ) ASC,
-          cs2.id ASC
-        LIMIT 1
-      )
+${SQL_PORTAL_ENROLLMENT_CS_DIRECT_JOIN}
+${SQL_PORTAL_ENROLLMENT_CS_LEG_JOIN}
     LEFT JOIN courses cat
       ON TRIM(cat.code) =
          TRIM(pc.course_code)
@@ -1070,9 +1002,9 @@ export async function listPortalEnrollmentRowsForStudentAcademics(
           : String(w).trim() || null;
     }
     const sec =
-      r.enrollment_section_code == null
+      r.resolved_section_code == null
         ? null
-        : String(r.enrollment_section_code).trim() || null;
+        : String(r.resolved_section_code).trim() || null;
     const tr =
       r.enrollment_schedule_track == null
         ? null
@@ -1188,15 +1120,7 @@ export async function precheckPortalWithdrawalByCourseSection(
                   TRIM(e.term)
               AND cs0.year = e.year
           )
-          AND ? = (
-            SELECT MIN(cs2.id)
-            FROM course_sections cs2
-            WHERE TRIM(cs2.course_code) =
-                  TRIM(pc.course_code)
-              AND TRIM(cs2.term) =
-                  TRIM(e.term)
-              AND cs2.year = e.year
-          )
+          AND ? = ${SQL_PORTAL_ENROLLMENT_LEGACY_SECTION_ID}
         )
       )
     LIMIT 1
@@ -1299,8 +1223,7 @@ export async function softWithdrawPortalEnrollmentByCourseSection(
   if (!Number.isFinite(csid) || csid <= 0) return 0;
   /**
    * Section-keyed rows match `course_section_id` directly.
-   * Legacy rows (`course_section_id` NULL) match when the withdraw target is the canonical
-   * `MIN(course_sections.id)` for that catalog course + term/year (same pick as timetable reads).
+   * Legacy rows (`course_section_id` NULL) match via {@link SQL_PORTAL_ENROLLMENT_LEGACY_SECTION_ID}.
    */
   const sql = `
     UPDATE portal_enrollments e
@@ -1328,15 +1251,7 @@ export async function softWithdrawPortalEnrollmentByCourseSection(
                   TRIM(e.term)
               AND cs0.year = e.year
           )
-          AND ? = (
-            SELECT MIN(cs2.id)
-            FROM course_sections cs2
-            WHERE TRIM(cs2.course_code) =
-                  TRIM(pc.course_code)
-              AND TRIM(cs2.term) =
-                  TRIM(e.term)
-              AND cs2.year = e.year
-          )
+          AND ? = ${SQL_PORTAL_ENROLLMENT_LEGACY_SECTION_ID}
         )
       )
   `;

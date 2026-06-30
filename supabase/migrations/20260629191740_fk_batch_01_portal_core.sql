@@ -1,5 +1,5 @@
 -- Batch 01: Portal domain FKs (student, term, course, section).
--- Prerequisite: 20260629210000_fk_preflight_cleanup.sql
+-- Prerequisite: 20260629191733_fk_preflight_cleanup.sql
 -- Adds ~11 constraints. Existing fk_portal_enrollment_course is unchanged.
 
 ALTER TABLE portal_enrollments

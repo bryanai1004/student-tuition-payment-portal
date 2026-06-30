@@ -26,7 +26,7 @@ async function ensureAdminUsersColumns(db: Pool): Promise<void> {
   );
   if (rows.length === 0) {
     throw new Error(
-      "admin_users.username is missing — apply supabase/migrations for admin_users first.",
+      "admin_users.username is missing — run `supabase db push` (migration 20260629181658_admin_users_staff_columns.sql).",
     );
   }
 }

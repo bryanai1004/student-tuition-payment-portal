@@ -1,4 +1,5 @@
--- Prefer idempotent applies: backend/migrations/001_academic_terms_payment_policy.sql
+-- Prefer supabase/migrations/ — see docs/database-migrations.md.
+-- Legacy reference: archived/mysql-legacy/backend-migrations/001_academic_terms_payment_policy.sql
 --
 -- Extends `academic_terms` for payment DDL and registration lock (Admin Academic Terms UI).
 -- For databases missing these columns (older `academic_terms_schema.sql`).

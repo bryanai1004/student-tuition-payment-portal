@@ -25,6 +25,7 @@ import {
 import {
   findLatestPortalEnrollmentTermYear,
   listPortalEnrollmentRowsForStudentAcademics,
+  listStudentEnrolledSectionsForTerm,
 } from "../repositories/studentEnrollmentRepository.js";
 import { loadCoursesTranscriptLookup } from "../repositories/studentTranscriptRepository.js";
 import type {
@@ -34,7 +35,7 @@ import type {
 import { getCatalogDemoAccountPayload } from "./demoAccountService.js";
 import {
   pickNewerRegistrationAnchor,
-  resolveRegistrationAnchoredAcademicTermConsideringPortal,
+  resolveActiveEnrollmentTerm,
   termSortOrder,
   termsMatch,
 } from "./studentAcademicCourseRecords.js";
@@ -42,6 +43,7 @@ import { listAcademicTerms } from "../repositories/academicTermRepository.js";
 import type { AcademicTermDetail } from "../types/academicTerm.js";
 import { buildClinicalProgress } from "./clinicalProgressService.js";
 import { assembleLegacyStudentAccountPayload } from "./studentLegacyAccountAssembler.js";
+import { courseSectionDetailsToAccountScheduleRows } from "./portalEnrollmentSchedule.js";
 import { buildAccountCurrentTerm } from "./studentAccountDashboard.js";
 import { assembleStudentAccountPayload } from "./studentAccountAssembler.js";
 
@@ -358,7 +360,7 @@ async function getRealStudentAccountPayload(
   const portalActiveTerm =
     latestRegistration == null
       ? null
-      : resolveRegistrationAnchoredAcademicTermConsideringPortal(
+      : resolveActiveEnrollmentTerm(
           latestRegistration,
           allMarksRows,
           portalEnrollmentRows,
@@ -380,6 +382,31 @@ async function getRealStudentAccountPayload(
   availableScheduleTerms =
     await enrichScheduleTermsWithAcademicIds(availableScheduleTerms);
 
+  const activePortalEnrollmentCountForBrowseTerm = portalEnrollmentRows.filter(
+    (p) =>
+      p.year === effectiveSnap.year &&
+      termsMatch(p.term, effectiveSnap.term) &&
+      p.status !== "withdrawn",
+  ).length;
+
+  let enrolledSectionsScheduleRows;
+  if (activePortalEnrollmentCountForBrowseTerm > 0) {
+    try {
+      const { sections } = await listStudentEnrolledSectionsForTerm(
+        studentId,
+        effectiveSnap.term,
+        effectiveSnap.year,
+      );
+      enrolledSectionsScheduleRows =
+        courseSectionDetailsToAccountScheduleRows(sections);
+    } catch (e) {
+      console.warn(
+        "[account] enrolled-sections schedule for browse term failed",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+
   return assembleLegacyStudentAccountPayload(
     effectiveSnap,
     accountingRows,
@@ -390,6 +417,7 @@ async function getRealStudentAccountPayload(
       availableScheduleTerms,
       clinicalProgress,
       portalEnrollmentRows,
+      enrolledSectionsScheduleRows,
     },
   );
 }

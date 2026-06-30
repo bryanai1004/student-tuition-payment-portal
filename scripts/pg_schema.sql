@@ -1,6 +1,8 @@
--- Generated from MySQL SHOW CREATE TABLE output.
--- Source database: school
--- This file contains PostgreSQL DDL only and is not executed by the script.
+-- DEPRECATED SNAPSHOT — do not use to bootstrap new environments.
+-- Generated from MySQL SHOW CREATE TABLE output (school database import).
+-- Missing: RLS, FK batches, student_course_bin, portal_store_orders, admin_users.username, etc.
+-- Authoritative schema evolution: supabase/migrations/ — see docs/database-migrations.md
+-- This file contains PostgreSQL DDL only and is not executed by any script.
 
 
 CREATE TABLE "Test" (

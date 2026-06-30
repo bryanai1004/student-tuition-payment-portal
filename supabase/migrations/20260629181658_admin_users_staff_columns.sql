@@ -1,4 +1,5 @@
--- Rebuild admin_users for Supabase Postgres mirror (auth passwords live in Supabase Auth).
+-- admin_users staff columns + roster seed (Supabase Auth holds passwords).
+-- Applied on production as migration 20260629181658.
 ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS username varchar(64);
 ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS display_name varchar(255);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_users_username ON admin_users (username);

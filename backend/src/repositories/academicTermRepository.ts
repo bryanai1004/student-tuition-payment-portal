@@ -19,7 +19,7 @@ function assertPaymentPolicyWritable(
   if (hasPaymentPolicyColumns) return;
   if (!rowWantsPersistedPaymentPolicy(row)) return;
   throw new Error(
-    "Database schema is missing academic_terms.payment_due_date and/or lock_registration_if_overdue. Apply backend/migrations/001_academic_terms_payment_policy.sql.",
+    "Database schema is missing academic_terms.payment_due_date and/or lock_registration_if_overdue. Run `supabase db push` from the repo root, or clone production schema — see docs/database-migrations.md.",
   );
 }
 
@@ -462,7 +462,7 @@ export async function postAcademicTermToDashboard(
   const { hasPostedToDashboardColumn } = await academicTermSchemaCaps();
   if (!hasPostedToDashboardColumn) {
     throw new Error(
-      "Database schema is missing academic_terms.is_posted_to_dashboard. Apply backend/migrations/005_academic_terms_is_posted_to_dashboard.sql.",
+      "Database schema is missing academic_terms.is_posted_to_dashboard. Run `supabase db push` from the repo root, or clone production schema — see docs/database-migrations.md.",
     );
   }
   const trimmed = id.trim();

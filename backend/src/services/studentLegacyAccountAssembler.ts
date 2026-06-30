@@ -10,12 +10,13 @@ import type {
   AccountScheduleTermOption,
   ClinicalProgress,
   PaymentRecord,
+  ScheduleRow,
   StudentAccountPayload,
 } from "../types/studentAccount.js";
 import {
   buildAcademicCourseRecordsFromMarksWithLookup,
   portalEnrollmentRowToAcademicCourseRecord,
-  resolveRegistrationAnchoredAcademicTermConsideringPortal,
+  resolveActiveEnrollmentTerm,
   scheduleRowsFromAcademicCourseRecords,
   termsMatch,
 } from "./studentAcademicCourseRecords.js";
@@ -59,6 +60,11 @@ export type AssembleLegacyStudentAccountOptions = {
    * marks (portal wins on duplicate course code). Withdrawn portal rows stay out of the timetable.
    */
   portalEnrollmentRows?: PortalEnrollmentAcademicRow[];
+  /**
+   * When set, account browse schedule uses the same rows as GET /api/student/enrolled-sections
+   * instead of merging portal academic rows with marks.
+   */
+  enrolledSectionsScheduleRows?: ScheduleRow[];
 };
 
 function mergeBrowseTermScheduleRecords(
@@ -201,12 +207,13 @@ export function assembleLegacyStudentAccountPayload(
     ),
   );
 
-  const scheduleSourceRecords =
-    portalBrowseRecords.length > 0
-      ? mergeBrowseTermScheduleRecords(portalBrowseRecords, browseRecords)
-      : browseRecords.filter((r) => r.status !== "withdrawn");
   const scheduleRows =
-    scheduleRowsFromAcademicCourseRecords(scheduleSourceRecords);
+    options.enrolledSectionsScheduleRows ??
+    scheduleRowsFromAcademicCourseRecords(
+      portalBrowseRecords.length > 0
+        ? mergeBrowseTermScheduleRecords(portalBrowseRecords, browseRecords)
+        : browseRecords.filter((r) => r.status !== "withdrawn"),
+    );
   const currentTerm =
     portalActiveTerm != null
       ? buildAccountCurrentTerm(portalActiveTerm.term, portalActiveTerm.year)
@@ -223,7 +230,7 @@ export function assembleLegacyStudentAccountPayload(
     ...(browseMatchesPortalActive
       ? {
           academicEnrollmentActive:
-            resolveRegistrationAnchoredAcademicTermConsideringPortal(
+            resolveActiveEnrollmentTerm(
               browseTerm,
               allMarksRows,
               portalRows,

@@ -29,6 +29,7 @@ import {
   resolveAmuCourse,
   type EligibilityResolvedCourse,
 } from "../services/courseEligibilityService.js";
+import { getCourseEquivalencyIndex } from "../services/courseEquivalencyService.js";
 import {
   buildStudentRecordFactsForQuestion,
 } from "../services/studentRecordAiService.js";
@@ -458,6 +459,7 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
         const rules = parsePrerequisiteRules(resolvedCourse);
         let eligibilityText = "Eligibility evaluation unavailable.";
         if (rules != null) {
+          const equiv = await getCourseEquivalencyIndex();
           const eligibility = evaluateCourseEligibility({
             targetCourse: resolvedCourse,
             prerequisites: rules,
@@ -469,6 +471,7 @@ export async function postAiAsk(req: Request, res: Response): Promise<void> {
               code: r.code,
               status: "active",
             })),
+            equivalency: equiv,
           });
           eligibilityText = [
             "Course eligibility analysis",

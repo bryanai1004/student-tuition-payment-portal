@@ -1,49 +1,30 @@
 /**
- * Registration (portal) + academic attempts (`marks`) in one payload. `transcript` = marks-only slice for this API.
- * `enrollmentHistory` (JSON key) = **combinedAcademicHistory**: sorted union of registration rows + attempts — not
- * “registration-only” naming; see {@link CombinedAcademicHistoryItem}.
- *
- * Does not compute degree audit or clinical progress; merge those only at the account layer when needed.
+ * Registration (portal) + academic attempts (`marks`) + clinic in one payload.
+ * `transcript` and `courseRecords` share the same unified merge (see studentUnifiedAcademicRecordsService).
  */
 
 import { DEMO_STUDENT_ID } from "../config/constants.js";
-import { pool } from "../lib/db.js";
 import { isMissingTable } from "../lib/dbErrors.js";
-import {
-  getLegacyStudentDisplayName,
-  listMarksForStudent,
-  type MarksRow,
-} from "../repositories/studentAcademicsRepository.js";
-import { findLatestLegacyTermYear } from "../repositories/studentLegacyAccountRepository.js";
-import {
-  findLatestPortalEnrollmentTermYear,
-  getPortalStudentDisplayName,
-  listPortalEnrollmentRowsForStudentAcademics,
-} from "../repositories/studentEnrollmentRepository.js";
-import { loadCoursesTranscriptLookup } from "../repositories/studentTranscriptRepository.js";
 import type {
   CombinedAcademicHistoryItem,
   StudentAcademicsResponse,
+  StudentAcademicsScheduleItem,
 } from "../types/studentAcademics.js";
 import {
-  buildAcademicCourseRecordsFromMarksWithLookup,
   buildAvailableTermsFromCourseRecords,
   courseRecordToEnrollmentItem,
-  courseRecordToScheduleItem,
   courseRecordToTranscriptItem,
-  legacyCompletedBlocksPortalRow,
-  pickNewerRegistrationAnchor,
-  portalEnrollmentRowToAcademicCourseRecord,
-  resolveRegistrationAnchoredAcademicTerm,
+  resolveActiveEnrollmentTerm,
   sortTranscriptPreviewRecords,
-  termsMatch,
 } from "./studentAcademicCourseRecords.js";
 import {
   courseFeedbackLookupKey,
   getFeedbackSubmittedAtMapForStudent,
 } from "./studentCourseFeedbackService.js";
+import { courseSectionDetailsToAcademicsScheduleItems } from "./portalEnrollmentSchedule.js";
+import { listStudentEnrolledSectionsForTerm } from "../repositories/studentEnrollmentRepository.js";
+import { loadUnifiedStudentAcademicContext } from "./studentUnifiedAcademicRecordsService.js";
 
-/** Attaches course feedback flags to the combined timeline; response field stays `enrollmentHistory` for clients. */
 function mergeEnrollmentFeedbackIntoPayload(
   payload: StudentAcademicsResponse,
   submittedAtByKey: Map<string, string>,
@@ -60,55 +41,44 @@ function mergeEnrollmentFeedbackIntoPayload(
   return { ...payload, enrollmentHistory: combinedAcademicHistory };
 }
 
-function buildMergedPayload(
+async function loadCurrentScheduleForActiveTerm(
   studentId: string,
-  studentName: string,
-  marksRows: MarksRow[],
-  legacyCourseRecords: import("../types/studentAcademics.js").StudentAcademicCourseRecord[],
-  portalCourseRecords: import("../types/studentAcademics.js").StudentAcademicCourseRecord[],
-  latestRegistration: { term: string; year: number } | null,
+  currentTerm: { term: string; year: number } | null,
+): Promise<StudentAcademicsScheduleItem[]> {
+  if (currentTerm == null) return [];
+  try {
+    const { sections } = await listStudentEnrolledSectionsForTerm(
+      studentId,
+      currentTerm.term,
+      currentTerm.year,
+    );
+    return courseSectionDetailsToAcademicsScheduleItems(sections);
+  } catch (e) {
+    console.warn(
+      "[academics] enrolled-sections schedule for currentTerm failed",
+      e instanceof Error ? e.message : e,
+    );
+    return [];
+  }
+}
+
+function buildAcademicsPayloadFromContext(
+  ctx: NonNullable<Awaited<ReturnType<typeof loadUnifiedStudentAcademicContext>>>,
+  currentSchedule: StudentAcademicsScheduleItem[],
 ): StudentAcademicsResponse {
-  const academicAttemptsFromMarks = legacyCourseRecords;
-  const registrationHistoryFromPortal = portalCourseRecords;
-  const combinedSortedCourseRecords = [
-    ...academicAttemptsFromMarks,
-    ...registrationHistoryFromPortal,
-  ];
-  sortTranscriptPreviewRecords(combinedSortedCourseRecords);
-  const courseRecords = combinedSortedCourseRecords;
-
-  const resolvedActive = resolveRegistrationAnchoredAcademicTerm(
-    latestRegistration,
-    marksRows,
-  );
-  const currentTerm = resolvedActive;
-
-  const currentSchedule =
-    currentTerm == null
-      ? []
-      : courseRecords
-          .filter(
-            (r) =>
-              r.status !== "withdrawn" &&
-              r.year === currentTerm.year &&
-              termsMatch(r.term, currentTerm.term),
-          )
-          .map(courseRecordToScheduleItem);
-
-  const combinedAcademicHistory: CombinedAcademicHistoryItem[] =
-    courseRecords.map((r) => courseRecordToEnrollmentItem(r));
-
-  /** Unofficial transcript lines: legacy `marks` attempts plus portal rows (incl. W after withdraw). */
+  const courseRecords = ctx.courseRecords;
+  const currentTerm = ctx.activeTerm;
   const transcript = courseRecords.map(courseRecordToTranscriptItem);
+  const enrollmentHistory = courseRecords.map((r) => courseRecordToEnrollmentItem(r));
 
   return {
-    studentId,
-    studentName,
+    studentId: ctx.studentId,
+    studentName: ctx.studentName,
     currentTerm,
     availableTerms: buildAvailableTermsFromCourseRecords(courseRecords),
     currentSchedule,
     transcript,
-    enrollmentHistory: combinedAcademicHistory,
+    enrollmentHistory,
     courseRecords,
   };
 }
@@ -143,51 +113,34 @@ export async function getStudentAcademicsPayload(
     };
   }
 
-  const marksRows = await listMarksForStudent(pool, trimmed);
-  const courseLookup = await loadCoursesTranscriptLookup(pool);
-  const latestLegacy = await findLatestLegacyTermYear(pool, trimmed);
-  const latestPortal = await findLatestPortalEnrollmentTermYear(trimmed);
-  const portalRows = await listPortalEnrollmentRowsForStudentAcademics(trimmed);
-
-  const latestRegistration = pickNewerRegistrationAnchor(
-    latestLegacy,
-    latestPortal,
-  );
-  console.debug("[academics] source rows loaded", {
-    studentId: trimmed,
-    marksRowCount: marksRows.length,
-    portalEnrollmentRowCount: portalRows.length,
-    latestLegacy,
-    latestPortal,
-    latestRegistration,
-  });
-
-  const nameFromMarks = marksRows[0]?.name?.trim() ?? "";
-  let studentName =
-    nameFromMarks.length > 0 ? nameFromMarks : trimmed;
-  if (nameFromMarks.length === 0) {
-    const legacyName = await getLegacyStudentDisplayName(pool, trimmed);
-    if (legacyName != null) studentName = legacyName;
-    else {
-      const pn = await getPortalStudentDisplayName(trimmed);
-      if (pn != null) studentName = pn;
-    }
+  const ctx = await loadUnifiedStudentAcademicContext(trimmed);
+  if (ctx == null) {
+    return {
+      studentId: trimmed,
+      studentName: trimmed,
+      currentTerm: null,
+      availableTerms: [],
+      currentSchedule: [],
+      transcript: [],
+      enrollmentHistory: [],
+      courseRecords: [],
+    };
   }
 
-  if (marksRows.length === 0 && portalRows.length === 0) {
-    console.error("[academics] no verified academic source rows found", {
-      studentId: trimmed,
-      latestLegacy,
-      latestPortal,
-      latestRegistration,
-    });
-    const resolvedActive = resolveRegistrationAnchoredAcademicTerm(
-      latestRegistration,
+  const hasAnySource =
+    ctx.marksRows.length > 0 ||
+    ctx.portalEnrollmentRows.length > 0 ||
+    ctx.clinicRows.length > 0;
+
+  if (!hasAnySource) {
+    const resolvedActive = resolveActiveEnrollmentTerm(
+      ctx.latestRegistration,
       [],
+      ctx.portalEnrollmentRows,
     );
     return {
       studentId: trimmed,
-      studentName,
+      studentName: ctx.studentName,
       currentTerm: resolvedActive,
       availableTerms: [],
       currentSchedule: [],
@@ -197,61 +150,19 @@ export async function getStudentAcademicsPayload(
     };
   }
 
-  const resolvedActiveForRecords = resolveRegistrationAnchoredAcademicTerm(
-    latestRegistration,
-    marksRows,
-  );
-
-  const legacyCourseRecords =
-    marksRows.length > 0
-      ? buildAcademicCourseRecordsFromMarksWithLookup(
-          trimmed,
-          marksRows,
-          courseLookup,
-          resolvedActiveForRecords,
-        )
-      : [];
-
-  const portalCourseRecords = portalRows
-    .filter(
-      (p) =>
-        !legacyCompletedBlocksPortalRow(
-          legacyCourseRecords,
-          p.course_code,
-          p.term,
-          p.year,
-        ),
-    )
-    .map((p) =>
-      portalEnrollmentRowToAcademicCourseRecord(
-        trimmed,
-        p,
-        p.display_course_title.length > 0
-          ? p.display_course_title
-          : p.course_title_raw.length > 0
-            ? p.course_title_raw
-            : p.course_code,
-        resolvedActiveForRecords,
-      ),
-    );
-
-  const payload = buildMergedPayload(
-    trimmed,
-    studentName,
-    marksRows,
-    legacyCourseRecords,
-    portalCourseRecords,
-    latestRegistration,
-  );
-  console.debug("[academics] merged payload summary", {
+  console.debug("[academics] unified source rows loaded", {
     studentId: trimmed,
-    currentTerm: payload.currentTerm,
-    availableTerms: payload.availableTerms.length,
-    currentScheduleCount: payload.currentSchedule.length,
-    transcriptCount: payload.transcript.length,
-    enrollmentHistoryCount: payload.enrollmentHistory.length,
-    courseRecordCount: payload.courseRecords.length,
+    marksRowCount: ctx.marksRows.length,
+    portalEnrollmentRowCount: ctx.portalEnrollmentRows.length,
+    clinicRowCount: ctx.clinicRows.length,
+    courseRecordCount: ctx.courseRecords.length,
   });
+
+  const currentSchedule = await loadCurrentScheduleForActiveTerm(
+    trimmed,
+    ctx.activeTerm,
+  );
+  const payload = buildAcademicsPayloadFromContext(ctx, currentSchedule);
 
   if (payload.courseRecords.length === 0) {
     return payload;

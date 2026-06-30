@@ -1,11 +1,13 @@
 import type { Request, Response } from "express";
 import { env } from "../config/env.js";
+import { isMissingTable } from "../lib/dbErrors.js";
 import {
   addOrUpdateCourseBinItem,
-  getCourseBinForStudent,
+  clearCourseBinForStudentTerm,
+  getCourseBinForStudentTerm,
   removeCourseBinItem,
 } from "../services/courseBinService.js";
-import type { CourseBinUpsertInput } from "../types/courseBin.js";
+import type { CourseBinScheduleTrack, CourseBinUpsertInput } from "../types/courseBin.js";
 
 function devMessage(e: unknown): string {
   return e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
@@ -15,6 +17,12 @@ function pathStudentId(req: Request): string {
   const v = req.params.studentId;
   if (Array.isArray(v)) return v[0] ?? "";
   return v ?? "";
+}
+
+function readAcademicTermId(req: Request): string {
+  const fromQuery = req.query.academic_term_id;
+  const raw = Array.isArray(fromQuery) ? fromQuery[0] : fromQuery;
+  return typeof raw === "string" ? raw.trim() : "";
 }
 
 function pathItemId(req: Request): number | null {
@@ -30,13 +38,20 @@ function strOrNull(v: unknown): string | null {
   return String(v);
 }
 
+function parseScheduleTrack(raw: unknown): CourseBinScheduleTrack {
+  if (typeof raw !== "string") return "EN";
+  return raw.trim().toUpperCase() === "CN" ? "CN" : "EN";
+}
+
 function parseUpsertBody(body: unknown): CourseBinUpsertInput | null {
   if (!body || typeof body !== "object") return null;
   const o = body as Record<string, unknown>;
+  const academic_term_id =
+    typeof o.academic_term_id === "string" ? o.academic_term_id.trim() : "";
   const course_code =
     typeof o.course_code === "string" ? o.course_code.trim() : "";
   const section = typeof o.section === "string" ? o.section.trim() : "";
-  if (!course_code || !section) return null;
+  if (!academic_term_id || !course_code || !section) return null;
 
   const registered_display =
     typeof o.registered_display === "string"
@@ -58,8 +73,10 @@ function parseUpsertBody(body: unknown): CourseBinUpsertInput | null {
         : null;
 
   return {
+    academic_term_id,
     course_code,
     section,
+    schedule_track: parseScheduleTrack(o.schedule_track),
     session: strOrNull(o.session),
     type: strOrNull(o.type),
     units: strOrNull(o.units),
@@ -70,12 +87,43 @@ function parseUpsertBody(body: unknown): CourseBinUpsertInput | null {
     location: strOrNull(o.location),
     eng_name: strOrNull(o.eng_name),
     chi_name: strOrNull(o.chi_name),
+    prerequisite_course_id: strOrNull(o.prerequisite_course_id),
+    prerequisite_course_code: strOrNull(o.prerequisite_course_code),
+    prerequisite_course_title: strOrNull(o.prerequisite_course_title),
+    schedule_weekday: strOrNull(o.schedule_weekday),
+    schedule_start_time: strOrNull(o.schedule_start_time),
+    schedule_end_time: strOrNull(o.schedule_end_time),
   };
 }
 
+function courseBinErrorResponse(e: unknown): { status: number; body: { error: string; message?: string } } {
+  if (isMissingTable(e)) {
+    return {
+      status: 503,
+      body: {
+        error:
+          "Course bin is not available until student_course_bin migration is applied.",
+      },
+    };
+  }
+  return {
+    status: 500,
+    body: {
+      error: "Course bin request failed",
+      ...(env.nodeEnv === "development" ? { message: devMessage(e) } : {}),
+    },
+  };
+}
+
+/** GET /api/course-bin/:studentId?academic_term_id= */
 export async function getCourseBin(req: Request, res: Response): Promise<void> {
   try {
-    const result = await getCourseBinForStudent(pathStudentId(req));
+    const academicTermId = readAcademicTermId(req);
+    if (academicTermId === "") {
+      res.status(400).json({ error: "Query parameter academic_term_id is required." });
+      return;
+    }
+    const result = await getCourseBinForStudentTerm(pathStudentId(req), academicTermId);
     if (!result) {
       res.status(400).json({ error: "studentId is required" });
       return;
@@ -83,20 +131,19 @@ export async function getCourseBin(req: Request, res: Response): Promise<void> {
     res.json({ items: result.items });
   } catch (e) {
     console.error("[course-bin] list failed:", e);
-    const body: { error: string; message?: string } = {
-      error: "Failed to load course bin",
-    };
-    if (env.nodeEnv === "development") body.message = devMessage(e);
-    res.status(500).json(body);
+    const out = courseBinErrorResponse(e);
+    res.status(out.status).json(out.body);
   }
 }
 
+/** POST /api/course-bin/:studentId */
 export async function postCourseBin(req: Request, res: Response): Promise<void> {
   try {
     const input = parseUpsertBody(req.body);
     if (!input) {
       res.status(400).json({
-        error: "Invalid body: require course_code and section",
+        error:
+          "Invalid body: require academic_term_id, course_code, and section",
       });
       return;
     }
@@ -108,14 +155,39 @@ export async function postCourseBin(req: Request, res: Response): Promise<void> 
     res.status(200).json(result.item);
   } catch (e) {
     console.error("[course-bin] upsert failed:", e);
-    const body: { error: string; message?: string } = {
-      error: "Failed to save course bin item",
-    };
-    if (env.nodeEnv === "development") body.message = devMessage(e);
-    res.status(500).json(body);
+    const out = courseBinErrorResponse(e);
+    res.status(out.status).json(out.body);
   }
 }
 
+/** DELETE /api/course-bin/:studentId?academic_term_id= — clear all rows for the term. */
+export async function deleteCourseBinForTermHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    const academicTermId = readAcademicTermId(req);
+    if (academicTermId === "") {
+      res.status(400).json({ error: "Query parameter academic_term_id is required." });
+      return;
+    }
+    const result = await clearCourseBinForStudentTerm(
+      pathStudentId(req),
+      academicTermId,
+    );
+    if (!result) {
+      res.status(400).json({ error: "studentId is required" });
+      return;
+    }
+    res.status(200).json({ ok: true, removedCount: result.removedCount });
+  } catch (e) {
+    console.error("[course-bin] clear failed:", e);
+    const out = courseBinErrorResponse(e);
+    res.status(out.status).json(out.body);
+  }
+}
+
+/** DELETE /api/course-bin/:studentId/:itemId */
 export async function deleteCourseBinItemHandler(
   req: Request,
   res: Response,
@@ -138,10 +210,7 @@ export async function deleteCourseBinItemHandler(
     res.status(204).send();
   } catch (e) {
     console.error("[course-bin] delete failed:", e);
-    const body: { error: string; message?: string } = {
-      error: "Failed to delete course bin item",
-    };
-    if (env.nodeEnv === "development") body.message = devMessage(e);
-    res.status(500).json(body);
+    const out = courseBinErrorResponse(e);
+    res.status(out.status).json(out.body);
   }
 }

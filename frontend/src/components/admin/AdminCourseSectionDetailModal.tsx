@@ -6,7 +6,7 @@ import {
   type AdminCourseSection,
   type AdminSectionRosterItem,
 } from '../../lib/api'
-import { socket, type EnrollmentChangedEvent } from '../../lib/socket'
+import { subscribeEnrollmentChanged, type EnrollmentChangedEvent } from '../../lib/realtime'
 import { adminSchedulingQueryString } from '../../lib/adminSchedulingSearchParams'
 import {
   getPreferredCourseTitle,
@@ -104,11 +104,7 @@ export function AdminCourseSectionDetailModal({
       if (event.sectionId !== currentSectionId) return
       void loadRoster(currentSectionId)
     }
-    socket.connect()
-    socket.on('enrollment.changed', handleEnrollmentChanged)
-    return () => {
-      socket.off('enrollment.changed', handleEnrollmentChanged)
-    }
+    return subscribeEnrollmentChanged(handleEnrollmentChanged)
   }, [section?.id, loadRoster])
 
   if (section == null) return null
