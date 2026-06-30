@@ -31,7 +31,7 @@ const PRODUCTION_LEDGER = [
   ["20260630180000", "course_placeholder_equivalencies"],
 ];
 
-const PENDING: Array<[string, string]> = [];
+const PENDING = [];
 
 function parseFilename(file) {
   const m = /^(\d+)_(.+)\.sql$/.exec(file);
