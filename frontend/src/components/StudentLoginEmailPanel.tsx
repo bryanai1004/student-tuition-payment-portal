@@ -9,9 +9,11 @@ import {
 type Props = {
   /** When false, the panel is hidden until the student profile has loaded. */
   ready: boolean
+  /** Renders inside the profile card without an extra outer card shell. */
+  embedded?: boolean
 }
 
-export function StudentLoginEmailPanel({ ready }: Props) {
+export function StudentLoginEmailPanel({ ready, embedded = false }: Props) {
   const [status, setStatus] = useState<StudentLoginEmailStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -31,6 +33,8 @@ export function StudentLoginEmailPanel({ ready }: Props) {
       const next = await fetchStudentLoginEmailStatus()
       setStatus(next)
       if (!next.verified) {
+        setEditing(true)
+      } else {
         setEditing(false)
       }
     } catch (e) {
@@ -107,9 +111,14 @@ export function StudentLoginEmailPanel({ ready }: Props) {
 
   if (!ready) return null
 
+  const Wrapper = embedded ? 'div' : 'section'
+  const wrapperClass = embedded
+    ? 'portal-login-email-embedded'
+    : 'portal-card portal-stack portal-login-email-card'
+
   return (
-    <section
-      className="portal-card portal-stack portal-login-email-card"
+    <Wrapper
+      className={wrapperClass}
       aria-labelledby="login-email-heading"
     >
       <h2 id="login-email-heading" className="portal-section-heading">
@@ -235,6 +244,6 @@ export function StudentLoginEmailPanel({ ready }: Props) {
           {actionError}
         </p>
       ) : null}
-    </section>
+    </Wrapper>
   )
 }

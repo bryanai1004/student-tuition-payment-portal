@@ -265,6 +265,7 @@ export function ProfilePage() {
         const result = await fetchMyStudentPhotoUrl({ signal: ac.signal })
         if (ac.signal.aborted) return
         setPhotoUrl(result.photoUrl)
+        setPhotoError(null)
       } catch (e) {
         if (ac.signal.aborted) return
         setPhotoUrl(null)
@@ -374,22 +375,17 @@ export function ProfilePage() {
     setPhotoFilename(file.name)
     setPhotoError(null)
     setPhotoSuccess(null)
+    void uploadPhotoFile(file, nextUrl)
   }
 
-  const normalizedPhotoError =
-    photoError && /(authentication required|http 401|401)/i.test(photoError)
-      ? 'Please sign in again to upload your profile photo.'
-      : photoError
-
-  const handlePhotoUpload = async () => {
-    if (!photoFile) return
+  const uploadPhotoFile = async (file: File, previewUrl?: string) => {
     setPhotoUploading(true)
     setPhotoError(null)
     setPhotoSuccess(null)
     try {
-      const uploaded = await uploadMyStudentPhoto(photoFile)
-      if (photoPreviewUrl) {
-        URL.revokeObjectURL(photoPreviewUrl)
+      const uploaded = await uploadMyStudentPhoto(file)
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
       }
       setPhotoPreviewUrl(null)
       setPhotoFile(null)
@@ -397,12 +393,13 @@ export function ProfilePage() {
       if (photoInputRef.current) {
         photoInputRef.current.value = ''
       }
-      if (uploaded.photoUrl) {
-        setPhotoUrl(uploaded.photoUrl)
-      } else {
-        setPhotoReloadKey((k) => k + 1)
-      }
-      setPhotoSuccess('Profile photo uploaded successfully.')
+      setPhotoUrl(uploaded.photoUrl)
+      setPhotoReloadKey((k) => k + 1)
+      setPhotoSuccess(
+        uploaded.photoUrl
+          ? 'Profile photo saved.'
+          : 'Photo uploaded — refresh if it does not appear.',
+      )
     } catch (e) {
       setPhotoError(
         e instanceof Error ? e.message : 'Unable to upload profile photo right now.',
@@ -411,6 +408,14 @@ export function ProfilePage() {
       setPhotoUploading(false)
     }
   }
+
+  const hasSavedPhoto = Boolean(photoUrl)
+  const hasPhotoDisplay = Boolean(photoPreviewUrl || photoUrl)
+
+  const normalizedPhotoError =
+    photoError && /(authentication required|http 401|401)/i.test(photoError)
+      ? 'Please sign in again to upload your profile photo.'
+      : photoError
 
   return (
     <main className="portal-page portal-module-page portal-profile-page">
@@ -469,11 +474,16 @@ export function ProfilePage() {
                 Profile Photo
               </h3>
               <div className="portal-profile-photo-frame" aria-live="polite">
-                {photoPreviewUrl || photoUrl ? (
+                {hasPhotoDisplay ? (
                   <img
                     src={photoPreviewUrl ?? photoUrl ?? ''}
                     alt={photoPreviewUrl ? 'Selected profile photo preview' : 'Profile photo'}
                     className="portal-profile-photo-image"
+                    onError={() => {
+                      if (photoPreviewUrl) return
+                      setPhotoUrl(null)
+                      setPhotoReloadKey((k) => k + 1)
+                    }}
                   />
                 ) : (
                   <span className="portal-profile-photo-placeholder">No photo</span>
@@ -483,21 +493,17 @@ export function ProfilePage() {
                 <input
                   ref={photoInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/jpg"
                   onChange={handlePhotoSelect}
                   className="portal-profile-photo-upload-input"
                   disabled={photoUploading}
                 />
-                Choose photo
+                {photoUploading
+                  ? 'Uploading…'
+                  : hasSavedPhoto || hasPhotoDisplay
+                    ? 'Change photo'
+                    : 'Choose photo'}
               </label>
-              <button
-                type="button"
-                className="portal-btn portal-btn--primary"
-                onClick={handlePhotoUpload}
-                disabled={!photoFile || photoUploading}
-              >
-                {photoUploading ? 'Uploading...' : 'Upload photo'}
-              </button>
               {photoLoading ? (
                 <p className="portal-card-note portal-profile-photo-filename">
                   Loading current photo...
@@ -605,7 +611,7 @@ export function ProfilePage() {
             </div>
             <div className="portal-row">
               <dt>{t('email')}</dt>
-              <dd>
+              <dd className="portal-profile-email-cell">
                 <input
                   className="portal-profile-input"
                   type="email"
@@ -613,6 +619,9 @@ export function ProfilePage() {
                   onChange={(e) => setEditableField('email', e.target.value)}
                   disabled={!isEditing || saveLoading}
                 />
+                <p className="portal-profile-field-note">
+                  Contact email — save with Edit. For sign-in, use Login email below.
+                </p>
               </dd>
             </div>
             <div className="portal-row">
@@ -730,6 +739,9 @@ export function ProfilePage() {
             </div>
             </dl>
           </div>
+
+          <StudentLoginEmailPanel embedded ready />
+
           <div className="portal-actions">
             {isEditing ? (
               <>
@@ -772,10 +784,6 @@ export function ProfilePage() {
           ) : null}
         </section>
       ) : null}
-
-      <StudentLoginEmailPanel
-        ready={!profileSectionLoading && !profileError && profile != null}
-      />
     </main>
   )
 }

@@ -1610,6 +1610,33 @@ button.portal-tab {
   margin-top: 1rem;
 }
 
+.portal-login-email-embedded {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e8e8e8;
+}
+
+.portal-profile-email-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.portal-profile-field-note {
+  margin: 0;
+  width: min(100%, 24rem);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-muted, #666);
+  text-align: left;
+}
+
+.portal-profile-details .portal-profile-email-cell {
+  align-items: flex-end;
+}
+
 .portal-login-email-intro {
   margin: 0;
   font-size: 0.875rem;
