@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useStudentPortalT } from '@/LanguageContext'
+import { useLanguage, useStudentPortalT } from '@/LanguageContext'
 import { useAccount } from '@/context/AccountContext'
 import { IconFeesStore } from '@/components/icons/PortalModuleIcons'
 import {
@@ -27,6 +27,7 @@ import { StoreFeeIcon } from '@/lib/storeFeeIcons'
 const STORE_PAGE_SIZE = 12
 
 export function FinancesStorePage() {
+  const { locale } = useLanguage()
   const t = useStudentPortalT()
   const navigate = useNavigate()
   const { currentStudentId, authToken, isAuthenticated } = useAccount()
@@ -64,7 +65,7 @@ export function FinancesStorePage() {
     ;(async () => {
       try {
         const [catalogRes, quartersRes] = await Promise.all([
-          fetchStoreCatalog({ signal: ac.signal, authToken: token }),
+          fetchStoreCatalog({ signal: ac.signal, authToken: token, locale }),
           fetchAccountingQuarters(studentId, { signal: ac.signal }),
         ])
         if (ac.signal.aborted) return
@@ -91,7 +92,7 @@ export function FinancesStorePage() {
       }
     })()
     return () => ac.abort()
-  }, [applyCartResponse, studentId, token])
+  }, [applyCartResponse, locale, studentId, token])
 
   const totalPages = Math.max(1, Math.ceil(catalog.length / STORE_PAGE_SIZE))
   const safePage = Math.min(page, totalPages - 1)
