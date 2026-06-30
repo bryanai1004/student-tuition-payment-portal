@@ -5,9 +5,12 @@ import {
   deleteAdminFinancePayment,
   getAdminFinanceLedger,
   getAdminFinanceQuarters,
+  getAdminFinanceQuarterSummary,
   getQuarterSettingsPayload,
   listAdminFinanceStudentsPaginated,
   parseBalanceFilterParam,
+  parseStatusFilterParam,
+  parseRosterScopeParam,
   listGlobalQuartersPayload,
   postAdminFinanceCharge,
   postAdminFinancePayment,
@@ -92,17 +95,62 @@ export async function getAdminFinanceStudents(
     const balanceStr = queryFirstString(req.query.balance);
     const balanceFilter = parseBalanceFilterParam(balanceStr);
 
+    const statusStr = queryFirstString(req.query.status);
+    const statusFilter = parseStatusFilterParam(statusStr);
+
+    const rosterScopeStr = queryFirstString(req.query.rosterScope);
+    const rosterScope = parseRosterScopeParam(rosterScopeStr);
+
     const payload = await listAdminFinanceStudentsPaginated(term, year, {
       page,
       pageSize,
       search,
       balanceFilter,
+      statusFilter,
+      rosterScope,
     });
     res.json(payload);
   } catch (e) {
     console.error("[admin/finance/students]", e);
     const body: { error: string; message?: string } = {
       error: "Failed to load finance student list",
+    };
+    if (env.nodeEnv === "development") body.message = devMessage(e);
+    res.status(500).json(body);
+  }
+}
+
+/**
+ * GET /api/admin/finance/quarter-summary?term=&year=
+ */
+export async function getAdminFinanceQuarterSummaryHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    const termRaw = req.query.term;
+    const yearRaw = req.query.year;
+    const term =
+      typeof termRaw === "string" && termRaw.trim() !== ""
+        ? termRaw.trim()
+        : "";
+    const yearNum =
+      typeof yearRaw === "string" && yearRaw.trim() !== ""
+        ? Number(yearRaw)
+        : Number.NaN;
+    const year = Number.isFinite(yearNum) ? Math.trunc(yearNum) : Number.NaN;
+    if (term === "" || !Number.isFinite(year)) {
+      res.status(400).json({
+        error: "Query parameters `term` and `year` are required",
+      });
+      return;
+    }
+    const payload = await getAdminFinanceQuarterSummary(term, year);
+    res.json(payload);
+  } catch (e) {
+    console.error("[admin/finance/quarter-summary]", e);
+    const body: { error: string; message?: string } = {
+      error: "Failed to load quarter finance summary",
     };
     if (env.nodeEnv === "development") body.message = devMessage(e);
     res.status(500).json(body);

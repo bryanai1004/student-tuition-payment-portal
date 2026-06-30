@@ -7,7 +7,13 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { buildApiUrl, clearAdminAuthClientStorage } from '../lib/api'
+import {
+  adminAuthRequestHeaders,
+  buildApiUrl,
+  clearAdminAccessTokenFromStorage,
+  clearAdminAuthClientStorage,
+  writeAdminAccessTokenToStorage,
+} from '../lib/api'
 import { type AdminRole, isAdminRole } from '../lib/adminAccess'
 
 type AdminLoginResult =
@@ -51,6 +57,7 @@ async function postAdminLogout(): Promise<void> {
     await fetch(buildApiUrl('/api/admin/auth/logout'), {
       method: 'POST',
       credentials: 'include',
+      headers: adminAuthRequestHeaders(),
     })
   } catch {
     /* ignore */
@@ -68,12 +75,14 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         const res = await fetch(buildApiUrl('/api/admin/auth/me'), {
           method: 'GET',
           credentials: 'include',
+          headers: adminAuthRequestHeaders(),
           signal: AbortSignal.timeout(10_000),
         })
         const data: unknown = await res.json().catch(() => null)
         if (cancelled) return
         if (!res.ok || res.status === 401) {
           setSession(null)
+          clearAdminAccessTokenFromStorage()
           clearAdminAuthClientStorage()
         } else {
           const parsed = parseMeResponse(data)
@@ -82,6 +91,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
             clearAdminAuthClientStorage()
           } else {
             setSession(null)
+            clearAdminAccessTokenFromStorage()
             clearAdminAuthClientStorage()
           }
         }
@@ -107,6 +117,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       if (password === '') {
         return { ok: false, error: 'Password is required' }
       }
+      clearAdminAccessTokenFromStorage()
       clearAdminAuthClientStorage()
       setSession(null)
       await postAdminLogout()
@@ -127,6 +138,11 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
               const email = typeof u.email === 'string' ? u.email : ''
               const roleRaw = typeof u.role === 'string' ? u.role : ''
               if (email.trim() !== '' && isAdminRole(roleRaw)) {
+                const accessToken =
+                  typeof o.accessToken === 'string' ? o.accessToken.trim() : ''
+                if (accessToken !== '') {
+                  writeAdminAccessTokenToStorage(accessToken)
+                }
                 setSession({ email, role: roleRaw })
                 return { ok: true }
               }
@@ -134,6 +150,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
           }
         }
         setSession(null)
+        clearAdminAccessTokenFromStorage()
         clearAdminAuthClientStorage()
         await postAdminLogout()
         const errBody = data as { error?: unknown } | null
@@ -144,6 +161,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         return { ok: false, error: msg }
       } catch {
         setSession(null)
+        clearAdminAccessTokenFromStorage()
         clearAdminAuthClientStorage()
         await postAdminLogout()
         return { ok: false, error: 'Login failed. Please try again.' }
@@ -154,6 +172,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await postAdminLogout()
+    clearAdminAccessTokenFromStorage()
     clearAdminAuthClientStorage()
     setSession(null)
   }, [])

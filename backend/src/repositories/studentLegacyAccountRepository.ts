@@ -522,14 +522,6 @@ const ADMIN_STUDENT_LIST_LATEST_REG_JOIN = `LEFT JOIN (
        FROM registration
      ) lr ON lr.id = s.id AND lr.rn = 1`;
 
-/** Escape `%`, `_`, and `\\` for use in a MySQL `LIKE` pattern with `ESCAPE '\\\\'`. */
-function escapeMysqlLikePattern(fragment: string): string {
-  return fragment
-    .replace(/\\/g, "\\\\")
-    .replace(/%/g, "\\%")
-    .replace(/_/g, "\\_");
-}
-
 export type LegacyAdminStudentListQuery = {
   /** Trimmed search string; matches student id, name, email, and program case-insensitively. */
   search: string;
@@ -621,15 +613,15 @@ function buildAdminStudentListFilters(
   const params: Array<string | number> = [];
   const searchTrimmed = query.search.trim();
   if (searchTrimmed !== "") {
-    const like = `%${escapeMysqlLikePattern(searchTrimmed.toLowerCase())}%`;
+    const needle = searchTrimmed.toLowerCase();
     clauses.push(`(
-      LOWER(TRIM(s.id)) LIKE ? ESCAPE '\\\\'
-      OR LOWER(COALESCE(s.name, '')) LIKE ? ESCAPE '\\\\'
-      OR LOWER(COALESCE(s.email, '')) LIKE ? ESCAPE '\\\\'
-      OR LOWER(COALESCE(s.amu_email, '')) LIKE ? ESCAPE '\\\\'
-      OR LOWER(TRIM(COALESCE(s.program, ''))) LIKE ? ESCAPE '\\\\'
+      POSITION(? IN LOWER(TRIM(s.id))) > 0
+      OR POSITION(? IN LOWER(COALESCE(s.name, ''))) > 0
+      OR POSITION(? IN LOWER(COALESCE(s.email, ''))) > 0
+      OR POSITION(? IN LOWER(COALESCE(s.amu_email, ''))) > 0
+      OR POSITION(? IN LOWER(TRIM(COALESCE(s.program, '')))) > 0
     )`);
-    params.push(like, like, like, like, like);
+    params.push(needle, needle, needle, needle, needle);
   }
   const programClause = buildAdminStudentProgramClause(query.program);
   if (programClause !== "") {

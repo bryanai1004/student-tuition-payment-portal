@@ -11017,6 +11017,10 @@ select.admin-student-edit-control {
   font-size: 0.875rem;
 }
 
+.admin-finance-banner--warn {
+  color: #b45309;
+}
+
 .admin-finance-expand__quarter-label {
   margin: 0 0.5rem 0 0;
   align-self: center;
@@ -11071,6 +11075,440 @@ select.admin-student-edit-control {
 
 .admin-finance-totals__label {
   text-align: right;
+}
+
+/* —— Admin Finance redesign (Students tab + drawer + Quarter tab) —— */
+
+.admin-finance-page__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  width: 100%;
+}
+
+.admin-finance-page-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  background: color-mix(in srgb, var(--amu-card) 88%, var(--portal-border-subtle));
+  border: 1px solid var(--portal-border-subtle);
+  border-radius: 999px;
+}
+
+.admin-finance-page-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--portal-text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.4rem 0.95rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.admin-finance-page-tab:hover {
+  color: var(--text-dark);
+}
+
+.admin-finance-page-tab--active {
+  background: var(--amu-card);
+  color: var(--text-dark);
+  box-shadow: var(--portal-shadow);
+}
+
+.admin-finance-quarter-summary-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.admin-finance-quarter-summary-bar__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  background: var(--amu-card);
+  border: 1px solid var(--portal-border-subtle);
+  border-radius: var(--portal-radius);
+  box-shadow: var(--portal-shadow);
+}
+
+.admin-finance-quarter-summary-bar__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--portal-text-faint);
+}
+
+.admin-finance-quarter-summary-bar__item strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dark);
+}
+
+.admin-finance-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.admin-finance-status-chips--inline {
+  margin-bottom: 0;
+}
+
+.admin-finance-roster-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.admin-finance-roster-scope__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.admin-finance-status-chip {
+  appearance: none;
+  border: 1px solid var(--portal-border-subtle);
+  background: var(--amu-card);
+  color: var(--portal-text-muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.admin-finance-status-chip:hover:not(:disabled) {
+  color: var(--text-dark);
+  border-color: color-mix(in srgb, var(--portal-border-subtle) 50%, var(--text-dark));
+}
+
+.admin-finance-status-chip--active {
+  background: color-mix(in srgb, var(--amu-primary) 12%, var(--amu-card));
+  border-color: color-mix(in srgb, var(--amu-primary) 35%, var(--portal-border-subtle));
+  color: var(--text-dark);
+}
+
+.admin-finance-status-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-finance-table-hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.admin-finance-table-wrap {
+  border: 1px solid var(--portal-border-subtle);
+  border-radius: var(--portal-radius);
+  overflow: hidden;
+  box-shadow: var(--portal-shadow);
+}
+
+.admin-finance-table tbody tr.admin-finance-table-row {
+  cursor: pointer;
+}
+
+.admin-finance-table tbody tr.admin-finance-table-row:hover {
+  background: color-mix(in srgb, var(--amu-primary) 4%, var(--amu-card));
+}
+
+.admin-finance-table-row--selected {
+  background: color-mix(in srgb, var(--amu-primary) 8%, var(--amu-card));
+}
+
+.admin-finance-table-row--selected .admin-student-name-link,
+.admin-finance-table-row--selected .admin-student-name-link:hover {
+  border-bottom-color: transparent;
+}
+
+.admin-finance-table-student {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.admin-finance-table-student__id {
+  font-size: 0.8125rem;
+}
+
+.admin-finance-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.admin-finance-status-badge--paid {
+  background: color-mix(in srgb, #16a34a 14%, var(--amu-card));
+  color: #15803d;
+}
+
+.admin-finance-status-badge--owes {
+  background: color-mix(in srgb, #d97706 14%, var(--amu-card));
+  color: #b45309;
+}
+
+.admin-finance-status-badge--overdue {
+  background: color-mix(in srgb, #dc2626 14%, var(--amu-card));
+  color: #b91c1c;
+}
+
+.admin-finance-status-badge--credit {
+  background: color-mix(in srgb, #2563eb 14%, var(--amu-card));
+  color: #1d4ed8;
+}
+
+.admin-finance-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.admin-finance-drawer {
+  width: min(42rem, 100vw);
+  height: 100%;
+  background: var(--amu-card);
+  border-left: 1px solid var(--portal-border-subtle);
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  animation: admin-finance-drawer-in 0.2s ease;
+}
+
+@keyframes admin-finance-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.admin-finance-drawer__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid var(--portal-border-subtle);
+}
+
+.admin-finance-drawer__title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.admin-finance-drawer__meta {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+}
+
+.admin-finance-drawer__header-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-finance-drawer__tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid var(--portal-border-subtle);
+}
+
+.admin-finance-drawer__tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--portal-text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.admin-finance-drawer__tab--active {
+  color: var(--text-dark);
+  border-bottom-color: var(--amu-primary);
+}
+
+.admin-finance-drawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.admin-finance-drawer-summary__status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.admin-finance-drawer-summary__net {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.admin-finance-bucket-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.admin-finance-bucket-card {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--portal-border-subtle);
+  border-radius: var(--portal-radius);
+  background: color-mix(in srgb, var(--amu-card) 96%, var(--portal-border-subtle));
+}
+
+.admin-finance-bucket-card__label {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--portal-text-faint);
+}
+
+.admin-finance-bucket-card__amount {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dark);
+}
+
+.admin-finance-drawer-summary__hint {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.admin-finance-drawer-ledger {
+  padding: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.admin-finance-drawer-ledger .admin-finance-expand__toolbar {
+  margin-bottom: 0.85rem;
+}
+
+.admin-finance-quarter-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-finance-quarter-card {
+  padding: 1.15rem 1.25rem;
+}
+
+.admin-finance-quarter-card__title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.admin-finance-quarter-card__lead {
+  margin: 0 0 0.85rem;
+  font-size: 0.9375rem;
+}
+
+.admin-finance-quarter-card__note {
+  margin: 0 0 0.85rem;
+}
+
+.admin-finance-quarter-card__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.admin-finance-quarter-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.admin-finance-quarter-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 1rem;
+  margin: 0;
+}
+
+.admin-finance-quarter-preview > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.admin-finance-quarter-preview dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--portal-text-faint);
+}
+
+.admin-finance-quarter-preview dd {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-form-message--success {
+  color: #15803d;
+}
+
+@media (max-width: 720px) {
+  .admin-finance-quarter-summary-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-finance-bucket-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-finance-drawer {
+    width: 100vw;
+  }
 }
 
 .admin-table-numeric {

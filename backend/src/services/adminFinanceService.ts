@@ -20,6 +20,7 @@ import {
   sumPortalBillingAdjustmentsNetByStudentForQuarter,
   sumPortalPaymentsByStudentForQuarter,
   type AdminFinanceRosterBalanceFilter,
+  type AdminFinanceRosterScope,
   type PortalBillingCategory,
   setFinanceQuarterDdlOnAcademicTerms,
   updateManualBillingAdjustment,
@@ -45,12 +46,47 @@ import { computeTuitionBalanceSnapshot } from "./tuitionBalanceService.js";
 import { resolveCanonicalStudentExternalId } from "../repositories/studentIdentityRepository.js";
 import type { LedgerRowForTuitionFlow } from "./ledgerTuitionFlowMath.js";
 
+export type AdminFinanceStudentStatus =
+  | "paid"
+  | "owes"
+  | "overdue"
+  | "credit";
+
+export type AdminFinanceStatusFilter =
+  | "all"
+  | "owes"
+  | "paid"
+  | "late_fee"
+  | "clinic_unpaid";
+
+export type AdminFinanceStudentBuckets = {
+  tuitionDue: number;
+  clinicDue: number;
+  lateFeeDue: number;
+  examDue: number;
+};
+
 /** One row in the paginated admin finance student list. */
 export type AdminFinanceStudentListItem = {
   studentId: string;
   name: string;
   /** Net balance for the selected quarter (legacy `accounting` + portal adjustments, or full portal ledger when no legacy rows). */
   balance: number;
+  /** Null when bucket breakdown was not computed for the list view (see drawer / ledger). */
+  tuitionDue: number | null;
+  clinicDue: number | null;
+  lateFeeDue: number | null;
+  examDue: number | null;
+  bucketsLoaded: boolean;
+  status: AdminFinanceStudentStatus;
+};
+
+export type AdminFinanceQuarterSummary = {
+  term: string;
+  year: number;
+  paymentDueDate: string | null;
+  studentsOwing: number;
+  totalOutstanding: number;
 };
 
 export type AdminFinanceStudentsListResponse = {
@@ -518,6 +554,36 @@ export function parseBalanceFilterParam(
   return "all";
 }
 
+export function parseStatusFilterParam(
+  raw: string | undefined,
+): AdminFinanceStatusFilter {
+  const s = (raw ?? "").trim().toLowerCase();
+  if (
+    s === "owes" ||
+    s === "paid" ||
+    s === "late_fee" ||
+    s === "clinic_unpaid" ||
+    s === "all"
+  ) {
+    return s;
+  }
+  return "all";
+}
+
+export function parseRosterScopeParam(
+  raw: string | undefined,
+): AdminFinanceRosterScope {
+  const s = (raw ?? "").trim().toLowerCase();
+  if (s === "all") return "all";
+  return "quarter";
+}
+
+function statusFilterNeedsBuckets(
+  filter: AdminFinanceStatusFilter,
+): boolean {
+  return filter === "late_fee" || filter === "clinic_unpaid";
+}
+
 function matchesFinanceBalanceFilter(
   balance: number,
   filter: AdminFinanceRosterBalanceFilter,
@@ -529,10 +595,298 @@ function matchesFinanceBalanceFilter(
   return b === 0;
 }
 
+function emptyFinanceBuckets(): AdminFinanceStudentBuckets {
+  return {
+    tuitionDue: 0,
+    clinicDue: 0,
+    lateFeeDue: 0,
+    examDue: 0,
+  };
+}
+
+async function computeFinanceBucketsForStudent(
+  studentId: string,
+  term: string,
+  year: number,
+): Promise<AdminFinanceStudentBuckets> {
+  const requested = studentId.trim();
+  const canonical =
+    (await resolveCanonicalStudentExternalId(pool, requested)) ?? requested;
+  const ledger = await getAccountingLedgerPayload(
+    canonical,
+    term.trim(),
+    year,
+    {
+      studentPortalLedgerPresentation: true,
+      skipExpiredClinicalBookingReconciliation: true,
+      skipLateFeeEvaluation: true,
+    },
+  );
+  if (ledger == null) {
+    return emptyFinanceBuckets();
+  }
+  const snap = computeTuitionBalanceSnapshot({
+    requestedStudentId: requested,
+    resolvedStudentId: canonical,
+    term: ledger.term.trim() || term.trim(),
+    year: ledger.year,
+    rows: (ledger.rows ?? []) as LedgerRowForTuitionFlow[],
+  });
+  return {
+    tuitionDue: snap.tuitionChargeAmountDue,
+    clinicDue: roundMoney(
+      Math.max(
+        0,
+        snap.chargeTotals.clinic_fee - snap.paidAllocations.clinic_fee,
+      ),
+    ),
+    lateFeeDue: snap.lateFeeChargeAmountDue,
+    examDue: roundMoney(
+      Math.max(0, snap.chargeTotals.exam_fee - snap.paidAllocations.exam_fee),
+    ),
+  };
+}
+
+async function batchComputeFinanceBuckets(
+  studentIds: string[],
+  term: string,
+  year: number,
+  concurrency = 8,
+): Promise<Map<string, AdminFinanceStudentBuckets>> {
+  const out = new Map<string, AdminFinanceStudentBuckets>();
+  const uniqueIds = [
+    ...new Set(studentIds.map((s) => s.trim()).filter((s) => s !== "")),
+  ];
+  for (let i = 0; i < uniqueIds.length; i += concurrency) {
+    const chunk = uniqueIds.slice(i, i + concurrency);
+    const part = await Promise.all(
+      chunk.map(async (id) => ({
+        id,
+        buckets: await computeFinanceBucketsForStudent(id, term, year),
+      })),
+    );
+    for (const row of part) {
+      out.set(row.id, row.buckets);
+    }
+  }
+  return out;
+}
+
+function deriveFinanceStudentStatus(
+  balance: number,
+  buckets: AdminFinanceStudentBuckets,
+  paymentDueDate: string | null,
+): AdminFinanceStudentStatus {
+  const b = roundMoney(balance);
+  if (b < 0) return "credit";
+  const hasBucketDue =
+    buckets.tuitionDue > 0 ||
+    buckets.clinicDue > 0 ||
+    buckets.lateFeeDue > 0 ||
+    buckets.examDue > 0;
+  if (b <= 0 && !hasBucketDue) return "paid";
+  if (b > 0 && paymentDueDate != null && isPastSchoolLocalDueDate(paymentDueDate)) {
+    return "overdue";
+  }
+  if (b > 0 || hasBucketDue) return "owes";
+  return "paid";
+}
+
+function matchesFinanceStatusFilter(
+  balance: number,
+  buckets: AdminFinanceStudentBuckets,
+  status: AdminFinanceStudentStatus,
+  filter: AdminFinanceStatusFilter,
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "owes") return roundMoney(balance) > 0;
+  if (filter === "paid") {
+    return (
+      status === "paid" ||
+      (roundMoney(balance) <= 0 &&
+        buckets.tuitionDue <= 0 &&
+        buckets.clinicDue <= 0 &&
+        buckets.lateFeeDue <= 0 &&
+        buckets.examDue <= 0)
+    );
+  }
+  if (filter === "late_fee") return buckets.lateFeeDue > 0;
+  if (filter === "clinic_unpaid") return buckets.clinicDue > 0;
+  return true;
+}
+
+function deriveFinanceStudentStatusFromBalanceOnly(
+  balance: number,
+  paymentDueDate: string | null,
+): AdminFinanceStudentStatus {
+  const b = roundMoney(balance);
+  if (b < 0) return "credit";
+  if (b <= 0) return "paid";
+  if (
+    paymentDueDate != null &&
+    isPastSchoolLocalDueDate(paymentDueDate)
+  ) {
+    return "overdue";
+  }
+  return "owes";
+}
+
+function matchesFinanceStatusFilterBalanceOnly(
+  balance: number,
+  status: AdminFinanceStudentStatus,
+  filter: AdminFinanceStatusFilter,
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "owes") return roundMoney(balance) > 0;
+  if (filter === "paid") return roundMoney(balance) <= 0;
+  return true;
+}
+
+function buildFinanceStudentListItem(
+  row: { studentId: string; name: string },
+  balance: number,
+  buckets: AdminFinanceStudentBuckets | null,
+  paymentDueDate: string | null,
+): AdminFinanceStudentListItem {
+  const b = roundMoney(balance);
+  if (buckets == null) {
+    return {
+      studentId: row.studentId,
+      name: row.name,
+      balance: b,
+      tuitionDue: null,
+      clinicDue: null,
+      lateFeeDue: null,
+      examDue: null,
+      bucketsLoaded: false,
+      status: deriveFinanceStudentStatusFromBalanceOnly(b, paymentDueDate),
+    };
+  }
+  const status = deriveFinanceStudentStatus(b, buckets, paymentDueDate);
+  return {
+    studentId: row.studentId,
+    name: row.name,
+    balance: b,
+    tuitionDue: buckets.tuitionDue,
+    clinicDue: buckets.clinicDue,
+    lateFeeDue: buckets.lateFeeDue,
+    examDue: buckets.examDue,
+    bucketsLoaded: true,
+    status,
+  };
+}
+
+function financeRosterQuery(
+  term: string,
+  year: number,
+  searchTrimmed: string,
+  rosterScope: AdminFinanceRosterScope,
+): {
+  searchTrimmed: string;
+  rosterScope: AdminFinanceRosterScope;
+  term: string;
+  year: number;
+} {
+  return {
+    searchTrimmed,
+    rosterScope,
+    term: term.trim(),
+    year: Math.trunc(year),
+  };
+}
+
+export async function getAdminFinanceQuarterSummary(
+  term: string,
+  year: number,
+): Promise<AdminFinanceQuarterSummary> {
+  const t = term.trim();
+  const y = Math.trunc(year);
+  const settings = await getQuarterSettingsPayload(t, y);
+  const quarterRows = await listAdminFinanceRosterAllSearchOnlyOrdered(pool, {
+    ...financeRosterQuery(t, y, "", "quarter"),
+  });
+  const quarterIds = quarterRows.map((r) => r.studentId);
+  const maps = await loadQuarterBalanceAggregateMaps(t, y);
+  const balMap = computeListQuarterBalancesFromAggregates(quarterIds, maps);
+  let studentsOwing = 0;
+  let totalOutstanding = 0;
+  for (const id of quarterIds) {
+    const b = roundMoney(balMap.get(id) ?? 0);
+    if (b > 0) {
+      studentsOwing += 1;
+      totalOutstanding = roundMoney(totalOutstanding + b);
+    }
+  }
+  return {
+    term: t,
+    year: y,
+    paymentDueDate: settings.paymentDueDate,
+    studentsOwing,
+    totalOutstanding,
+  };
+}
+
+type QuarterBalanceAggregateMaps = {
+  legacyMap: Map<string, number>;
+  adjMap: Map<string, number>;
+  payMap: Map<string, number>;
+  quarterActiveSet: Set<string>;
+};
+
+async function loadQuarterBalanceAggregateMaps(
+  term: string,
+  year: number,
+): Promise<QuarterBalanceAggregateMaps> {
+  const t = term.trim();
+  const y = Math.trunc(year);
+  const [legacyMap, adjMap, payMap, quarterActiveIds] = await Promise.all([
+    sumLegacyAccountingBalanceByStudentForQuarter(pool, t, y),
+    sumPortalBillingAdjustmentsNetByStudentForQuarter(pool, t, y),
+    sumPortalPaymentsByStudentForQuarter(pool, t, y),
+    listStudentIdsWithPortalQuarterActivity(pool, t, y),
+  ]);
+  return {
+    legacyMap,
+    adjMap,
+    payMap,
+    quarterActiveSet: new Set(quarterActiveIds),
+  };
+}
+
+/** Fast roster balance: SQL aggregates only (no portal billing context / tuition synthesis). */
+function computeListQuarterBalancesFromAggregates(
+  studentIds: string[],
+  maps: QuarterBalanceAggregateMaps,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  const uniqueIds = [
+    ...new Set(studentIds.map((s) => s.trim()).filter((s) => s !== "")),
+  ];
+  for (const id of uniqueIds) {
+    if (maps.legacyMap.has(id)) {
+      const legacyNet = roundMoney(maps.legacyMap.get(id) ?? 0);
+      const adjNet = roundMoney(maps.adjMap.get(id) ?? 0);
+      out.set(id, roundMoney(legacyNet + adjNet));
+      continue;
+    }
+    if (
+      !maps.quarterActiveSet.has(id) &&
+      roundMoney(maps.adjMap.get(id) ?? 0) === 0 &&
+      roundMoney(maps.payMap.get(id) ?? 0) === 0
+    ) {
+      out.set(id, 0);
+      continue;
+    }
+    const adjNet = roundMoney(maps.adjMap.get(id) ?? 0);
+    const payNet = roundMoney(maps.payMap.get(id) ?? 0);
+    out.set(id, roundMoney(adjNet - payNet));
+  }
+  return out;
+}
+
 /**
  * Merged quarter balance per student id: legacy `accounting` net + portal adjustments when
- * legacy rows exist; otherwise the same net as the portal ledger builder (tuition synthesis,
- * adjustments, and `portal_payments`).
+ * legacy rows exist; otherwise portal ledger net (tuition synthesis when enrollment-only).
  */
 async function computeMergedFinanceQuarterBalancesForStudents(
   studentIds: string[],
@@ -549,17 +903,21 @@ async function computeMergedFinanceQuarterBalancesForStudents(
     return out;
   }
 
-  const [legacyMap, adjMap, payMap] = await Promise.all([
-    sumLegacyAccountingBalanceByStudentForQuarter(pool, t, y),
-    sumPortalBillingAdjustmentsNetByStudentForQuarter(pool, t, y),
-    sumPortalPaymentsByStudentForQuarter(pool, t, y),
-  ]);
+  const maps = await loadQuarterBalanceAggregateMaps(t, y);
+  const { legacyMap, adjMap, payMap, quarterActiveSet } = maps;
 
   const portalOnlyIds = uniqueIds.filter((id) => !legacyMap.has(id));
+  /** Tuition synthesis only when enrolled with no posted adjustment/payment rows yet. */
+  const portalOnlyIdsNeedingCtx = portalOnlyIds.filter((id) => {
+    const adjNet = roundMoney(adjMap.get(id) ?? 0);
+    const payNet = roundMoney(payMap.get(id) ?? 0);
+    if (adjNet !== 0 || payNet !== 0) return false;
+    return quarterActiveSet.has(id);
+  });
   const portalCtxByStudent = new Map<string, AccountContext>();
   const PORTAL_CTX_CHUNK = 200;
-  for (let i = 0; i < portalOnlyIds.length; i += PORTAL_CTX_CHUNK) {
-    const chunk = portalOnlyIds.slice(i, i + PORTAL_CTX_CHUNK);
+  for (let i = 0; i < portalOnlyIdsNeedingCtx.length; i += PORTAL_CTX_CHUNK) {
+    const chunk = portalOnlyIdsNeedingCtx.slice(i, i + PORTAL_CTX_CHUNK);
     const part = await batchLoadPortalTermBillingContextsForQuarter(
       pool,
       chunk,
@@ -576,6 +934,14 @@ async function computeMergedFinanceQuarterBalancesForStudents(
       const legacyNet = roundMoney(legacyMap.get(id) ?? 0);
       const adjNet = roundMoney(adjMap.get(id) ?? 0);
       out.set(id, roundMoney(legacyNet + adjNet));
+      continue;
+    }
+    if (
+      !quarterActiveSet.has(id) &&
+      roundMoney(adjMap.get(id) ?? 0) === 0 &&
+      roundMoney(payMap.get(id) ?? 0) === 0
+    ) {
+      out.set(id, 0);
       continue;
     }
     const ctx = portalCtxByStudent.get(id);
@@ -603,6 +969,8 @@ export async function listAdminFinanceStudentsPaginated(
     pageSize: number;
     search: string;
     balanceFilter: AdminFinanceRosterBalanceFilter;
+    statusFilter: AdminFinanceStatusFilter;
+    rosterScope: AdminFinanceRosterScope;
   },
 ): Promise<AdminFinanceStudentsListResponse> {
   console.time("[admin finance students] total");
@@ -613,14 +981,26 @@ export async function listAdminFinanceStudentsPaginated(
   const offset = (page - 1) * pageSize;
   const searchTrimmed = query.search.trim();
   const balanceFilter = query.balanceFilter;
+  const statusFilter = query.statusFilter;
+  const rosterScope = query.rosterScope;
+  const rosterQuery = financeRosterQuery(t, y, searchTrimmed, rosterScope);
+  const needsFullRosterPass =
+    balanceFilter !== "all" || statusFilter !== "all";
+  const needsBuckets = statusFilterNeedsBuckets(statusFilter);
+
+  const [quarterSettings, balanceMaps] = await Promise.all([
+    getQuarterSettingsPayload(t, y),
+    needsBuckets ? Promise.resolve(null) : loadQuarterBalanceAggregateMaps(t, y),
+  ]);
+  const paymentDueDate = quarterSettings.paymentDueDate;
 
   try {
-    if (balanceFilter === "all") {
+    if (!needsFullRosterPass) {
       console.time("[admin finance students] students query");
       const [total, rawRows] = await Promise.all([
-        countAdminFinanceRosterSearchOnly(pool, { searchTrimmed }),
+        countAdminFinanceRosterSearchOnly(pool, rosterQuery),
         listAdminFinanceRosterPageSearchOnly(pool, {
-          searchTrimmed,
+          ...rosterQuery,
           limit: pageSize,
           offset,
         }),
@@ -629,49 +1009,85 @@ export async function listAdminFinanceStudentsPaginated(
 
       console.time("[admin finance students] balance aggregate");
       const ids = rawRows.map((r) => r.studentId);
-      const balMap = await computeMergedFinanceQuarterBalancesForStudents(
-        ids,
-        t,
-        y,
-      );
+      const balMap =
+        balanceMaps != null
+          ? computeListQuarterBalancesFromAggregates(ids, balanceMaps)
+          : await computeMergedFinanceQuarterBalancesForStudents(ids, t, y);
       console.timeEnd("[admin finance students] balance aggregate");
 
-      const items: AdminFinanceStudentListItem[] = rawRows.map((r) => ({
-        studentId: r.studentId,
-        name: r.name,
-        balance: roundMoney(balMap.get(r.studentId) ?? 0),
-      }));
+      const items: AdminFinanceStudentListItem[] = rawRows.map((r) =>
+        buildFinanceStudentListItem(
+          r,
+          balMap.get(r.studentId) ?? 0,
+          null,
+          paymentDueDate,
+        ),
+      );
       return { items, total, page, pageSize };
     }
 
     console.time("[admin finance students] students query");
-    const allRows = await listAdminFinanceRosterAllSearchOnlyOrdered(pool, {
-      searchTrimmed,
-    });
+    const allRows = await listAdminFinanceRosterAllSearchOnlyOrdered(
+      pool,
+      rosterQuery,
+    );
     console.timeEnd("[admin finance students] students query");
 
     console.time("[admin finance students] balance aggregate");
     const allIds = allRows.map((r) => r.studentId);
-    const balMap = await computeMergedFinanceQuarterBalancesForStudents(
-      allIds,
-      t,
-      y,
-    );
+    const balMap =
+      balanceMaps != null
+        ? computeListQuarterBalancesFromAggregates(allIds, balanceMaps)
+        : await computeMergedFinanceQuarterBalancesForStudents(allIds, t, y);
+    const bucketMap = needsBuckets
+      ? await batchComputeFinanceBuckets(allIds, t, y)
+      : null;
     console.timeEnd("[admin finance students] balance aggregate");
 
-    const filtered = allRows.filter((r) =>
-      matchesFinanceBalanceFilter(
-        balMap.get(r.studentId) ?? 0,
-        balanceFilter,
-      ),
-    );
+    const filtered = allRows.filter((r) => {
+      const balance = balMap.get(r.studentId) ?? 0;
+      if (!matchesFinanceBalanceFilter(balance, balanceFilter)) {
+        return false;
+      }
+      if (needsBuckets && bucketMap != null) {
+        const buckets = bucketMap.get(r.studentId) ?? emptyFinanceBuckets();
+        const status = deriveFinanceStudentStatus(
+          balance,
+          buckets,
+          paymentDueDate,
+        );
+        return matchesFinanceStatusFilter(
+          balance,
+          buckets,
+          status,
+          statusFilter,
+        );
+      }
+      const status = deriveFinanceStudentStatusFromBalanceOnly(
+        balance,
+        paymentDueDate,
+      );
+      return matchesFinanceStatusFilterBalanceOnly(
+        balance,
+        status,
+        statusFilter,
+      );
+    });
     const total = filtered.length;
     const slice = filtered.slice(offset, offset + pageSize);
-    const items: AdminFinanceStudentListItem[] = slice.map((r) => ({
-      studentId: r.studentId,
-      name: r.name,
-      balance: roundMoney(balMap.get(r.studentId) ?? 0),
-    }));
+    const items: AdminFinanceStudentListItem[] = slice.map((r) => {
+      const balance = balMap.get(r.studentId) ?? 0;
+      const buckets =
+        needsBuckets && bucketMap != null
+          ? (bucketMap.get(r.studentId) ?? emptyFinanceBuckets())
+          : null;
+      return buildFinanceStudentListItem(
+        r,
+        balance,
+        buckets,
+        paymentDueDate,
+      );
+    });
     return { items, total, page, pageSize };
   } finally {
     console.timeEnd("[admin finance students] total");
@@ -720,6 +1136,27 @@ export async function getAdminFinanceLedger(
           year: presentation.year,
           rows: (presentation.rows ?? []) as LedgerRowForTuitionFlow[],
         });
+  const bucketSummary =
+    tuitionSnap == null
+      ? null
+      : {
+          tuitionDue: tuitionSnap.tuitionChargeAmountDue,
+          clinicDue: roundMoney(
+            Math.max(
+              0,
+              tuitionSnap.chargeTotals.clinic_fee -
+                tuitionSnap.paidAllocations.clinic_fee,
+            ),
+          ),
+          lateFeeDue: tuitionSnap.lateFeeChargeAmountDue,
+          examDue: roundMoney(
+            Math.max(
+              0,
+              tuitionSnap.chargeTotals.exam_fee -
+                tuitionSnap.paidAllocations.exam_fee,
+            ),
+          ),
+        };
   console.log("[admin-ledger-summary]", {
     studentId: canonical,
     requestedStudentId: requested,
@@ -745,6 +1182,7 @@ export async function getAdminFinanceLedger(
             tuitionChargeAmountDue: tuitionSnap.tuitionChargeAmountDue,
             lateFeeChargeAmountDue: tuitionSnap.lateFeeChargeAmountDue,
           },
+    bucketSummary,
   };
 }
 

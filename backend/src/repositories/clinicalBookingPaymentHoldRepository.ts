@@ -30,7 +30,12 @@ export type ClinicalBookingPaymentHoldRow = {
   status: ClinicalBookingPaymentHoldStatus;
 };
 
+let cachedClinicalBookingPaymentHoldsTable: boolean | null = null;
+
 export async function clinicalBookingPaymentHoldsTableExists(): Promise<boolean> {
+  if (cachedClinicalBookingPaymentHoldsTable !== null) {
+    return cachedClinicalBookingPaymentHoldsTable;
+  }
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT 1 AS ok
        FROM information_schema.tables
@@ -38,12 +43,8 @@ export async function clinicalBookingPaymentHoldsTableExists(): Promise<boolean>
         AND table_name = 'clinical_booking_payment_holds'
       LIMIT 1`,
   );
-  const exists = rows.length > 0;
-  console.log(
-    "[clinical_booking_payment_holds] clinicalBookingPaymentHoldsTableExists:",
-    exists,
-  );
-  return exists;
+  cachedClinicalBookingPaymentHoldsTable = rows.length > 0;
+  return cachedClinicalBookingPaymentHoldsTable;
 }
 
 export async function insertClinicalBookingPaymentHold(params: {

@@ -99,7 +99,10 @@ function readStudentAccessTokenFromStorage(): string | null {
   return null
 }
 
-/** Legacy / mistaken client keys for admin UI; auth is httpOnly cookie + React state. */
+/** Admin JWT for Bearer auth (survives refresh; complements httpOnly cookie). */
+export const ADMIN_ACCESS_TOKEN_STORAGE_KEY = 'amu_admin_access_token'
+
+/** Legacy / mistaken client keys for admin UI. */
 const ADMIN_AUTH_LEGACY_STORAGE_KEYS = [
   'admin',
   'adminUser',
@@ -107,6 +110,52 @@ const ADMIN_AUTH_LEGACY_STORAGE_KEYS = [
   'amu_admin',
 ] as const
 
+export function readAdminAccessTokenFromStorage(): string | null {
+  try {
+    const token = sessionStorage.getItem(ADMIN_ACCESS_TOKEN_STORAGE_KEY)?.trim() ?? ''
+    return token !== '' ? token : null
+  } catch {
+    return null
+  }
+}
+
+export function writeAdminAccessTokenToStorage(token: string): void {
+  if (typeof window === 'undefined') return
+  const trimmed = token.trim()
+  if (trimmed === '') return
+  try {
+    sessionStorage.setItem(ADMIN_ACCESS_TOKEN_STORAGE_KEY, trimmed)
+  } catch {
+    // ignore
+  }
+}
+
+function shouldAttachAdminAuthorization(path: string): boolean {
+  if (!path.startsWith('/api/admin/')) return false
+  return !path.startsWith('/api/admin/auth/login')
+}
+
+export function adminAuthRequestHeaders(extra?: HeadersInit): Headers {
+  const headers = new Headers(extra ?? undefined)
+  if (!headers.has('Authorization')) {
+    const token = readAdminAccessTokenFromStorage()
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    }
+  }
+  return headers
+}
+
+export function clearAdminAccessTokenFromStorage(): void {
+  if (typeof window === 'undefined') return
+  try {
+    sessionStorage.removeItem(ADMIN_ACCESS_TOKEN_STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+/** Clears mistaken legacy localStorage keys only (not the Bearer token). */
 export function clearAdminAuthClientStorage(): void {
   if (typeof window === 'undefined') return
   try {
@@ -177,6 +226,12 @@ export async function fetchApiJson(
   const headers = new Headers(init.headers ?? undefined)
   if (!headers.has('Authorization') && shouldAttachStudentAuthorization(path)) {
     const token = readStudentAccessTokenFromStorage()
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    }
+  }
+  if (!headers.has('Authorization') && shouldAttachAdminAuthorization(path)) {
+    const token = readAdminAccessTokenFromStorage()
     if (token) {
       headers.set('Authorization', `Bearer ${token}`)
     }
@@ -1722,6 +1777,13 @@ export type TuitionPayFlowLedgerSummary = {
   lateFeeChargeAmountDue: number
 }
 
+export type AdminFinanceBucketSummary = {
+  tuitionDue: number
+  clinicDue: number
+  lateFeeDue: number
+  examDue: number
+}
+
 export type AccountingLedgerResponse = {
   studentId: string
   term: string
@@ -1734,6 +1796,7 @@ export type AccountingLedgerResponse = {
   }
   /** Matches student Pay Tuition (portal presentation, tuition + late fee buckets). */
   tuitionPayFlowSummary?: TuitionPayFlowLedgerSummary | null
+  bucketSummary?: AdminFinanceBucketSummary | null
 }
 
 export type AuthorizeNetOpaqueData = {
@@ -2289,14 +2352,30 @@ export async function fetchAuthorizeClinicFeeSummary(
 }
 
 /** GET /api/admin/finance/students — paginated roster with quarter balance. */
+export type AdminFinanceStudentStatus = 'paid' | 'owes' | 'overdue' | 'credit'
+
 export type AdminFinanceStudentListItem = {
   studentId: string
   name: string
   balance: number
+  tuitionDue: number | null
+  clinicDue: number | null
+  lateFeeDue: number | null
+  examDue: number | null
+  bucketsLoaded: boolean
+  status: AdminFinanceStudentStatus
 }
 
 /** @deprecated Use {@link AdminFinanceStudentListItem} */
 export type AdminFinanceStudentRow = AdminFinanceStudentListItem
+
+export type AdminFinanceQuarterSummary = {
+  term: string
+  year: number
+  paymentDueDate: string | null
+  studentsOwing: number
+  totalOutstanding: number
+}
 
 export type AdminFinanceStudentsListResponse = {
   items: AdminFinanceStudentListItem[]
@@ -2305,24 +2384,54 @@ export type AdminFinanceStudentsListResponse = {
   pageSize: number
 }
 
+function parseMoneyField(raw: unknown, fallback = 0): number {
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (typeof raw === 'string') {
+    const t = raw.trim()
+    if (t !== '') {
+      const n = Number(t)
+      if (Number.isFinite(n)) return n
+    }
+  }
+  return fallback
+}
+
+function parseAdminFinanceStudentStatus(
+  raw: unknown,
+): AdminFinanceStudentStatus {
+  if (
+    raw === 'paid' ||
+    raw === 'owes' ||
+    raw === 'overdue' ||
+    raw === 'credit'
+  ) {
+    return raw
+  }
+  return 'paid'
+}
+
 function parseAdminFinanceStudentListItem(
   o: Record<string, unknown>,
 ): AdminFinanceStudentListItem {
   if (typeof o.studentId !== 'string' || typeof o.name !== 'string') {
     throw new Error('Unexpected admin finance students response')
   }
-  const bal = o.balance
-  let balance = 0
-  if (typeof bal === 'number' && Number.isFinite(bal)) {
-    balance = bal
-  } else if (typeof bal === 'string') {
-    const t = bal.trim()
-    if (t !== '') {
-      const n = Number(t)
-      if (Number.isFinite(n)) balance = n
-    }
+  const balance = parseMoneyField(o.balance, 0)
+  const status = parseAdminFinanceStudentStatus(o.status)
+  const bucketsLoaded = o.bucketsLoaded === true
+  return {
+    studentId: o.studentId,
+    name: o.name,
+    balance,
+    tuitionDue: bucketsLoaded
+      ? parseMoneyField(o.tuitionDue, 0)
+      : null,
+    clinicDue: bucketsLoaded ? parseMoneyField(o.clinicDue, 0) : null,
+    lateFeeDue: bucketsLoaded ? parseMoneyField(o.lateFeeDue, 0) : null,
+    examDue: bucketsLoaded ? parseMoneyField(o.examDue, 0) : null,
+    bucketsLoaded,
+    status,
   }
-  return { studentId: o.studentId, name: o.name, balance }
 }
 
 export type AdminFinanceStudentsQuery = {
@@ -2330,6 +2439,9 @@ export type AdminFinanceStudentsQuery = {
   pageSize?: number
   search?: string
   balance?: 'all' | 'positive' | 'negative' | 'zero'
+  status?: 'all' | 'owes' | 'paid' | 'late_fee' | 'clinic_unpaid'
+  /** Default `quarter`: students with finance activity in the selected term/year. */
+  rosterScope?: 'quarter' | 'all'
 }
 
 /** GET /api/admin/finance/students?term=&year=&page=&pageSize=&search=&balance= */
@@ -2356,6 +2468,12 @@ export async function fetchAdminFinanceStudents(
   }
   if (q?.balance != null && q.balance !== 'all') {
     params.set('balance', q.balance)
+  }
+  if (q?.status != null && q.status !== 'all') {
+    params.set('status', q.status)
+  }
+  if (q?.rosterScope != null && q.rosterScope !== 'quarter') {
+    params.set('rosterScope', q.rosterScope)
   }
   const data = (await fetchApiJson(
     `/api/admin/finance/students?${params.toString()}`,
@@ -2391,6 +2509,283 @@ export async function fetchAdminFinanceStudents(
     throw new Error('Unexpected admin finance students response')
   }
   return { items, total, page, pageSize }
+}
+
+/** GET /api/admin/finance/quarter-summary?term=&year= */
+export async function fetchAdminFinanceQuarterSummary(
+  term: string,
+  year: number,
+  options?: { signal?: AbortSignal },
+): Promise<AdminFinanceQuarterSummary> {
+  const params = new URLSearchParams()
+  params.set('term', term.trim())
+  params.set('year', String(year))
+  const data = (await fetchApiJson(
+    `/api/admin/finance/quarter-summary?${params.toString()}`,
+    { signal: options?.signal },
+  )) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected admin finance quarter summary response')
+  }
+  const d = data as Record<string, unknown>
+  if (
+    typeof d.term !== 'string' ||
+    typeof d.year !== 'number' ||
+    !Number.isFinite(d.year) ||
+    typeof d.studentsOwing !== 'number' ||
+    !Number.isFinite(d.studentsOwing)
+  ) {
+    throw new Error('Unexpected admin finance quarter summary response')
+  }
+  const due = d.paymentDueDate
+  let paymentDueDate: string | null = null
+  if (typeof due === 'string' && due.trim() !== '') {
+    paymentDueDate = due.trim().slice(0, 10)
+  } else if (due === null) {
+    paymentDueDate = null
+  }
+  return {
+    term: d.term,
+    year: d.year,
+    paymentDueDate,
+    studentsOwing: d.studentsOwing,
+    totalOutstanding: parseMoneyField(d.totalOutstanding, 0),
+  }
+}
+
+export type AdminFinanceQuarterSettings = {
+  term: string
+  year: number
+  paymentDueDate: string | null
+  lateFeeEnabled: boolean
+  lateFeeAmount: number
+  ddlPersistenceAvailable: boolean
+  ddlSaveNote: string | null
+}
+
+/** GET /api/admin/finance/quarter-settings?term=&year= */
+export async function fetchAdminFinanceQuarterSettings(
+  term: string,
+  year: number,
+  options?: { signal?: AbortSignal },
+): Promise<AdminFinanceQuarterSettings> {
+  const params = new URLSearchParams()
+  params.set('term', term.trim())
+  params.set('year', String(year))
+  const data = (await fetchApiJson(
+    `/api/admin/finance/quarter-settings?${params.toString()}`,
+    { signal: options?.signal },
+  )) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected admin finance quarter settings response')
+  }
+  const d = data as Record<string, unknown>
+  if (typeof d.term !== 'string' || typeof d.year !== 'number') {
+    throw new Error('Unexpected admin finance quarter settings response')
+  }
+  const due = d.paymentDueDate
+  let paymentDueDate: string | null = null
+  if (typeof due === 'string' && due.trim() !== '') {
+    paymentDueDate = due.trim().slice(0, 10)
+  } else if (due === null) {
+    paymentDueDate = null
+  }
+  return {
+    term: d.term,
+    year: d.year,
+    paymentDueDate,
+    lateFeeEnabled: d.lateFeeEnabled !== false,
+    lateFeeAmount: parseMoneyField(d.lateFeeAmount, 30),
+    ddlPersistenceAvailable: d.ddlPersistenceAvailable === true,
+    ddlSaveNote:
+      typeof d.ddlSaveNote === 'string' && d.ddlSaveNote.trim() !== ''
+        ? d.ddlSaveNote.trim()
+        : null,
+  }
+}
+
+export type PutAdminFinanceQuarterSettingsBody = {
+  term: string
+  year: number
+  paymentDueDate?: string | null
+  lateFeeEnabled?: boolean
+  lateFeeAmount?: number
+}
+
+/** PUT /api/admin/finance/quarter-settings */
+export async function putAdminFinanceQuarterSettings(
+  body: PutAdminFinanceQuarterSettingsBody,
+  options?: { signal?: AbortSignal },
+): Promise<AdminFinanceQuarterSettings & { ok?: boolean }> {
+  const data = (await fetchApiJson('/api/admin/finance/quarter-settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected admin finance quarter settings save response')
+  }
+  const d = data as Record<string, unknown>
+  if (typeof d.term !== 'string' || typeof d.year !== 'number') {
+    throw new Error('Unexpected admin finance quarter settings save response')
+  }
+  const due = d.paymentDueDate
+  let paymentDueDate: string | null = null
+  if (typeof due === 'string' && due.trim() !== '') {
+    paymentDueDate = due.trim().slice(0, 10)
+  } else if (due === null) {
+    paymentDueDate = null
+  }
+  return {
+    term: d.term,
+    year: d.year,
+    paymentDueDate,
+    lateFeeEnabled: d.lateFeeEnabled !== false,
+    lateFeeAmount: parseMoneyField(d.lateFeeAmount, 30),
+    ddlPersistenceAvailable: d.ddlPersistenceAvailable === true,
+    ddlSaveNote:
+      typeof d.ddlSaveNote === 'string' && d.ddlSaveNote.trim() !== ''
+        ? d.ddlSaveNote.trim()
+        : null,
+    ok: d.ok === true,
+  }
+}
+
+export type AdminFinanceLateFeePreview = {
+  term: string
+  year: number
+  paymentDueDate: string | null
+  studentsScanned: number
+  wouldAddSystemLateFeeCount: number
+  wouldReverseInvalidSystemLateFeeCount: number
+  wouldRequireManualReviewCount: number
+  sampleReversalStudentId: string | null
+}
+
+/** GET /api/admin/finance/late-fee-reconciliation-preview */
+export async function fetchAdminFinanceLateFeePreview(
+  term: string,
+  year: number,
+  options?: { signal?: AbortSignal; paymentDueDate?: string | null },
+): Promise<AdminFinanceLateFeePreview> {
+  const params = new URLSearchParams()
+  params.set('term', term.trim())
+  params.set('year', String(year))
+  if (options?.paymentDueDate !== undefined) {
+    if (options.paymentDueDate == null) {
+      params.set('paymentDueDate', '')
+    } else {
+      params.set('paymentDueDate', options.paymentDueDate)
+    }
+  }
+  const data = (await fetchApiJson(
+    `/api/admin/finance/late-fee-reconciliation-preview?${params.toString()}`,
+    { signal: options?.signal },
+  )) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected late fee preview response')
+  }
+  const d = data as Record<string, unknown>
+  if (
+    typeof d.term !== 'string' ||
+    typeof d.year !== 'number' ||
+    typeof d.studentsScanned !== 'number'
+  ) {
+    throw new Error('Unexpected late fee preview response')
+  }
+  const due = d.paymentDueDate
+  let paymentDueDate: string | null = null
+  if (typeof due === 'string' && due.trim() !== '') {
+    paymentDueDate = due.trim().slice(0, 10)
+  } else if (due === null) {
+    paymentDueDate = null
+  }
+  return {
+    term: d.term,
+    year: d.year,
+    paymentDueDate,
+    studentsScanned: d.studentsScanned,
+    wouldAddSystemLateFeeCount: Number(d.wouldAddSystemLateFeeCount) || 0,
+    wouldReverseInvalidSystemLateFeeCount:
+      Number(d.wouldReverseInvalidSystemLateFeeCount) || 0,
+    wouldRequireManualReviewCount:
+      Number(d.wouldRequireManualReviewCount) || 0,
+    sampleReversalStudentId:
+      typeof d.sampleReversalStudentId === 'string'
+        ? d.sampleReversalStudentId
+        : null,
+  }
+}
+
+export type AdminFinanceLateFeeReconcileResult = {
+  ok: true
+  term: string
+  year: number
+  paymentDueDate: string | null
+  studentsScanned: number
+  insertedCount: number
+  reversedCount: number
+  protectedSettledCount: number
+  skippedCount: number
+}
+
+/** POST /api/admin/finance/reconcile-late-fees */
+export async function postAdminFinanceReconcileLateFees(
+  body: { term: string; year: number },
+  options?: { signal?: AbortSignal },
+): Promise<AdminFinanceLateFeeReconcileResult> {
+  const data = (await fetchApiJson('/api/admin/finance/reconcile-late-fees', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })) as unknown
+  if (
+    data == null ||
+    typeof data !== 'object' ||
+    (data as { ok?: unknown }).ok !== true
+  ) {
+    throw new Error('Unexpected late fee reconcile response')
+  }
+  const d = data as Record<string, unknown>
+  const due = d.paymentDueDate
+  let paymentDueDate: string | null = null
+  if (typeof due === 'string' && due.trim() !== '') {
+    paymentDueDate = due.trim().slice(0, 10)
+  }
+  return {
+    ok: true,
+    term: String(d.term ?? body.term),
+    year: Number(d.year) || body.year,
+    paymentDueDate,
+    studentsScanned: Number(d.studentsScanned) || 0,
+    insertedCount: Number(d.insertedCount) || 0,
+    reversedCount: Number(d.reversedCount) || 0,
+    protectedSettledCount: Number(d.protectedSettledCount) || 0,
+    skippedCount: Number(d.skippedCount) || 0,
+  }
+}
+
+/** POST /api/admin/finance/run-late-fee */
+export async function postAdminFinanceRunLateFeeCheck(
+  body: { term: string; year: number },
+  options?: { signal?: AbortSignal },
+): Promise<{ ok: boolean; message?: string }> {
+  const data = (await fetchApiJson('/api/admin/finance/run-late-fee', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  })) as unknown
+  if (data == null || typeof data !== 'object') {
+    throw new Error('Unexpected run late fee response')
+  }
+  const d = data as Record<string, unknown>
+  return {
+    ok: d.ok === true,
+    message: typeof d.message === 'string' ? d.message : undefined,
+  }
 }
 
 /** GET /api/admin/finance/:studentId/quarters — same shape as student accounting quarters. */

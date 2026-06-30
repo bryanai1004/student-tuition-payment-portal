@@ -40,12 +40,50 @@ export type AdminFinanceRosterBalanceFilter =
   | "negative"
   | "zero";
 
-/** Escape `%`, `_`, and `\\` for use in a MySQL `LIKE` pattern with `ESCAPE '\\\\'`. */
-function escapeMysqlLikePattern(fragment: string): string {
-  return fragment
-    .replace(/\\/g, "\\\\")
-    .replace(/%/g, "\\%")
-    .replace(/_/g, "\\_");
+/** Roster population: all legacy students vs those with finance activity in the selected quarter. */
+export type AdminFinanceRosterScope = "quarter" | "all";
+
+export type AdminFinanceRosterQuery = {
+  searchTrimmed: string;
+  rosterScope: AdminFinanceRosterScope;
+  term: string;
+  year: number;
+};
+
+function buildFinanceRosterQuarterJoin(
+  rosterScope: AdminFinanceRosterScope,
+  term: string,
+  year: number,
+): { joinClause: string; params: Array<string | number> } {
+  if (rosterScope === "all") {
+    return { joinClause: "", params: [] };
+  }
+  const t = term.trim();
+  const y = Math.trunc(year);
+  return {
+    joinClause: ` INNER JOIN (
+      SELECT DISTINCT TRIM(student_id) AS student_id FROM (
+        SELECT TRIM(student_external_id) AS student_id
+        FROM portal_enrollments
+        WHERE term = ? AND year = ?
+        UNION
+        SELECT TRIM(student_external_id) AS student_id
+        FROM portal_billing_adjustments
+        WHERE term = ? AND year = ?
+        UNION
+        SELECT TRIM(student_external_id) AS student_id
+        FROM portal_payments
+        WHERE term = ? AND year = ?
+        UNION
+        SELECT TRIM(id) AS student_id
+        FROM accounting
+        WHERE LOWER(TRIM(term)) = LOWER(TRIM(?))
+          AND year = ?
+      ) q
+      WHERE TRIM(COALESCE(student_id, '')) <> ''
+    ) qa ON qa.student_id = r.student_id`,
+    params: [t, y, t, y, t, y, t, y],
+  };
 }
 
 function buildFinanceRosterSearchClause(
@@ -54,13 +92,13 @@ function buildFinanceRosterSearchClause(
   if (searchTrimmed === "") {
     return { clause: "", params: [] };
   }
-  const like = `%${escapeMysqlLikePattern(searchTrimmed.toLowerCase())}%`;
+  const needle = searchTrimmed.toLowerCase();
   return {
     clause: ` AND (
-      LOWER(r.student_id) LIKE ? ESCAPE '\\\\'
-      OR LOWER(r.display_name) LIKE ? ESCAPE '\\\\'
+      POSITION(? IN LOWER(r.student_id)) > 0
+      OR POSITION(? IN LOWER(r.display_name)) > 0
     )`,
-    params: [like, like],
+    params: [needle, needle],
   };
 }
 
@@ -95,18 +133,25 @@ export type AdminFinanceRosterPageRow = AdminFinanceRosterStudentRow;
  */
 export async function countAdminFinanceRosterSearchOnly(
   pool: Pool,
-  params: {
-    searchTrimmed: string;
-  },
+  params: AdminFinanceRosterQuery,
 ): Promise<number> {
   const { clause: searchClause, params: searchParams } =
     buildFinanceRosterSearchClause(params.searchTrimmed);
+  const { joinClause, params: joinParams } = buildFinanceRosterQuarterJoin(
+    params.rosterScope,
+    params.term,
+    params.year,
+  );
   const sql = `${ADMIN_FINANCE_ROSTER_BASE_SQL}
     SELECT COUNT(*) AS cnt
     FROM roster r
+    ${joinClause}
     WHERE 1 = 1
     ${searchClause}`;
-  const [rows] = await pool.query<RowDataPacket[]>(sql, [...searchParams]);
+  const [rows] = await pool.query<RowDataPacket[]>(sql, [
+    ...joinParams,
+    ...searchParams,
+  ]);
   const row = rows[0];
   if (row == null) return 0;
   const n = Number((row as { cnt?: unknown }).cnt);
@@ -118,8 +163,7 @@ export async function countAdminFinanceRosterSearchOnly(
  */
 export async function listAdminFinanceRosterPageSearchOnly(
   pool: Pool,
-  params: {
-    searchTrimmed: string;
+  params: AdminFinanceRosterQuery & {
     limit: number;
     offset: number;
   },
@@ -128,15 +172,22 @@ export async function listAdminFinanceRosterPageSearchOnly(
   const offset = Math.max(0, Math.trunc(params.offset));
   const { clause: searchClause, params: searchParams } =
     buildFinanceRosterSearchClause(params.searchTrimmed);
+  const { joinClause, params: joinParams } = buildFinanceRosterQuarterJoin(
+    params.rosterScope,
+    params.term,
+    params.year,
+  );
   const sql = `${ADMIN_FINANCE_ROSTER_BASE_SQL}
     SELECT r.student_id AS studentId,
            r.display_name AS name
     FROM roster r
+    ${joinClause}
     WHERE 1 = 1
     ${searchClause}
     ORDER BY r.display_name ASC, r.student_id ASC
     LIMIT ? OFFSET ?`;
   const [rows] = await pool.query<RowDataPacket[]>(sql, [
+    ...joinParams,
     ...searchParams,
     limit,
     offset,
@@ -150,18 +201,27 @@ export async function listAdminFinanceRosterPageSearchOnly(
 /** Full roster after search (ordered), used when applying balance filters before pagination. */
 export async function listAdminFinanceRosterAllSearchOnlyOrdered(
   pool: Pool,
-  params: { searchTrimmed: string },
+  params: AdminFinanceRosterQuery,
 ): Promise<AdminFinanceRosterStudentRow[]> {
   const { clause: searchClause, params: searchParams } =
     buildFinanceRosterSearchClause(params.searchTrimmed);
+  const { joinClause, params: joinParams } = buildFinanceRosterQuarterJoin(
+    params.rosterScope,
+    params.term,
+    params.year,
+  );
   const sql = `${ADMIN_FINANCE_ROSTER_BASE_SQL}
     SELECT r.student_id AS studentId,
            r.display_name AS name
     FROM roster r
+    ${joinClause}
     WHERE 1 = 1
     ${searchClause}
     ORDER BY r.display_name ASC, r.student_id ASC`;
-  const [rows] = await pool.query<RowDataPacket[]>(sql, [...searchParams]);
+  const [rows] = await pool.query<RowDataPacket[]>(sql, [
+    ...joinParams,
+    ...searchParams,
+  ]);
   return rows.map((r) => ({
     studentId: str(r.studentId),
     name: str(r.name),

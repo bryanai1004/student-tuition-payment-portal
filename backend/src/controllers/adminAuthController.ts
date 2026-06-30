@@ -69,6 +69,7 @@ export async function postAdminAuthLogin(req: Request, res: Response): Promise<v
     });
     res.status(200).json({
       ok: true,
+      accessToken: result.accessToken,
       user: {
         email: result.user.email,
         role: result.user.role,

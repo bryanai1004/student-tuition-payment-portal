@@ -32,6 +32,7 @@ import {
   deleteAdminFinancePaymentByIdHandler,
   getAdminFinanceLedgerHandler,
   getAdminFinanceQuartersHandler,
+  getAdminFinanceQuarterSummaryHandler,
   getAdminFinanceStudents,
   getFinanceQuarterSettings,
   getGlobalFinanceQuarters,
@@ -363,6 +364,7 @@ adminRouter.delete("/course-sections/:id", deleteAdminCourseSection);
 adminRouter.delete("/enrollments", deleteAdminPortalEnrollmentHandler);
 adminRouter.post("/marks/set-grade", setStudentGrade);
 adminRouter.get("/finance/quarters", getGlobalFinanceQuarters);
+adminRouter.get("/finance/quarter-summary", getAdminFinanceQuarterSummaryHandler);
 adminRouter.get("/finance/quarter-settings", getFinanceQuarterSettings);
 adminRouter.get(
   "/finance/late-fee-reconciliation-preview",

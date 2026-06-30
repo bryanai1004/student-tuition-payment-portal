@@ -19,6 +19,8 @@ type Props = {
   year: number
   quarterLabel: string
   onRosterRefresh: () => void
+  /** When `drawer`, omits inline expand padding and quarter label. */
+  variant?: 'inline' | 'drawer'
 }
 
 function moneyColumn(n: number): string {
@@ -80,6 +82,7 @@ export function AdminFinanceLedgerPanel({
   year,
   quarterLabel,
   onRosterRefresh,
+  variant = 'inline',
 }: Props) {
   const [ledger, setLedger] = useState<AccountingLedgerResponse | null>(null)
   const [lBusy, setLBusy] = useState(false)
@@ -462,13 +465,19 @@ export function AdminFinanceLedgerPanel({
   }
 
   const panelBusy = lBusy
+  const rootClass =
+    variant === 'drawer'
+      ? 'admin-finance-drawer-ledger'
+      : 'admin-finance-expand'
 
   return (
-    <div className="admin-finance-expand">
+    <div className={rootClass}>
       <div className="admin-finance-expand__toolbar">
-        <p className="admin-finance-expand__quarter-label portal-text-muted admin-form-hint">
-          Ledger: <strong>{quarterLabel}</strong>
-        </p>
+        {variant === 'inline' ? (
+          <p className="admin-finance-expand__quarter-label portal-text-muted admin-form-hint">
+            Ledger: <strong>{quarterLabel}</strong>
+          </p>
+        ) : null}
         <button
           type="button"
           className="portal-btn portal-btn--secondary portal-btn--compact"
