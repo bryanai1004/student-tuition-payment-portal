@@ -107,7 +107,7 @@ export async function insertOtpChallenge(input: {
   purpose: string;
   expiresAt: Date;
 }): Promise<OtpChallengeRow> {
-  await pool.query(
+  const [result] = await pool.query<{ insertId: number }>(
     `INSERT INTO student_email_otp_challenges (
        student_id, email, code_hash, purpose, expires_at
      ) VALUES (?, ?, ?, ?, ?)`,
@@ -119,18 +119,49 @@ export async function insertOtpChallenge(input: {
       input.expiresAt,
     ],
   );
+  const insertId = Number(result?.insertId ?? 0);
+  if (!Number.isFinite(insertId) || insertId <= 0) {
+    throw new Error("Failed to create OTP challenge.");
+  }
 
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT id, student_id, email, code_hash, purpose, expires_at, attempts, consumed_at, created_at
      FROM student_email_otp_challenges
-     WHERE student_id = ? AND LOWER(email) = ? AND purpose = ?
-     ORDER BY id DESC
+     WHERE id = ?
      LIMIT 1`,
-    [input.studentId.trim(), input.email.trim().toLowerCase(), input.purpose],
+    [insertId],
   );
   const row = rows[0];
   if (!row) throw new Error("Failed to create OTP challenge.");
   return mapChallengeRow(row);
+}
+
+/** Drop older unused codes so only the latest send remains valid. */
+export async function consumeOutstandingOtpChallenges(input: {
+  studentId: string;
+  purpose: string;
+  exceptId?: number;
+}): Promise<void> {
+  if (input.exceptId != null) {
+    await pool.query(
+      `UPDATE student_email_otp_challenges
+       SET consumed_at = NOW()
+       WHERE student_id = ?
+         AND purpose = ?
+         AND consumed_at IS NULL
+         AND id <> ?`,
+      [input.studentId.trim(), input.purpose, input.exceptId],
+    );
+    return;
+  }
+  await pool.query(
+    `UPDATE student_email_otp_challenges
+     SET consumed_at = NOW()
+     WHERE student_id = ?
+       AND purpose = ?
+       AND consumed_at IS NULL`,
+    [input.studentId.trim(), input.purpose],
+  );
 }
 
 export async function updateOtpChallengeHash(

@@ -32,10 +32,13 @@ export function StudentLoginEmailPanel({ ready, embedded = false }: Props) {
     try {
       const next = await fetchStudentLoginEmailStatus()
       setStatus(next)
-      if (!next.verified) {
-        setEditing(true)
-      } else {
+      if (next.verified) {
         setEditing(false)
+        setCodeSent(false)
+        setEmailInput('')
+        setCodeInput('')
+      } else {
+        setEditing(true)
       }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Unable to load login email.')
@@ -103,7 +106,11 @@ export function StudentLoginEmailPanel({ ready, embedded = false }: Props) {
       resetEditState()
       setActionSuccess('Email verified — you can sign in with a one-time code.')
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Verification failed.')
+      const message = e instanceof Error ? e.message : 'Verification failed.'
+      setActionError(message)
+      if (/no active verification code|already verified/i.test(message)) {
+        void loadStatus()
+      }
     } finally {
       setActionLoading(false)
     }

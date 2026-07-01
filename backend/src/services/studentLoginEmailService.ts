@@ -7,6 +7,7 @@ import {
 } from "../lib/studentLoginEmailUtils.js";
 import {
   consumeOtpChallenge,
+  consumeOutstandingOtpChallenges,
   countRecentOtpSends,
   findLatestActiveOtpChallenge,
   findLoginEmailByStudentId,
@@ -163,6 +164,11 @@ export async function sendStudentLoginEmailCode(
 
   const codeHash = hashOtpCode(code, challenge.id, studentId);
   await updateOtpChallengeHash(challenge.id, codeHash);
+  await consumeOutstandingOtpChallenges({
+    studentId,
+    purpose: OTP_PURPOSE_VERIFY,
+    exceptId: challenge.id,
+  });
 
   const bodies = buildOtpEmailBodies(code);
   const mail = await sendEmail({
@@ -205,6 +211,15 @@ export async function verifyStudentLoginEmailCode(
     );
   }
 
+  const existing = await findLoginEmailByStudentId(studentId);
+  if (existing != null && existing.email.toLowerCase() === email) {
+    return {
+      verified: true,
+      emailMasked: maskLoginEmail(existing.email),
+      verifiedAt: existing.verifiedAt,
+    };
+  }
+
   const challenge = await findLatestActiveOtpChallenge({
     studentId,
     email,
@@ -213,6 +228,13 @@ export async function verifyStudentLoginEmailCode(
   if (challenge == null) {
     throw new StudentLoginEmailError(
       "No active verification code. Send a new code and try again.",
+      400,
+    );
+  }
+
+  if (challenge.email.toLowerCase() !== email) {
+    throw new StudentLoginEmailError(
+      "This code was sent to a different email address. Send a new code for the email you entered.",
       400,
     );
   }
