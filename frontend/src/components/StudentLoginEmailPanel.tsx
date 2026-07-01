@@ -128,9 +128,9 @@ export function StudentLoginEmailPanel({ ready, embedded = false }: Props) {
       className={wrapperClass}
       aria-labelledby="login-email-heading"
     >
-      <h2 id="login-email-heading" className="portal-section-heading">
+      <h3 id="login-email-heading" className={embedded ? 'portal-profile-section__title' : 'portal-section-heading'}>
         Login email
-      </h2>
+      </h3>
       <p className="portal-login-email-intro">
         Verify an email to sign in with a one-time code or reset your password later.
         This is separate from your contact email above.

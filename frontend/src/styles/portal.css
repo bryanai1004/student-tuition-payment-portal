@@ -1509,27 +1509,224 @@ button.portal-tab {
   justify-content: center;
 }
 
-.portal-profile-card.portal-stack > .portal-section-heading {
-  margin-bottom: 0.5rem;
+.portal-profile-card.portal-stack {
+  gap: 0;
 }
 
-.portal-profile-layout {
-  display: grid;
-  grid-template-columns: minmax(11rem, 12rem) minmax(0, 1fr);
-  align-items: start;
-  gap: 1rem 1.25rem;
+/* —— Profile hero (photo + identity + actions) —— */
+.portal-profile-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  padding-bottom: 1.5rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--portal-border-subtle);
 }
 
-.portal-profile-photo-card {
+.portal-profile-hero__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+
+.portal-profile-hero__photo-wrap {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.portal-profile-hero__photo {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 50%;
+  border: 2px solid var(--portal-border-subtle);
+  background: #f4f6f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.portal-profile-hero__photo .portal-profile-photo-image {
+  border-radius: 50%;
+}
+
+.portal-profile-hero__photo-btn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--portal-accent);
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.portal-profile-hero__photo-btn:hover {
+  text-decoration: underline;
+}
+
+.portal-profile-hero__identity {
+  min-width: 0;
+  padding-top: 0.25rem;
+}
+
+.portal-profile-hero__name {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--portal-text);
+}
+
+.portal-profile-hero__meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--portal-text-muted);
+}
+
+.portal-profile-hero__note {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--portal-text-muted);
+}
+
+.portal-profile-hero__note--success {
+  color: #166534;
+}
+
+.portal-profile-hero__note--error {
+  color: var(--amu-red-dark);
+}
+
+.portal-profile-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+
+.portal-profile-banner {
+  margin: 0 0 1rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--portal-radius);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.portal-profile-banner--success {
+  background: #ecfdf3;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.portal-profile-banner--error {
+  background: #fef2f2;
+  color: var(--amu-red-dark);
+  border: 1px solid #fecaca;
+}
+
+/* —— Profile sections & field grid —— */
+.portal-profile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  padding: 1.5rem 0 0;
+}
+
+.portal-profile-section__title {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--portal-text-muted);
+}
+
+.portal-profile-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 2rem;
+  margin: 0;
+}
+
+.portal-profile-field {
+  display: grid;
+  grid-template-columns: 7.75rem minmax(0, 1fr);
+  gap: 0.375rem 0.875rem;
+  align-items: start;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--portal-border-subtle);
   min-width: 0;
 }
 
-.portal-profile-photo-card > .portal-section-heading {
+.portal-profile-field--full {
+  grid-column: 1 / -1;
+}
+
+.portal-profile-field dt {
   margin: 0;
+  padding-top: 0.125rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--portal-text-muted);
+  line-height: 1.35;
+}
+
+.portal-profile-field dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.portal-profile-readonly {
+  display: block;
   font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--portal-text);
+  word-break: break-word;
+}
+
+.portal-profile-readonly--muted {
+  color: var(--portal-text-faint);
+  font-weight: 400;
+}
+
+.portal-profile-control {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 2.375rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--portal-text);
+  background: var(--portal-surface);
+  border: 1px solid var(--portal-border);
+  border-radius: var(--portal-radius);
+  box-sizing: border-box;
+}
+
+.portal-profile-control:focus {
+  outline: 2px solid rgba(139, 0, 21, 0.25);
+  outline-offset: 1px;
+  border-color: var(--portal-accent);
+}
+
+.portal-profile-field-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--portal-text-muted);
 }
 
 .portal-profile-photo-frame {
@@ -1563,10 +1760,6 @@ button.portal-tab {
   color: var(--portal-text-muted);
 }
 
-.portal-profile-photo-upload {
-  width: 100%;
-}
-
 .portal-profile-photo-upload-input {
   position: absolute;
   width: 1px;
@@ -1578,30 +1771,19 @@ button.portal-tab {
   border: 0;
 }
 
-.portal-profile-photo-filename {
-  margin-top: -0.25rem;
-  overflow-wrap: anywhere;
-}
-
-.portal-profile-details {
-  min-width: 0;
-}
-
-.portal-profile-details .portal-row dd {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.portal-profile-input {
+.portal-profile-input,
+.portal-login-email-input {
+  display: block;
+  width: 100%;
+  max-width: 100%;
   height: 2.375rem;
-  min-width: min(100%, 20rem);
-  width: min(100%, 24rem);
   padding: 0 0.75rem;
   font-size: 0.875rem;
   font-family: inherit;
-  color: var(--text-dark);
-  background: var(--amu-card);
-  border: 1px solid #cccccc;
+  font-weight: 500;
+  color: var(--portal-text);
+  background: var(--portal-surface);
+  border: 1px solid var(--portal-border);
   border-radius: var(--portal-radius);
   box-sizing: border-box;
 }
@@ -1611,37 +1793,23 @@ button.portal-tab {
 }
 
 .portal-login-email-embedded {
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid #e8e8e8;
+  margin-top: 1.75rem;
 }
 
-.portal-profile-email-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.35rem;
-  width: 100%;
+.portal-login-email-embedded > .portal-profile-section__title,
+.portal-login-email-embedded > .portal-section-heading {
+  margin-bottom: 0.5rem;
 }
 
-.portal-profile-field-note {
-  margin: 0;
-  width: min(100%, 24rem);
-  font-size: 0.75rem;
-  line-height: 1.4;
-  color: var(--text-muted, #666);
-  text-align: left;
-}
-
-.portal-profile-details .portal-profile-email-cell {
-  align-items: flex-end;
+.portal-login-email-embedded .portal-login-email-intro {
+  margin-bottom: 1rem;
 }
 
 .portal-login-email-intro {
   margin: 0;
   font-size: 0.875rem;
   line-height: 1.5;
-  color: var(--text-muted, #555);
+  color: var(--portal-text-muted);
 }
 
 .portal-login-email-row {
@@ -1696,6 +1864,7 @@ button.portal-tab {
   flex-direction: column;
   gap: 0.75rem;
   margin-top: 0.5rem;
+  max-width: 28rem;
 }
 
 .portal-login-email-field {
@@ -1705,7 +1874,7 @@ button.portal-tab {
 }
 
 .portal-login-email-input {
-  width: min(100%, 24rem);
+  width: 100%;
 }
 
 .portal-login-email-actions {
@@ -1759,21 +1928,29 @@ select.portal-profile-input {
 }
 
 @media (max-width: 768px) {
-  .portal-profile-layout {
-    grid-template-columns: 1fr;
+  .portal-profile-hero {
+    flex-direction: column;
   }
 
-  .portal-profile-photo-card {
-    max-width: 13rem;
-  }
-
-  .portal-profile-details .portal-row dd {
-    justify-content: flex-start;
-  }
-
-  .portal-profile-input {
-    min-width: 0;
+  .portal-profile-hero__actions {
     width: 100%;
+  }
+
+  .portal-profile-hero__actions .portal-btn {
+    flex: 1 1 auto;
+  }
+
+  .portal-profile-field-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .portal-profile-field {
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+  }
+
+  .portal-profile-field--full {
+    grid-column: auto;
   }
 
   .portal-profile-page .portal-profile-state {
@@ -7523,7 +7700,7 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
 }
 
 .portal-login-card-title {
-  margin: 0 0 10px;
+  margin: 0 0 1.125rem;
   padding: 0;
   font-family: 'Cinzel', 'Times New Roman', Times, serif;
   font-size: 17px;
@@ -7537,6 +7714,87 @@ table.portal-academics-transcript-sheet__table.portal-academics-portal-grades-ta
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.portal-login-card-intro {
+  margin: 0 0 1.125rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-align: center;
+  color: #666;
+}
+
+.portal-login-back-link-wrap {
+  margin: 1rem 0 0;
+  text-align: center;
+}
+
+.portal-login-mode-switch {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 0;
+}
+
+.portal-login-mode-alt {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: #888888;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.portal-login-mode-alt:hover {
+  color: var(--amu-red);
+  text-decoration: underline;
+}
+
+.portal-login-mode-alt:focus-visible {
+  outline: 2px solid rgba(139, 0, 21, 0.35);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.portal-login-secondary-btn {
+  width: 100%;
+  min-height: 2.375rem;
+  padding: 0 0.875rem;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+  background: var(--amu-card);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  cursor: pointer;
+}
+
+.portal-login-secondary-btn:hover:not(:disabled) {
+  border-color: #999;
+}
+
+.portal-login-secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.portal-login-notice {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: #2e7d32;
+}
+
+.portal-login-error {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: #6e1622;
 }
 
 @media (max-width: 520px) {

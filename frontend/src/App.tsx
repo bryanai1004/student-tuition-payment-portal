@@ -23,6 +23,9 @@ import { AdminSchedulingTimetablePage } from './pages/admin/AdminSchedulingTimet
 import { AdminFinancePage } from './pages/admin/AdminFinancePage'
 import { AdminAcademicTermsPage } from './pages/admin/AdminAcademicTermsPage'
 import { LoginPage } from './pages/LoginPage'
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
+import { ForgotStudentIdPage } from './pages/ForgotStudentIdPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { PaymentPlanPage } from './pages/PaymentPlanPage'
 import { PortalLayout } from './components/PortalLayout'
 import { RegistrationLayout } from './pages/registration/RegistrationLayout'
@@ -184,6 +187,9 @@ export default function App() {
       </Route>
       <Route element={<StudentAccountScope />}>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/login/forgot-student-id" element={<ForgotStudentIdPage />} />
+        <Route path="/login/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/plan" element={<PaymentPlanPage />} />
         <Route element={<RequireAuth />}>
           <Route element={<PortalLayout />}>

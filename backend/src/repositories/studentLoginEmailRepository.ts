@@ -217,15 +217,16 @@ export async function consumeOtpChallenge(id: number): Promise<void> {
 export async function countRecentOtpSends(
   studentId: string,
   windowMinutes: number,
+  purpose: string,
 ): Promise<number> {
   const since = new Date(Date.now() - windowMinutes * 60 * 1000);
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT COUNT(*)::int AS cnt
      FROM student_email_otp_challenges
      WHERE student_id = ?
-       AND purpose = 'verify'
+       AND purpose = ?
        AND created_at > ?`,
-    [studentId.trim(), since],
+    [studentId.trim(), purpose, since],
   );
   return Number(rows[0]?.cnt ?? 0);
 }

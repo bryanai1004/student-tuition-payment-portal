@@ -1763,6 +1763,25 @@ export type LoginStudentSuccess = {
   accessToken?: string
 }
 
+function parseLoginStudentSuccess(data: unknown): LoginStudentSuccess {
+  if (
+    data != null &&
+    typeof data === 'object' &&
+    typeof (data as { studentId?: unknown }).studentId === 'string' &&
+    typeof (data as { displayName?: unknown }).displayName === 'string'
+  ) {
+    const o = data as LoginStudentSuccess
+    return {
+      studentId: o.studentId,
+      displayName: o.displayName,
+      ...(typeof o.accessToken === 'string' && o.accessToken.trim() !== ''
+        ? { accessToken: o.accessToken }
+        : {}),
+    }
+  }
+  throw new Error('Unexpected login response shape')
+}
+
 /**
  * POST /api/auth/login — legacy students table password check.
  * On success returns { studentId, displayName }; throws on 4xx/5xx (see fetchApiJson).
@@ -1782,23 +1801,137 @@ export async function loginStudent(
     signal: options?.signal,
   })) as unknown
 
+  return parseLoginStudentSuccess(data)
+}
+
+/** POST /api/auth/login/otp/send-code */
+export async function sendStudentLoginOtpCode(
+  email: string,
+  options?: { signal?: AbortSignal },
+): Promise<{ expiresInSeconds: number }> {
+  const data = (await fetchApiJson('/api/auth/login/otp/send-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim() }),
+    signal: options?.signal,
+  })) as unknown
+
   if (
     data != null &&
     typeof data === 'object' &&
-    typeof (data as { studentId?: unknown }).studentId === 'string' &&
-    typeof (data as { displayName?: unknown }).displayName === 'string'
+    typeof (data as { expiresInSeconds?: unknown }).expiresInSeconds === 'number'
   ) {
-    const o = data as LoginStudentSuccess
-    return {
-      studentId: o.studentId,
-      displayName: o.displayName,
-      ...(typeof o.accessToken === 'string' && o.accessToken.trim() !== ''
-        ? { accessToken: o.accessToken }
-        : {}),
+    return { expiresInSeconds: (data as { expiresInSeconds: number }).expiresInSeconds }
+  }
+  throw new Error('Unexpected OTP send response')
+}
+
+/** POST /api/auth/login/otp/verify */
+export async function verifyStudentLoginOtp(
+  email: string,
+  code: string,
+  options?: { signal?: AbortSignal },
+): Promise<LoginStudentSuccess> {
+  const data = (await fetchApiJson('/api/auth/login/otp/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim(), code: code.trim() }),
+    signal: options?.signal,
+  })) as unknown
+
+  return parseLoginStudentSuccess(data)
+}
+
+/** POST /api/auth/password-reset/request */
+export async function requestStudentPasswordReset(
+  email: string,
+  options?: { signal?: AbortSignal },
+): Promise<{ ok: true; message: string }> {
+  const data = (await fetchApiJson('/api/auth/password-reset/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim() }),
+    signal: options?.signal,
+  })) as unknown
+
+  if (
+    data != null &&
+    typeof data === 'object' &&
+    (data as { ok?: unknown }).ok === true &&
+    typeof (data as { message?: unknown }).message === 'string'
+  ) {
+    return { ok: true, message: (data as { message: string }).message }
+  }
+  throw new Error('Unexpected password reset request response')
+}
+
+/** POST /api/auth/student-id-recovery/request */
+export async function requestStudentIdRecovery(
+  email: string,
+  options?: { signal?: AbortSignal },
+): Promise<{ ok: true; message: string }> {
+  const data = (await fetchApiJson('/api/auth/student-id-recovery/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim() }),
+    signal: options?.signal,
+  })) as unknown
+
+  if (
+    data != null &&
+    typeof data === 'object' &&
+    (data as { ok?: unknown }).ok === true &&
+    typeof (data as { message?: unknown }).message === 'string'
+  ) {
+    return { ok: true, message: (data as { message: string }).message }
+  }
+  throw new Error('Unexpected student ID recovery request response')
+}
+
+/** GET /api/auth/password-reset/validate?token= */
+export async function validateStudentPasswordResetToken(
+  token: string,
+  options?: { signal?: AbortSignal },
+): Promise<{ valid: true; emailMasked: string } | { valid: false }> {
+  const data = (await fetchApiJson(
+    `/api/auth/password-reset/validate?token=${encodeURIComponent(token.trim())}`,
+    { signal: options?.signal },
+  )) as unknown
+
+  if (data != null && typeof data === 'object' && (data as { valid?: unknown }).valid === true) {
+    const emailMasked = (data as { emailMasked?: unknown }).emailMasked
+    if (typeof emailMasked === 'string') {
+      return { valid: true, emailMasked }
     }
   }
+  if (data != null && typeof data === 'object' && (data as { valid?: unknown }).valid === false) {
+    return { valid: false }
+  }
+  throw new Error('Unexpected password reset validate response')
+}
 
-  throw new Error('Unexpected login response shape')
+/** POST /api/auth/password-reset/confirm */
+export async function confirmStudentPasswordReset(
+  token: string,
+  password: string,
+  options?: { signal?: AbortSignal },
+): Promise<{ ok: true; message: string }> {
+  const data = (await fetchApiJson('/api/auth/password-reset/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: token.trim(), password }),
+    signal: options?.signal,
+  })) as unknown
+
+  if (
+    data != null &&
+    typeof data === 'object' &&
+    (data as { ok?: unknown }).ok === true &&
+    typeof (data as { message?: unknown }).message === 'string'
+  ) {
+    return { ok: true, message: (data as { message: string }).message }
+  }
+  throw new Error('Unexpected password reset confirm response')
 }
 
 export type AccountingQuarterOption = {

@@ -1,6 +1,12 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { env, type SmtpProfile } from "../config/env.js";
 
+export type EmailAttachment = {
+  filename?: string;
+  content: Buffer | string;
+  cid?: string;
+};
+
 export type SendEmailInput = {
   /** Visible recipients (rare for bulk staff→student). Usually empty in favor of `bcc`. */
   to?: string[];
@@ -13,6 +19,8 @@ export type SendEmailInput = {
   text: string;
   /** Optional HTML body. If both provided, mail clients pick one based on prefs. */
   html?: string;
+  /** Optional inline/regular attachments (e.g. CID logo for HTML templates). */
+  attachments?: EmailAttachment[];
   /** Optional sender profile id (must exist in `env.smtp.profiles`). When omitted, the
    * first configured profile is used. When no profiles exist, the message is logged
    * with `delivered: false` instead of being sent. */
@@ -145,6 +153,7 @@ export async function sendEmail(
     subject,
     text: input.text,
     html: input.html,
+    attachments: input.attachments,
   });
 
   return {

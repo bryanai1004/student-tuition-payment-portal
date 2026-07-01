@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, type ChangeEventHandler } from 'react'
 import { BackToDashboardLink } from '../components/BackToDashboardLink'
+import {
+  ProfileField,
+  ProfileReadonlyValue,
+  ProfileSection,
+} from '../components/ProfileFieldGrid'
 import { StudentLoginEmailPanel } from '../components/StudentLoginEmailPanel'
 import { useAccount } from '../context/AccountContext'
 import { useStudentPortalT } from '../LanguageContext'
@@ -47,9 +52,7 @@ type EditableProfileFields = {
   ssn: string
   visa: string
   address: string
-  phone1: string
-  phone2: string
-  phone3: string
+  phone: string
   email: string
   citizenship: string
   race: string
@@ -72,13 +75,23 @@ const EMPTY_EDITABLE_PROFILE: EditableProfileFields = {
   ssn: '',
   visa: '',
   address: '',
-  phone1: '',
-  phone2: '',
-  phone3: '',
+  phone: '',
   email: '',
   citizenship: '',
   race: '',
   marital: '',
+}
+
+function primaryPhone(
+  phone1: string | null | undefined,
+  phone2: string | null | undefined,
+  phone3: string | null | undefined,
+): string {
+  for (const value of [phone1, phone2, phone3]) {
+    const trimmed = value?.trim() ?? ''
+    if (trimmed.length > 0) return trimmed
+  }
+  return ''
 }
 
 const RACE_OPTIONS = [
@@ -153,9 +166,7 @@ function toEditableState(profile: StudentProfileWithSensitive): EditableProfileF
     ssn: profile.ssn ?? '',
     visa: profile.visa ?? '',
     address: profile.address ?? '',
-    phone1: profile.phone1 ?? '',
-    phone2: profile.phone2 ?? '',
-    phone3: profile.phone3 ?? '',
+    phone: primaryPhone(profile.phone1, profile.phone2, profile.phone3),
     email: profile.email ?? '',
     citizenship: profile.citizenship ?? '',
     race: profile.race ?? '',
@@ -174,6 +185,16 @@ function maskedSsnDisplay(raw: string, dash: string): string {
   const digits = trimmed.replace(/\D/g, '')
   if (digits.length < 4) return '***-**-****'
   return `***-**-${digits.slice(-4)}`
+}
+
+function profileInitials(fullName: string): string {
+  const parts = fullName
+    .split(/[\s,]+/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase()
 }
 
 export function ProfilePage() {
@@ -328,9 +349,9 @@ export function ProfilePage() {
         ssn: toPatchValue(editable.ssn),
         visa: toPatchValue(editable.visa),
         address: toPatchValue(editable.address),
-        phone1: toPatchValue(editable.phone1),
-        phone2: toPatchValue(editable.phone2),
-        phone3: toPatchValue(editable.phone3),
+        phone1: toPatchValue(editable.phone),
+        phone2: null,
+        phone3: null,
         email: toPatchValue(editable.email),
         citizenship: toPatchValue(editable.citizenship),
         race: toPatchValue(editable.race),
@@ -413,6 +434,63 @@ export function ProfilePage() {
       ? 'Please sign in again to upload your profile photo.'
       : photoError
 
+  const renderTextField = (
+    field: keyof EditableProfileFields,
+    options?: { type?: string; placeholder?: string },
+  ) => {
+    const value = editable[field]
+    if (!isEditing) {
+      const display =
+        field === 'dob'
+          ? formatUsMdY(value || null, dash)
+          : dashText(value, dash)
+      return (
+        <ProfileReadonlyValue muted={!value.trim()}>
+          {display}
+        </ProfileReadonlyValue>
+      )
+    }
+    return (
+      <input
+        className="portal-profile-control"
+        type={options?.type ?? 'text'}
+        value={value}
+        placeholder={options?.placeholder}
+        onChange={(e) => setEditableField(field, e.target.value)}
+        disabled={saveLoading}
+      />
+    )
+  }
+
+  const renderSelectField = (
+    field: 'race' | 'citizenship' | 'marital',
+    options: readonly string[],
+  ) => {
+    const value = editable[field]
+    if (!isEditing) {
+      return (
+        <ProfileReadonlyValue muted={!value.trim()}>
+          {dashText(value, dash)}
+        </ProfileReadonlyValue>
+      )
+    }
+    return (
+      <select
+        className="portal-profile-control"
+        value={value}
+        onChange={(e) => setEditableField(field, e.target.value)}
+        disabled={saveLoading}
+      >
+        <option value="">{dash}</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    )
+  }
+
   return (
     <main className="portal-page portal-module-page portal-profile-page">
       <header className="portal-module-header">
@@ -458,186 +536,194 @@ export function ProfilePage() {
           className="portal-card portal-stack portal-profile-card"
           aria-labelledby="profile-student-heading"
         >
-          <h2 id="profile-student-heading" className="portal-section-heading">
-            {t('studentProfile')}
-          </h2>
-          <div className="portal-profile-layout">
-            <section
-              className="portal-profile-photo-card"
-              aria-labelledby="profile-photo-heading"
-            >
-              <h3 id="profile-photo-heading" className="portal-section-heading">
-                Profile Photo
-              </h3>
-              <div className="portal-profile-photo-frame" aria-live="polite">
-                {hasPhotoDisplay ? (
-                  <img
-                    src={photoPreviewUrl ?? photoUrl ?? ''}
-                    alt={photoPreviewUrl ? 'Selected profile photo preview' : 'Profile photo'}
-                    className="portal-profile-photo-image"
-                    onError={() => {
-                      if (photoPreviewUrl) return
-                      setPhotoUrl(null)
-                      setPhotoReloadKey((k) => k + 1)
-                    }}
+          <header className="portal-profile-hero">
+            <div className="portal-profile-hero__main">
+              <div className="portal-profile-hero__photo-wrap">
+                <div className="portal-profile-hero__photo" aria-live="polite">
+                  {hasPhotoDisplay ? (
+                    <img
+                      src={photoPreviewUrl ?? photoUrl ?? ''}
+                      alt={
+                        photoPreviewUrl ? 'Selected profile photo preview' : 'Profile photo'
+                      }
+                      className="portal-profile-photo-image"
+                      onError={() => {
+                        if (photoPreviewUrl) return
+                        setPhotoUrl(null)
+                        setPhotoReloadKey((k) => k + 1)
+                      }}
+                    />
+                  ) : (
+                    <span className="portal-profile-photo-placeholder portal-profile-photo-placeholder--initials">
+                      {profileInitials(profile.fullName)}
+                    </span>
+                  )}
+                </div>
+                <label className="portal-profile-hero__photo-btn">
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/jpg"
+                    onChange={handlePhotoSelect}
+                    className="portal-profile-photo-upload-input"
+                    disabled={photoUploading}
                   />
-                ) : (
-                  <span className="portal-profile-photo-placeholder">No photo</span>
-                )}
+                  {photoUploading
+                    ? 'Uploading…'
+                    : hasSavedPhoto || hasPhotoDisplay
+                      ? 'Change photo'
+                      : 'Add photo'}
+                </label>
               </div>
-              <label className="portal-btn portal-btn--secondary portal-profile-photo-upload">
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/jpg"
-                  onChange={handlePhotoSelect}
-                  className="portal-profile-photo-upload-input"
-                  disabled={photoUploading}
-                />
-                {photoUploading
-                  ? 'Uploading…'
-                  : hasSavedPhoto || hasPhotoDisplay
-                    ? 'Change photo'
-                    : 'Choose photo'}
-              </label>
-              {photoLoading ? (
-                <p className="portal-card-note portal-profile-photo-filename">
-                  Loading current photo...
+              <div className="portal-profile-hero__identity">
+                <h2 id="profile-student-heading" className="portal-profile-hero__name">
+                  {dashText(profile.fullName, dash)}
+                </h2>
+                <p className="portal-profile-hero__meta">
+                  <span>{dashText(profile.studentId, dash)}</span>
+                  <span aria-hidden="true"> · </span>
+                  <span>{profile.program}</span>
                 </p>
-              ) : null}
-              {photoFilename ? (
-                <p className="portal-card-note portal-profile-photo-filename">
-                  Selected: {photoFilename}
-                </p>
-              ) : null}
-              {photoSuccess ? (
-                <p className="portal-card-note" role="status" aria-live="polite">
-                  {photoSuccess}
-                </p>
-              ) : null}
-              {photoError ? (
-                <p className="portal-card-note" role="alert" aria-live="assertive">
-                  {normalizedPhotoError}
-                </p>
-              ) : null}
-            </section>
-
-            <dl className="portal-profile-details">
-            <div className="portal-row">
-              <dt>{t('fullName')}</dt>
-              <dd>{dashText(profile.fullName, dash)}</dd>
+                {photoLoading ? (
+                  <p className="portal-profile-hero__note">Loading photo…</p>
+                ) : null}
+                {photoFilename ? (
+                  <p className="portal-profile-hero__note">Selected: {photoFilename}</p>
+                ) : null}
+                {photoSuccess ? (
+                  <p className="portal-profile-hero__note portal-profile-hero__note--success" role="status">
+                    {photoSuccess}
+                  </p>
+                ) : null}
+                {photoError ? (
+                  <p className="portal-profile-hero__note portal-profile-hero__note--error" role="alert">
+                    {normalizedPhotoError}
+                  </p>
+                ) : null}
+              </div>
             </div>
-            <div className="portal-row">
-              <dt>{t('studentId')}</dt>
-              <dd>{dashText(profile.studentId, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('program')}</dt>
-              <dd>{profile.program}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('track')}</dt>
-              <dd>{dashText(profile.track ?? undefined, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('gender')}</dt>
-              <dd>{dashText(profile.gender ?? undefined, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('age')}</dt>
-              <dd>{displayAge(profile.age, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('enrollmentDate')}</dt>
-              <dd>{formatUsMdY(profile.enrollmentDate ?? undefined, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('background')}</dt>
-              <dd>{dashText(profile.background ?? undefined, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('credits')}</dt>
-              <dd>{displayCredits(profile.credits, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('highestDegree')}</dt>
-              <dd>{dashText(profile.highestDegree ?? undefined, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('race')}</dt>
-              <dd>
-                <select
-                  className="portal-profile-input"
-                  value={editable.race}
-                  onChange={(e) => setEditableField('race', e.target.value)}
-                  disabled={!isEditing || saveLoading}
+            <div className="portal-profile-hero__actions">
+              {isEditing ? (
+                <>
+                  <button
+                    type="button"
+                    className="portal-btn portal-btn--primary"
+                    onClick={handleSaveProfile}
+                    disabled={saveLoading}
+                  >
+                    {saveLoading ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    className="portal-btn portal-btn--secondary"
+                    onClick={handleCancelEdit}
+                    disabled={saveLoading}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="portal-btn portal-btn--secondary"
+                  onClick={handleStartEdit}
                 >
-                  <option value="">{dash}</option>
-                  {RACE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </dd>
+                  Edit profile
+                </button>
+              )}
             </div>
-            <div className="portal-row">
-              <dt>{t('address')}</dt>
-              <dd>
-                <input
-                  className="portal-profile-input"
-                  type="text"
-                  value={editable.address}
-                  onChange={(e) => setEditableField('address', e.target.value)}
-                  disabled={!isEditing || saveLoading}
-                />
-              </dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('city')}</dt>
-              <dd>{dashText(profile.city ?? undefined, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('state')}</dt>
-              <dd>{dashText(profile.state ?? undefined, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('zip')}</dt>
-              <dd>{dashText(profile.zip ?? undefined, dash)}</dd>
-            </div>
-            <div className="portal-row">
-              <dt>{t('email')}</dt>
-              <dd className="portal-profile-email-cell">
-                <input
-                  className="portal-profile-input"
-                  type="email"
-                  value={editable.email}
-                  onChange={(e) => setEditableField('email', e.target.value)}
-                  disabled={!isEditing || saveLoading}
-                />
-                <p className="portal-profile-field-note">
-                  Contact email — save with Edit. For sign-in, use Login email below.
-                </p>
-              </dd>
-            </div>
-            <div className="portal-row">
-              <dt>Date of Birth</dt>
-              <dd>
-                <input
-                  className="portal-profile-input"
-                  type="date"
-                  value={editable.dob}
-                  onChange={(e) => setEditableField('dob', e.target.value)}
-                  disabled={!isEditing || saveLoading}
-                />
-              </dd>
-            </div>
-            <div className="portal-row">
-              <dt>SSN</dt>
-              <dd>
+          </header>
+
+          {saveSuccess ? (
+            <p className="portal-profile-banner portal-profile-banner--success" role="status">
+              {saveSuccess}
+            </p>
+          ) : null}
+          {saveError ? (
+            <p className="portal-profile-banner portal-profile-banner--error" role="alert">
+              {normalizedSaveError}
+            </p>
+          ) : null}
+
+          <div className="portal-profile-body">
+            <ProfileSection title="Academic record">
+              <ProfileField label={t('track')}>
+                <ProfileReadonlyValue muted={!profile.track}>
+                  {dashText(profile.track ?? undefined, dash)}
+                </ProfileReadonlyValue>
+              </ProfileField>
+              <ProfileField label={t('gender')}>
+                <ProfileReadonlyValue muted={!profile.gender}>
+                  {dashText(profile.gender ?? undefined, dash)}
+                </ProfileReadonlyValue>
+              </ProfileField>
+              <ProfileField label={t('age')}>
+                <ProfileReadonlyValue muted={profile.age == null}>
+                  {displayAge(profile.age, dash)}
+                </ProfileReadonlyValue>
+              </ProfileField>
+              <ProfileField label={t('enrollmentDate')}>
+                <ProfileReadonlyValue muted={!profile.enrollmentDate}>
+                  {formatUsMdY(profile.enrollmentDate ?? undefined, dash)}
+                </ProfileReadonlyValue>
+              </ProfileField>
+              <ProfileField label={t('background')}>
+                <ProfileReadonlyValue muted={!profile.background}>
+                  {dashText(profile.background ?? undefined, dash)}
+                </ProfileReadonlyValue>
+              </ProfileField>
+              <ProfileField label={t('credits')}>
+                <ProfileReadonlyValue muted={profile.credits == null}>
+                  {displayCredits(profile.credits, dash)}
+                </ProfileReadonlyValue>
+              </ProfileField>
+              <ProfileField label={t('highestDegree')}>
+                <ProfileReadonlyValue muted={!profile.highestDegree}>
+                  {dashText(profile.highestDegree ?? undefined, dash)}
+                </ProfileReadonlyValue>
+              </ProfileField>
+              <ProfileField label={t('race')}>
+                {renderSelectField('race', RACE_OPTIONS)}
+              </ProfileField>
+            </ProfileSection>
+
+            <ProfileSection title="Contact">
+              <ProfileField label={t('address')} fullWidth>
+                {renderTextField('address')}
+              </ProfileField>
+              <ProfileField label={t('city')}>
+                <ProfileReadonlyValue muted={!profile.city}>
+                  {dashText(profile.city ?? undefined, dash)}
+                </ProfileReadonlyValue>
+              </ProfileField>
+              <ProfileField label={t('state')}>
+                <ProfileReadonlyValue muted={!profile.state}>
+                  {dashText(profile.state ?? undefined, dash)}
+                </ProfileReadonlyValue>
+              </ProfileField>
+              <ProfileField label={t('zip')}>
+                <ProfileReadonlyValue muted={!profile.zip}>
+                  {dashText(profile.zip ?? undefined, dash)}
+                </ProfileReadonlyValue>
+              </ProfileField>
+              <ProfileField label="Phone">{renderTextField('phone')}</ProfileField>
+              <ProfileField
+                label={t('email')}
+                fullWidth
+                note="Contact email — saved with Edit profile. For sign-in, use Login email below."
+              >
+                {renderTextField('email', { type: 'email' })}
+              </ProfileField>
+            </ProfileSection>
+
+            <ProfileSection title="Personal information">
+              <ProfileField label="Date of birth">
+                {renderTextField('dob', { type: 'date' })}
+              </ProfileField>
+              <ProfileField label="SSN">
                 {isEditing ? (
                   <input
-                    className="portal-profile-input"
+                    className="portal-profile-control"
                     type="text"
                     value={editable.ssn}
                     onChange={(e) => setEditableField('ssn', e.target.value)}
@@ -645,139 +731,22 @@ export function ProfilePage() {
                     placeholder="000-00-0000"
                   />
                 ) : (
-                  maskedSsnDisplay(editable.ssn, dash)
+                  <ProfileReadonlyValue muted={!editable.ssn.trim()}>
+                    {maskedSsnDisplay(editable.ssn, dash)}
+                  </ProfileReadonlyValue>
                 )}
-              </dd>
-            </div>
-            <div className="portal-row">
-              <dt>Visa</dt>
-              <dd>
-                <input
-                  className="portal-profile-input"
-                  type="text"
-                  value={editable.visa}
-                  onChange={(e) => setEditableField('visa', e.target.value)}
-                  disabled={!isEditing || saveLoading}
-                />
-              </dd>
-            </div>
-            <div className="portal-row">
-              <dt>Phone 1</dt>
-              <dd>
-                <input
-                  className="portal-profile-input"
-                  type="text"
-                  value={editable.phone1}
-                  onChange={(e) => setEditableField('phone1', e.target.value)}
-                  disabled={!isEditing || saveLoading}
-                />
-              </dd>
-            </div>
-            <div className="portal-row">
-              <dt>Phone 2</dt>
-              <dd>
-                <input
-                  className="portal-profile-input"
-                  type="text"
-                  value={editable.phone2}
-                  onChange={(e) => setEditableField('phone2', e.target.value)}
-                  disabled={!isEditing || saveLoading}
-                />
-              </dd>
-            </div>
-            <div className="portal-row">
-              <dt>Phone 3</dt>
-              <dd>
-                <input
-                  className="portal-profile-input"
-                  type="text"
-                  value={editable.phone3}
-                  onChange={(e) => setEditableField('phone3', e.target.value)}
-                  disabled={!isEditing || saveLoading}
-                />
-              </dd>
-            </div>
-            <div className="portal-row">
-              <dt>Citizenship</dt>
-              <dd>
-                <select
-                  className="portal-profile-input"
-                  value={editable.citizenship}
-                  onChange={(e) => setEditableField('citizenship', e.target.value)}
-                  disabled={!isEditing || saveLoading}
-                >
-                  <option value="">{dash}</option>
-                  {CITIZENSHIP_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </dd>
-            </div>
-            <div className="portal-row">
-              <dt>Marital Status</dt>
-              <dd>
-                <select
-                  className="portal-profile-input"
-                  value={editable.marital}
-                  onChange={(e) => setEditableField('marital', e.target.value)}
-                  disabled={!isEditing || saveLoading}
-                >
-                  <option value="">{dash}</option>
-                  {MARITAL_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </dd>
-            </div>
-            </dl>
+              </ProfileField>
+              <ProfileField label="Visa">{renderTextField('visa')}</ProfileField>
+              <ProfileField label="Citizenship">
+                {renderSelectField('citizenship', CITIZENSHIP_OPTIONS)}
+              </ProfileField>
+              <ProfileField label="Marital status">
+                {renderSelectField('marital', MARITAL_OPTIONS)}
+              </ProfileField>
+            </ProfileSection>
           </div>
 
           <StudentLoginEmailPanel embedded ready />
-
-          <div className="portal-actions">
-            {isEditing ? (
-              <>
-                <button
-                  type="button"
-                  className="portal-btn portal-btn--primary"
-                  onClick={handleSaveProfile}
-                  disabled={saveLoading}
-                >
-                  {saveLoading ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  className="portal-btn portal-btn--secondary"
-                  onClick={handleCancelEdit}
-                  disabled={saveLoading}
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="portal-btn portal-btn--secondary"
-                onClick={handleStartEdit}
-              >
-                Edit
-              </button>
-            )}
-          </div>
-          {saveSuccess ? (
-            <p role="status" aria-live="polite">
-              {saveSuccess}
-            </p>
-          ) : null}
-          {saveError ? (
-            <p role="alert" aria-live="assertive">
-              {normalizedSaveError}
-            </p>
-          ) : null}
         </section>
       ) : null}
     </main>

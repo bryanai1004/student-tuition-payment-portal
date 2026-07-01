@@ -1133,6 +1133,20 @@ export async function createLegacyStudentPasswordRow(
   ]);
 }
 
+export async function updateLegacyStudentPasswordRow(
+  pool: LegacyMysqlClient,
+  studentId: string,
+  plainPassword: string,
+): Promise<boolean> {
+  const hash = legacyStudentPasswordMd5Hex(plainPassword);
+  const [result] = await pool.execute(
+    `UPDATE password_stu SET password = ? WHERE TRIM(id) = ?`,
+    [hash, studentId.trim()],
+  );
+  const affected = (result as { affectedRows?: number }).affectedRows ?? 0;
+  return affected > 0;
+}
+
 export async function hasLegacyStudentRegistration(
   pool: LegacyMysqlClient,
   studentId: string,

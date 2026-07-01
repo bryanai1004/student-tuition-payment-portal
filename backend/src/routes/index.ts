@@ -105,7 +105,17 @@ import {
   postStudentLoginEmailSendCodeHandler,
   postStudentLoginEmailVerifyHandler,
 } from "../controllers/studentLoginEmailController.js";
-import { postStudentLogin } from "../controllers/studentAuthController.js";
+import {
+  postStudentLogin,
+  postStudentLoginOtpSendCode,
+  postStudentLoginOtpVerify,
+} from "../controllers/studentAuthController.js";
+import {
+  getStudentPasswordResetValidateHandler,
+  postStudentPasswordResetConfirmHandler,
+  postStudentPasswordResetRequestHandler,
+} from "../controllers/studentPasswordResetController.js";
+import { postStudentIdRecoveryRequestHandler } from "../controllers/studentIdRecoveryController.js";
 import {
   getAdminAuthMe,
   postAdminAuthLogin,
@@ -195,6 +205,12 @@ apiRouter.get("/health", getHealth);
 apiRouter.get("/health/db", getHealthDb);
 
 apiRouter.post("/auth/login", postStudentLogin);
+apiRouter.post("/auth/login/otp/send-code", postStudentLoginOtpSendCode);
+apiRouter.post("/auth/login/otp/verify", postStudentLoginOtpVerify);
+apiRouter.post("/auth/password-reset/request", postStudentPasswordResetRequestHandler);
+apiRouter.get("/auth/password-reset/validate", getStudentPasswordResetValidateHandler);
+apiRouter.post("/auth/password-reset/confirm", postStudentPasswordResetConfirmHandler);
+apiRouter.post("/auth/student-id-recovery/request", postStudentIdRecoveryRequestHandler);
 
 const studentPaymentsRouter = Router();
 studentPaymentsRouter.use(requireStudentAuth);
